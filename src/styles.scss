@@ -1,1 +1,221 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --bg-top: #f7f1e8;
+  --bg-bottom: #dbe7e4;
+  --surface-0: #fffdf8;
+  --surface-1: rgba(255, 253, 248, 0.85);
+  --text-main: #17313c;
+  --text-muted: #5f7279;
+  --accent: #3e7c73;
+  --accent-strong: #214f58;
+  --accent-soft: #d9ebe3;
+  --danger: #a43f2e;
+  --danger-bg: #fae5df;
+  --success: #275846;
+  --success-bg: #e1f1e8;
+  --border-color: rgba(23, 49, 60, 0.14);
+  --shadow: 0 24px 60px rgba(33, 79, 88, 0.12);
+  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top left, rgba(62, 124, 115, 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgba(190, 126, 74, 0.18), transparent 24%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.auth-page {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0 3rem;
+}
+
+.auth-card {
+  width: min(100%, 32rem);
+  padding: 2rem;
+  border-radius: 1.75rem;
+  background: var(--surface-1);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.auth-card.wide {
+  width: min(100%, 42rem);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.auth-card h1 {
+  margin: 0.5rem 0 0;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  line-height: 0.95;
+}
+
+.lede {
+  margin: 1rem 0 0;
+  color: var(--text-muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-form.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-form label,
+.full-width {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.auth-form label span {
+  font-weight: 600;
+}
+
+.auth-form input,
+.auth-form textarea {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-main);
+}
+
+.auth-form textarea {
+  resize: vertical;
+}
+
+.auth-form .checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.auth-form .checkbox input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.15rem;
+}
+
+.auth-form button,
+.button-link {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 3.25rem;
+  padding: 0.9rem 1.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: var(--surface-0);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.auth-form button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.notice {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+}
+
+.notice.success {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.notice.error {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.auth-links a {
+  color: var(--accent-strong);
+}
+
+.token-panel {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--accent-soft);
+}
+
+.token-title {
+  margin: 0 0 1rem;
+  font-weight: 700;
+}
+
+.token-panel dl {
+  margin: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.token-panel dt {
+  font-weight: 700;
+}
+
+.token-panel dd {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+}
+
+.wrap {
+  overflow-wrap: anywhere;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .auth-card {
+    padding: 1.35rem;
+    border-radius: 1.25rem;
+  }
+
+  .auth-form.two-columns {
+    grid-template-columns: 1fr;
+  }
+}

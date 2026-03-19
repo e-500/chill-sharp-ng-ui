@@ -1,0 +1,247 @@
+<section class="permissions-page">
+  <header class="hero">
+    <p class="eyebrow">{{ chill.T('68ADFBAB-4D1A-42A5-AB39-F099FB870A7C', 'Security', 'Sicurezza') }}</p>
+    <h1>{{ chill.T('830A6D96-0332-4B08-8EC7-B850702B4337', 'Permissions', 'Permessi') }}</h1>
+    <p class="lede">{{ chill.T('B8F5A363-9E5F-4CAA-9296-54FBF31E1C98', 'Manage user roles, permission rules, and the special ability to manage permissions.', 'Gestisci ruoli utente, regole permesso e l\'abilitazione speciale per gestire i permessi.') }}</p>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="notice error">{{ errorMessage() }}</div>
+  }
+
+  @if (successMessage()) {
+    <div class="notice success">{{ successMessage() }}</div>
+  }
+
+  @if (isLoading()) {
+    <div class="notice">{{ chill.T('9559C65E-F793-4A7E-BBE3-52F9400A3444', 'Loading users, roles, and permission rules...', 'Caricamento utenti, ruoli e regole permesso...') }}</div>
+  } @else {
+    <div class="layout">
+      <section class="panel">
+        <header class="panel-header">
+          <h2>{{ chill.T('8455C9A5-BAC8-457C-B726-F79DA6D758DF', 'Users', 'Utenti') }}</h2>
+          <p>{{ chill.T('FC3C9BE2-4870-4261-B93E-B0CA0A732D85', 'Select a user, assign roles, and optionally grant permission-management rights.', 'Seleziona un utente, assegna ruoli e concedi facoltativamente i diritti di gestione permessi.') }}</p>
+        </header>
+
+        <div class="selector-list">
+          @for (user of users(); track user.guid) {
+            <button type="button" class="selector-item" [class.active]="selectedUserGuid() === user.guid" (click)="selectUser(user.guid)">
+              <span>{{ userLabel(user) }}</span>
+              @if (user.canManagePermissions) {
+                <small>{{ chill.T('C607D5B1-40FA-4438-BE3B-C5D7D52D7B48', 'Can manage permissions', 'Può gestire permessi') }}</small>
+              }
+            </button>
+          }
+        </div>
+
+        @if (selectedUser()) {
+          <form class="editor" (ngSubmit)="saveUser()">
+            <label class="field">
+              <span>{{ chill.T('774E2C11-EB71-48BA-A44C-0D7C3D0E4663', 'User name', 'Nome utente') }}</span>
+              <input [ngModel]="userForm().userName" (ngModelChange)="updateUserField('userName', $event)" name="userName" />
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('52C09124-E4D6-4B0D-82C1-E45CADE12834', 'Display name', 'Nome visualizzato') }}</span>
+              <input [ngModel]="userForm().displayName" (ngModelChange)="updateUserField('displayName', $event)" name="displayName" />
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('A8A69633-4218-402F-BEC5-C90B3A4310C0', 'External id', 'Id esterno') }}</span>
+              <input [ngModel]="userForm().externalId" (ngModelChange)="updateUserField('externalId', $event)" name="externalId" />
+            </label>
+
+            <label class="toggle">
+              <input type="checkbox" [ngModel]="userForm().isActive" (ngModelChange)="updateUserField('isActive', $event)" name="isActive" />
+              <span>{{ chill.T('7E68D769-5B5E-45AE-A8E7-2843478668D5', 'Active user', 'Utente attivo') }}</span>
+            </label>
+
+            <label class="toggle">
+              <input type="checkbox" [ngModel]="userForm().canManagePermissions" (ngModelChange)="updateUserField('canManagePermissions', $event)" name="canManagePermissions" />
+              <span>{{ chill.T('E44FE49D-E1AA-44C9-9EC0-A05040E9DFBA', 'Can manage permissions', 'Può gestire permessi') }}</span>
+            </label>
+
+            <div class="role-grid">
+              <p class="section-label">{{ chill.T('AB54AD2A-2A88-4AF0-8387-39AA4A08F9F6', 'Assigned roles', 'Ruoli assegnati') }}</p>
+              @for (role of roles(); track role.guid) {
+                <label class="toggle">
+                  <input type="checkbox" [checked]="userRoleIds().includes(role.guid)" (change)="toggleUserRole(role.guid, $any($event.target).checked)" />
+                  <span>{{ role.name }}</span>
+                </label>
+              }
+            </div>
+
+            <button type="submit" [disabled]="isSavingUser()">
+              {{ isSavingUser()
+                ? chill.T('32E1A7C8-B09A-4A6B-8EA5-3C5AF84070B2', 'Saving...', 'Salvataggio...')
+                : chill.T('D9938C0B-5D36-4702-BB53-E46D6154D2FD', 'Save user access', 'Salva accesso utente') }}
+            </button>
+          </form>
+        }
+      </section>
+
+      <section class="panel">
+        <header class="panel-header">
+          <h2>{{ chill.T('B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6', 'Roles', 'Ruoli') }}</h2>
+          <p>{{ chill.T('D1677B35-67BE-43E9-8D64-3040986B0B0C', 'Create roles that can then be assigned to users and targeted by permission rules.', 'Crea ruoli che possono poi essere assegnati agli utenti e usati come destinazione delle regole permesso.') }}</p>
+        </header>
+
+        <div class="selector-list compact">
+          @for (role of roles(); track role.guid) {
+            <button type="button" class="selector-item" [class.active]="selectedRoleGuid() === role.guid" (click)="selectRole(role.guid)">
+              <span>{{ role.name }}</span>
+              <small>{{ role.description || ' ' }}</small>
+            </button>
+          }
+        </div>
+
+        <form class="editor" (ngSubmit)="createRole()">
+          <p class="section-label">{{ chill.T('E9C30E5D-CBC8-4E48-A01F-4C4DF9C7E13B', 'Create role', 'Crea ruolo') }}</p>
+
+          <label class="field">
+            <span>{{ chill.T('7767C44A-8F47-4E39-BB2A-0B297887A0D3', 'Name', 'Nome') }}</span>
+            <input [ngModel]="newRole().name" (ngModelChange)="updateNewRoleField('name', $event)" name="roleName" />
+          </label>
+
+          <label class="field">
+            <span>{{ chill.T('97A7BFE7-22A7-4665-B0D8-C75506A8F794', 'Description', 'Descrizione') }}</span>
+            <textarea rows="3" [ngModel]="newRole().description" (ngModelChange)="updateNewRoleField('description', $event)" name="roleDescription"></textarea>
+          </label>
+
+          <label class="toggle">
+            <input type="checkbox" [ngModel]="newRole().isActive" (ngModelChange)="updateNewRoleField('isActive', $event)" name="roleIsActive" />
+            <span>{{ chill.T('7A2D49F9-9A14-4FD1-8A8B-9B604CA3796C', 'Role is active', 'Ruolo attivo') }}</span>
+          </label>
+
+          <button type="submit" [disabled]="isCreatingRole()">
+            {{ isCreatingRole()
+              ? chill.T('A18D84D3-A54B-4A34-AB37-BAE0A546ED48', 'Creating...', 'Creazione...')
+              : chill.T('0B47EAA4-33BC-4D1C-B8C6-F75D3A5C8864', 'Create role', 'Crea ruolo') }}
+          </button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header">
+          <h2>{{ chill.T('64D855B5-1A89-4D6B-BD59-B201182BDBEF', 'Permission rules', 'Regole permesso') }}</h2>
+          <p>{{ chill.T('C2E827F5-C416-4C21-9D48-966CFD00D175', 'Create rules for a selected user or role. Remove rules to revoke access.', 'Crea regole per un utente o ruolo selezionato. Rimuovi le regole per revocare l\'accesso.') }}</p>
+        </header>
+
+        <div class="subject-switch">
+          <label class="toggle">
+            <input type="radio" [checked]="permissionSubjectType() === 'user'" (change)="setPermissionSubjectType('user')" name="permissionSubjectType" />
+            <span>{{ chill.T('8455C9A5-BAC8-457C-B726-F79DA6D758DF', 'Users', 'Utenti') }}</span>
+          </label>
+          <label class="toggle">
+            <input type="radio" [checked]="permissionSubjectType() === 'role'" (change)="setPermissionSubjectType('role')" name="permissionSubjectType" />
+            <span>{{ chill.T('B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6', 'Roles', 'Ruoli') }}</span>
+          </label>
+        </div>
+
+        <div class="notice subtle">
+          @if (permissionSubjectType() === 'user') {
+            {{ selectedUser() ? userLabel(selectedUser()!) : chill.T('1D33717C-A8F7-44D7-B5AE-E0329B414123', 'Select a user to manage direct permission rules.', 'Seleziona un utente per gestire le regole permesso dirette.') }}
+          } @else {
+            {{ selectedRole() ? selectedRole()!.name : chill.T('5CF57B23-8616-4F38-B4B2-B29DA24E8625', 'Select a role to manage role-based permission rules.', 'Seleziona un ruolo per gestire le regole permesso basate sul ruolo.') }}
+          }
+        </div>
+
+        <form class="editor" (ngSubmit)="createPermissionRule()">
+          <div class="grid-2">
+            <label class="field">
+              <span>{{ chill.T('678D4A79-804B-4D8F-B986-B08F4E3EC22F', 'Effect', 'Effetto') }}</span>
+              <select [ngModel]="newRule().effect" (ngModelChange)="updateNewRuleField('effect', +$event)" name="effect">
+                @for (option of permissionEffectOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('7E4DDC4C-D4E7-4427-BC9A-08AEF926A0FE', 'Action', 'Azione') }}</span>
+              <select [ngModel]="newRule().action" (ngModelChange)="updateNewRuleField('action', +$event)" name="action">
+                @for (option of permissionActionOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <label class="field">
+              <span>{{ chill.T('88724B00-D84F-44C8-AFC9-BC6C94A8D5E6', 'Scope', 'Ambito') }}</span>
+              <select [ngModel]="newRule().scope" (ngModelChange)="updateNewRuleField('scope', +$event)" name="scope">
+                @for (option of permissionScopeOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('2E4F99D0-8747-4A72-8394-C53F144D6CB2', 'Module', 'Modulo') }}</span>
+              <input [ngModel]="newRule().module" (ngModelChange)="updateNewRuleField('module', $event)" name="module" />
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <label class="field">
+              <span>{{ chill.T('22268D8E-642A-45A4-A923-D5BC560C59EA', 'Entity name', 'Nome entità') }}</span>
+              <input [ngModel]="newRule().entityName" (ngModelChange)="updateNewRuleField('entityName', $event)" name="entityName" />
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('B947A33E-97FD-49A0-B59B-D2D77838DA25', 'Property name', 'Nome proprietà') }}</span>
+              <input [ngModel]="newRule().propertyName" (ngModelChange)="updateNewRuleField('propertyName', $event)" name="propertyName" />
+            </label>
+          </div>
+
+          <label class="toggle">
+            <input type="checkbox" [ngModel]="newRule().appliesToAllProperties" (ngModelChange)="updateNewRuleField('appliesToAllProperties', $event)" name="allProperties" />
+            <span>{{ chill.T('2B72F81F-D445-4F56-B86D-98D7C24A3B4B', 'Apply to all properties', 'Applica a tutte le proprietà') }}</span>
+          </label>
+
+          <label class="field">
+            <span>{{ chill.T('97A7BFE7-22A7-4665-B0D8-C75506A8F794', 'Description', 'Descrizione') }}</span>
+            <textarea rows="3" [ngModel]="newRule().description" (ngModelChange)="updateNewRuleField('description', $event)" name="ruleDescription"></textarea>
+          </label>
+
+          <button type="submit" [disabled]="isCreatingRule()">
+            {{ isCreatingRule()
+              ? chill.T('A5A9C1F4-2B14-4FCA-901E-F0BDAA894A29', 'Creating rule...', 'Creazione regola...')
+              : chill.T('B4F053A6-0B3E-43A3-9B7D-5124EF2A3952', 'Create permission rule', 'Crea regola permesso') }}
+          </button>
+        </form>
+
+        <div class="rule-list">
+          @if (permissionRules().length === 0) {
+            <div class="notice subtle">{{ chill.T('1801F875-1D00-4D0B-BE62-C72471A645B2', 'No permission rules for the selected target.', 'Nessuna regola permesso per la destinazione selezionata.') }}</div>
+          } @else {
+            @for (rule of permissionRules(); track rule.guid) {
+              <article class="rule-card">
+                <div>
+                  <strong>{{ effectLabel(rule.effect) }} {{ actionLabel(rule.action) }}</strong>
+                  <p>{{ rule.module }} / {{ scopeLabel(rule.scope) }}</p>
+                  @if (rule.entityName) {
+                    <p>
+                      {{ rule.entityName }}
+                      @if (rule.propertyName) {
+                        <span> / {{ rule.propertyName }}</span>
+                      }
+                    </p>
+                  }
+                  @if (rule.description) {
+                    <p>{{ rule.description }}</p>
+                  }
+                </div>
+
+                <button type="button" class="danger" (click)="deletePermissionRule(rule.guid)">
+                  {{ chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete', 'Elimina') }}
+                </button>
+              </article>
+            }
+          }
+        </div>
+      </section>
+    </div>
+  }
+</section>

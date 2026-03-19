@@ -2,14 +2,21 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ChillSharpClientError, ChillSharpNgClient, type GetTextRequest, type JsonObject } from 'chill-sharp-ng-client';
 import { Observable, catchError, firstValueFrom, from, map, tap, throwError } from 'rxjs';
 import type {
+  AuthPermissionRule,
+  AuthRole,
   AuthSession,
   AuthTokenResponse,
+  AuthUser,
+  CreateAuthPermissionRuleRequest,
+  CreateAuthRoleRequest,
   LoginRequest,
   PasswordResetTokenResponse,
   RegisterRequest,
   RequestPasswordResetRequest,
   ResetPasswordRequest,
-  ResetPasswordResponse
+  ResetPasswordResponse,
+  UpdateAuthRoleRequest,
+  UpdateAuthUserRequest
 } from '../models/chill-auth.models';
 import type {
   ChillEntityChangeNotification,
@@ -48,6 +55,22 @@ interface ChillSharpNgClientEntityChangeSupport {
       guid?: string | null
     ) => Promise<{ unsubscribe: () => Promise<void> }>;
     disconnectEntityChanges?: () => Promise<void>;
+  };
+}
+
+interface ChillAuthManagementSupport {
+  getRawClient?: () => {
+    getAuthUsers?: () => Promise<unknown>;
+    updateAuthUser?: (userGuid: string, request: JsonObject) => Promise<unknown>;
+    getAuthUserRoles?: (userGuid: string) => Promise<unknown>;
+    assignAuthRole?: (userGuid: string, roleGuid: string) => Promise<void>;
+    removeAuthRole?: (userGuid: string, roleGuid: string) => Promise<void>;
+    getAuthRoles?: () => Promise<unknown>;
+    createAuthRole?: (request: JsonObject) => Promise<unknown>;
+    updateAuthRole?: (roleGuid: string, request: JsonObject) => Promise<unknown>;
+    getAuthPermissionRules?: (userGuid?: string, roleGuid?: string) => Promise<unknown>;
+    createAuthPermissionRule?: (request: JsonObject) => Promise<unknown>;
+    deleteAuthPermissionRule?: (ruleGuid: string) => Promise<void>;
   };
 }
 
@@ -248,6 +271,135 @@ export class ChillService {
     ));
   }
 
+  getAuthUsers() {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.getAuthUsers !== 'function') {
+      return throwError(() => new Error('Auth user management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.getAuthUsers()).pipe(
+      map((response) => this.normalizeAuthUsers(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  updateAuthUser(userGuid: string, request: UpdateAuthUserRequest) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.updateAuthUser !== 'function') {
+      return throwError(() => new Error('Auth user management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.updateAuthUser(userGuid, request as unknown as JsonObject)).pipe(
+      map((response) => this.normalizeAuthUser(response as JsonObject)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getAuthUserRoles(userGuid: string) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.getAuthUserRoles !== 'function') {
+      return throwError(() => new Error('Auth role management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.getAuthUserRoles(userGuid)).pipe(
+      map((response) => this.normalizeAuthRoles(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  assignAuthRole(userGuid: string, roleGuid: string) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.assignAuthRole !== 'function') {
+      return throwError(() => new Error('Auth role assignment is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.assignAuthRole(userGuid, roleGuid)).pipe(
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  removeAuthRole(userGuid: string, roleGuid: string) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.removeAuthRole !== 'function') {
+      return throwError(() => new Error('Auth role assignment is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.removeAuthRole(userGuid, roleGuid)).pipe(
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getAuthRoles() {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.getAuthRoles !== 'function') {
+      return throwError(() => new Error('Auth role management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.getAuthRoles()).pipe(
+      map((response) => this.normalizeAuthRoles(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  createAuthRole(request: CreateAuthRoleRequest) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.createAuthRole !== 'function') {
+      return throwError(() => new Error('Auth role management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.createAuthRole(request as unknown as JsonObject)).pipe(
+      map((response) => this.normalizeAuthRole(response as JsonObject)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  updateAuthRole(roleGuid: string, request: UpdateAuthRoleRequest) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.updateAuthRole !== 'function') {
+      return throwError(() => new Error('Auth role management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.updateAuthRole(roleGuid, request as unknown as JsonObject)).pipe(
+      map((response) => this.normalizeAuthRole(response as JsonObject)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getAuthPermissionRules(userGuid?: string, roleGuid?: string) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.getAuthPermissionRules !== 'function') {
+      return throwError(() => new Error('Auth permission management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.getAuthPermissionRules(userGuid, roleGuid)).pipe(
+      map((response) => this.normalizeAuthPermissionRules(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  createAuthPermissionRule(request: CreateAuthPermissionRuleRequest) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.createAuthPermissionRule !== 'function') {
+      return throwError(() => new Error('Auth permission management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.createAuthPermissionRule(request as unknown as JsonObject)).pipe(
+      map((response) => this.normalizeAuthPermissionRule(response as JsonObject)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  deleteAuthPermissionRule(ruleGuid: string) {
+    const rawClient = (this.chill as unknown as ChillAuthManagementSupport).getRawClient?.();
+    if (typeof rawClient?.deleteAuthPermissionRule !== 'function') {
+      return throwError(() => new Error('Auth permission management is unavailable on the current ChillSharp client.'));
+    }
+
+    return from(rawClient.deleteAuthPermissionRule(ruleGuid)).pipe(
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
   query(request: ChillQuery) {
     return this.chill.query(request as unknown as JsonObject).pipe(
       map((response) => response as JsonObject),
@@ -408,11 +560,92 @@ export class ChillService {
       : undefined;
   }
 
+  private readJsonBoolean(payload: JsonObject, key: string): boolean {
+    const directValue = payload[key];
+    if (typeof directValue === 'boolean') {
+      return directValue;
+    }
+
+    const matchedKey = Object.keys(payload).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const matchedValue = matchedKey ? payload[matchedKey] : undefined;
+    return matchedValue === true;
+  }
+
+  private readJsonNumber(payload: JsonObject, key: string): number {
+    const directValue = payload[key];
+    if (typeof directValue === 'number') {
+      return directValue;
+    }
+
+    const matchedKey = Object.keys(payload).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const matchedValue = matchedKey ? payload[matchedKey] : undefined;
+    return typeof matchedValue === 'number' ? matchedValue : 0;
+  }
+
+  private isJsonObject(value: unknown): value is JsonObject {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
   private normalizeEntityChangeNotification(change: ChillEntityChangeNotification): ChillEntityChangeNotification {
     return {
       chillType: change.chillType?.trim() ?? '',
       guid: change.guid?.trim() ?? '',
       action: change.action
+    };
+  }
+
+  private normalizeAuthUsers(response: unknown): AuthUser[] {
+    return Array.isArray(response)
+      ? response.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.normalizeAuthUser(item))
+      : [];
+  }
+
+  private normalizeAuthUser(response: JsonObject): AuthUser {
+    return {
+      guid: this.readJsonString(response, 'Guid') ?? '',
+      externalId: this.readJsonString(response, 'ExternalId') ?? '',
+      userName: this.readJsonString(response, 'UserName') ?? '',
+      displayName: this.readJsonString(response, 'DisplayName') ?? '',
+      isActive: this.readJsonBoolean(response, 'IsActive'),
+      canManagePermissions: this.readJsonBoolean(response, 'CanManagePermissions')
+    };
+  }
+
+  private normalizeAuthRoles(response: unknown): AuthRole[] {
+    return Array.isArray(response)
+      ? response.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.normalizeAuthRole(item))
+      : [];
+  }
+
+  private normalizeAuthRole(response: JsonObject): AuthRole {
+    return {
+      guid: this.readJsonString(response, 'Guid') ?? '',
+      name: this.readJsonString(response, 'Name') ?? '',
+      description: this.readJsonString(response, 'Description') ?? '',
+      isActive: this.readJsonBoolean(response, 'IsActive')
+    };
+  }
+
+  private normalizeAuthPermissionRules(response: unknown): AuthPermissionRule[] {
+    return Array.isArray(response)
+      ? response.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.normalizeAuthPermissionRule(item))
+      : [];
+  }
+
+  private normalizeAuthPermissionRule(response: JsonObject): AuthPermissionRule {
+    return {
+      guid: this.readJsonString(response, 'Guid') ?? '',
+      userGuid: this.readJsonString(response, 'UserGuid') ?? '',
+      roleGuid: this.readJsonString(response, 'RoleGuid') ?? '',
+      effect: this.readJsonNumber(response, 'Effect') as AuthPermissionRule['effect'],
+      action: this.readJsonNumber(response, 'Action') as AuthPermissionRule['action'],
+      scope: this.readJsonNumber(response, 'Scope') as AuthPermissionRule['scope'],
+      module: this.readJsonString(response, 'Module') ?? '',
+      entityName: this.readJsonString(response, 'EntityName') ?? '',
+      propertyName: this.readJsonString(response, 'PropertyName') ?? '',
+      appliesToAllProperties: this.readJsonBoolean(response, 'AppliesToAllProperties'),
+      description: this.readJsonString(response, 'Description') ?? '',
+      createdUtc: this.readJsonString(response, 'CreatedUtc') ?? ''
     };
   }
 

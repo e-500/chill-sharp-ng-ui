@@ -1,0 +1,37 @@
+<section class="event-viewer-page">
+  <header class="hero">
+    <p class="eyebrow">{{ chill.T('70245196-BE31-4C1D-845B-8B3CF17F98AF', 'Atlas', 'Atlas') }}</p>
+    <h1>{{ chill.T('E81CE558-CC32-477D-B4B0-8EA226D50A3A', 'Event viewer', 'Visualizzatore eventi') }}</h1>
+    <p class="lede">{{ chill.T('290D35DD-44F1-45B2-B682-4C42C0ABFDEA', 'Search Chill events through the EventQuery schema and browse the returned entities.', 'Cerca gli eventi Chill tramite lo schema EventQuery e consulta le entità restituite.') }}</p>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="notice error">{{ errorMessage() }}</div>
+  }
+
+  @if (isLoadingSchema()) {
+    <div class="notice">{{ chill.T('9836F635-C9D0-47D6-A35D-AE76DAA4A2A7', 'Loading EventQuery schema...', 'Caricamento dello schema EventQuery...') }}</div>
+  } @else {
+    <div class="layout">
+      <section class="panel">
+        <app-chill-form
+          [schema]="querySchema()"
+          [query]="queryModel()"
+          [submitLabel]="isSearching()
+            ? chill.T('F357243A-AE18-44A0-90DB-A7FB2C7E3278', 'Searching...', 'Ricerca in corso...')
+            : chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca')"
+          (formSubmit)="search($event)" />
+      </section>
+
+      <section class="panel">
+        @if (isSearching()) {
+          <div class="notice">{{ chill.T('6734CE10-8F49-4E20-8ADB-C6AEF407399E', 'Running query...', 'Esecuzione query in corso...') }}</div>
+        }
+
+        <app-chill-table
+          [schema]="resultSchema()"
+          [entities]="results()" />
+      </section>
+    </div>
+  }
+</section>

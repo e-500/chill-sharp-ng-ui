@@ -1,0 +1,42 @@
+<section class="chill-table-shell">
+  @if (schema()?.displayName) {
+    <header class="table-header">
+      <p class="table-kicker">{{ chill.T('2DDE962B-086C-47B1-8A48-B16F0E34C0A3', 'Chill schema', 'Schema Chill') }}</p>
+      <h2>{{ schema()?.displayName }}</h2>
+    </header>
+  }
+
+  @if (columns().length === 0) {
+    <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
+  } @else {
+    <div class="table-wrap">
+      <table class="chill-table">
+        <thead>
+          <tr>
+            @for (column of columns(); track column.name) {
+              <th scope="col">{{ column.displayName || column.name }}</th>
+            }
+          </tr>
+        </thead>
+
+        <tbody>
+          @if (entities().length === 0) {
+            <tr>
+              <td [attr.colspan]="columns().length" class="empty-row">{{ chill.T('D43AB4B7-3FD0-486C-88FF-7214FB45A1CA', 'No entities to display.', 'Nessuna entità da visualizzare.') }}</td>
+            </tr>
+          } @else {
+            @for (entity of entities(); track trackByEntity($index, entity)) {
+              <tr>
+                @for (column of columns(); track column.name) {
+                  <td [title]="cellText(entity, column)">
+                    {{ cellText(entity, column) }}
+                  </td>
+                }
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

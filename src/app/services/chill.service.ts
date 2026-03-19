@@ -1,7 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
-import { ChillSharpClientError, ChillSharpNgClient, type JsonObject } from 'chill-sharp-ng-client';
-import { catchError, map, tap, throwError } from 'rxjs';
+import { ChillSharpClientError, ChillSharpNgClient, type GetTextRequest, type JsonObject } from 'chill-sharp-ng-client';
+import { Observable, catchError, firstValueFrom, from, map, tap, throwError } from 'rxjs';
 import type {
   AuthSession,
   AuthTokenResponse,
@@ -12,20 +11,249 @@ import type {
   ResetPasswordRequest,
   ResetPasswordResponse
 } from '../models/chill-auth.models';
+import type {
+  ChillEntityChangeNotification,
+  ChillQuery,
+  ChillSchema,
+  ChillSchemaListItem
+} from '../models/chill-schema.models';
+import { CHILL_BASE_URL, CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE, CHILL_SECONDARY_TEXT_CULTURE } from '../chill.config';
 
 const SESSION_STORAGE_KEY = 'cini-home.chill-auth-session';
+const TEXT_QUEUE_DELAY_MS = 50;
+
+interface PendingTextRequest {
+  request: GetTextRequest;
+  fallbackText: string;
+}
+
+interface ChillSharpClientSessionSync {
+  applyAuthToken?: (payload: JsonObject, forgetPassword: boolean) => void;
+}
+
+interface ChillSharpNgClientSchemaListSupport {
+  getSchemaList?: (cultureName?: string) => { pipe: (...args: unknown[]) => unknown };
+  getRawClient?: () => {
+    getSchemaList?: (cultureName?: string) => Promise<unknown>;
+  };
+}
+
+interface ChillSharpNgClientEntityChangeSupport {
+  watchEntityChanges?: (chillType: string, guid?: string | null) => Observable<ChillEntityChangeNotification[]>;
+  disconnectEntityChanges?: () => Observable<void>;
+  getRawClient?: () => {
+    subscribeToEntityChanges?: (
+      chillType: string,
+      callback: (changes: ChillEntityChangeNotification[]) => void | Promise<void>,
+      guid?: string | null
+    ) => Promise<{ unsubscribe: () => Promise<void> }>;
+    disconnectEntityChanges?: () => Promise<void>;
+  };
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class ChillService {
   private readonly chill = inject(ChillSharpNgClient);
-  private readonly router = inject(Router);
   private readonly sessionState = signal<AuthSession | null>(this.readStoredSession());
+  private readonly textVersion = signal(0);
+  private readonly textCache = new Map<string, string>();
+  private readonly pendingTextRequests = new Map<string, PendingTextRequest>();
+  private readonly inFlightTextRequests = new Set<string>();
+  private readonly pendingTextResolvers = new Map<string, Array<(value: string) => void>>();
+  private textQueueHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
 
   readonly session = this.sessionState.asReadonly();
   readonly isAuthenticated = computed(() => this.sessionState() !== null);
   readonly userName = computed(() => this.sessionState()?.userName ?? '');
+
+  constructor() {
+    this.syncClientSession(this.sessionState());
+    this.logStartupDiagnostics();
+  }
+
+  version(): string {
+    const versionFn = (this.chill as unknown as { version?: () => string }).version;
+    if (typeof versionFn !== 'function') {
+      return this.T('1EB1A234-D374-48B1-9E14-C9A7BAE1C31D', 'Client version is unavailable on the current ChillSharp instance.', 'La versione del client non è disponibile nell\'istanza corrente di ChillSharp.');
+    }
+
+    return versionFn.call(this.chill);
+  }
+
+  T(labelGuid: string, primaryDefaultText: string, secondaryDefaultText: string): string {
+    this.textVersion();
+
+    const key = this.normalizeLabelGuid(labelGuid);
+    const fallbackText = this.selectDefaultText(primaryDefaultText, secondaryDefaultText);
+    if (!key) {
+      return fallbackText;
+    }
+
+    const cachedText = this.textCache.get(key);
+    if (cachedText !== undefined) {
+      return cachedText;
+    }
+
+    this.enqueueTextRequest(key, primaryDefaultText, secondaryDefaultText, fallbackText);
+    return fallbackText;
+  }
+
+  async TAsync(labelGuid: string, primaryDefaultText: string, secondaryDefaultText: string): Promise<string> {
+    const key = this.normalizeLabelGuid(labelGuid);
+    const fallbackText = this.selectDefaultText(primaryDefaultText, secondaryDefaultText);
+    if (!key) {
+      return fallbackText;
+    }
+
+    const cachedText = this.textCache.get(key);
+    if (cachedText !== undefined) {
+      return cachedText;
+    }
+
+    return new Promise<string>((resolve) => {
+      const pendingResolvers = this.pendingTextResolvers.get(key) ?? [];
+      pendingResolvers.push(resolve);
+      this.pendingTextResolvers.set(key, pendingResolvers);
+      this.enqueueTextRequest(key, primaryDefaultText, secondaryDefaultText, fallbackText);
+    });
+  }
+
+  test() {
+    return this.chill.test().pipe(
+      map((response) => response.trim()),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getSchema(chillType: string, chillViewCode: string, cultureName?: string) {
+    return this.chill.getSchema(chillType, chillViewCode, cultureName).pipe(
+      map((response) => response as ChillSchema | null),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getSchemaList(cultureName?: string) {
+    const client = this.chill as unknown as ChillSharpNgClientSchemaListSupport;
+
+    if (typeof client.getSchemaList === 'function') {
+      return this.chill.getSchemaList(cultureName).pipe(
+        map((response) => (response ?? []) as ChillSchemaListItem[]),
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    const rawClient = client.getRawClient?.();
+    if (typeof rawClient?.getSchemaList === 'function') {
+      return from(rawClient.getSchemaList(cultureName)).pipe(
+        map((response) => (response ?? []) as ChillSchemaListItem[]),
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    return throwError(() => new Error(
+      this.T(
+        '25A8B513-F55B-428D-B85F-49A6D39F165A',
+        'The current ChillSharp client does not expose getSchemaList().',
+        'Il client ChillSharp corrente non espone getSchemaList().'
+      )
+    ));
+  }
+
+  watchEntityChanges(chillType: string, guid?: string | null) {
+    const client = this.chill as unknown as ChillSharpNgClientEntityChangeSupport;
+
+    if (typeof client.watchEntityChanges === 'function') {
+      return client.watchEntityChanges(chillType, guid).pipe(
+        map((changes) => changes.map((change) => this.normalizeEntityChangeNotification(change))),
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    const rawClient = client.getRawClient?.();
+    if (typeof rawClient?.subscribeToEntityChanges === 'function') {
+      const subscribeToEntityChanges = rawClient.subscribeToEntityChanges.bind(rawClient);
+      return new Observable<ChillEntityChangeNotification[]>((subscriber) => {
+        let remoteSubscription: { unsubscribe: () => Promise<void> } | null = null;
+        let isClosed = false;
+
+        void subscribeToEntityChanges(
+            chillType,
+            async (changes) => {
+              subscriber.next(changes.map((change) => this.normalizeEntityChangeNotification(change)));
+            },
+            guid
+          )
+          .then(async (subscription) => {
+            remoteSubscription = subscription;
+            if (isClosed) {
+              await subscription.unsubscribe();
+            }
+          })
+          .catch((error) => {
+            subscriber.error(error);
+          });
+
+        return () => {
+          isClosed = true;
+          if (remoteSubscription) {
+            void remoteSubscription.unsubscribe();
+          }
+        };
+      }).pipe(
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    return throwError(() => new Error(
+      this.T(
+        '19AEF9E0-85E9-40DF-A786-22A61C52A9A3',
+        'The current ChillSharp client does not expose entity-change notifications.',
+        'Il client ChillSharp corrente non espone le notifiche di modifica entità.'
+      )
+    ));
+  }
+
+  watchEntity(chillType: string, guid: string) {
+    return this.watchEntityChanges(chillType, guid);
+  }
+
+  watchChillType(chillType: string) {
+    return this.watchEntityChanges(chillType, null);
+  }
+
+  disconnectEntityChanges() {
+    const client = this.chill as unknown as ChillSharpNgClientEntityChangeSupport;
+
+    if (typeof client.disconnectEntityChanges === 'function') {
+      return client.disconnectEntityChanges().pipe(
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    const rawClient = client.getRawClient?.();
+    if (typeof rawClient?.disconnectEntityChanges === 'function') {
+      return from(rawClient.disconnectEntityChanges()).pipe(
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    return throwError(() => new Error(
+      this.T(
+        'BB7AA5AE-3615-47CE-B026-D7D17989D18D',
+        'The current ChillSharp client does not expose notification disconnection.',
+        'Il client ChillSharp corrente non espone la disconnessione delle notifiche.'
+      )
+    ));
+  }
+
+  query(request: ChillQuery) {
+    return this.chill.query(request as unknown as JsonObject).pipe(
+      map((response) => response as JsonObject),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
 
   register(request: RegisterRequest) {
     return this.chill.registerAuthAccount(request as unknown as JsonObject).pipe(
@@ -68,7 +296,7 @@ export class ChillService {
   logout() {
     localStorage.removeItem(SESSION_STORAGE_KEY);
     this.sessionState.set(null);
-    void this.router.navigateByUrl('/login');
+    this.syncClientSession(null);
   }
 
   formatError(error: unknown): string {
@@ -80,7 +308,7 @@ export class ChillService {
       return error.message;
     }
 
-    return 'Unexpected error while calling ChillSharp.';
+    return this.T('48D1CE91-0230-4D35-90D0-A776D804B0A8', 'Unexpected error while calling ChillSharp.', 'Errore imprevisto durante la chiamata a ChillSharp.');
   }
 
   private persistSession(response: AuthTokenResponse): void {
@@ -100,6 +328,7 @@ export class ChillService {
 
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
     this.sessionState.set(session);
+    this.syncClientSession(session);
   }
 
   private readStoredSession(): AuthSession | null {
@@ -129,7 +358,199 @@ export class ChillService {
   }
 
   private toTokenResponse(response: JsonObject): AuthTokenResponse {
-    return response as unknown as AuthTokenResponse;
+    return {
+      AccessToken: this.readJsonString(response, 'AccessToken'),
+      AccessTokenIssuedUtc: this.readJsonString(response, 'AccessTokenIssuedUtc'),
+      AccessTokenExpiresUtc: this.readJsonString(response, 'AccessTokenExpiresUtc'),
+      RefreshToken: this.readJsonString(response, 'RefreshToken'),
+      RefreshTokenExpiresUtc: this.readJsonString(response, 'RefreshTokenExpiresUtc'),
+      UserId: this.readJsonString(response, 'UserId'),
+      UserName: this.readJsonString(response, 'UserName')
+    };
+  }
+
+  private syncClientSession(session: AuthSession | null): void {
+    const client = this.chill.getRawClient() as unknown as ChillSharpClientSessionSync;
+    if (typeof client.applyAuthToken !== 'function') {
+      return;
+    }
+
+    client.applyAuthToken(
+      {
+        AccessToken: session?.accessToken ?? '',
+        AccessTokenExpiresUtc: session?.accessTokenExpiresUtc ?? '',
+        RefreshToken: session?.refreshToken ?? '',
+        RefreshTokenExpiresUtc: session?.refreshTokenExpiresUtc ?? '',
+        UserName: session?.userName ?? ''
+      },
+      true
+    );
+  }
+
+  private readJsonString(payload: JsonObject, key: string): string | undefined {
+    const directValue = payload[key];
+    if (typeof directValue === 'string' && directValue.trim()) {
+      return directValue.trim();
+    }
+
+    const camelKey = key.length > 1
+      ? `${key[0].toLowerCase()}${key.slice(1)}`
+      : key.toLowerCase();
+    const camelValue = payload[camelKey];
+    if (typeof camelValue === 'string' && camelValue.trim()) {
+      return camelValue.trim();
+    }
+
+    const matchedKey = Object.keys(payload).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const matchedValue = matchedKey ? payload[matchedKey] : undefined;
+    return typeof matchedValue === 'string' && matchedValue.trim()
+      ? matchedValue.trim()
+      : undefined;
+  }
+
+  private normalizeEntityChangeNotification(change: ChillEntityChangeNotification): ChillEntityChangeNotification {
+    return {
+      chillType: change.chillType?.trim() ?? '',
+      guid: change.guid?.trim() ?? '',
+      action: change.action
+    };
+  }
+
+  private enqueueTextRequest(
+    key: string,
+    primaryDefaultText: string,
+    secondaryDefaultText: string,
+    fallbackText: string
+  ): void {
+    if (this.textCache.has(key) || this.pendingTextRequests.has(key) || this.inFlightTextRequests.has(key)) {
+      return;
+    }
+
+    this.pendingTextRequests.set(key, {
+      request: {
+        labelGuid: key,
+        cultureName: CHILL_CULTURE,
+        primaryCultureName: CHILL_PRIMARY_TEXT_CULTURE,
+        primaryDefaultText: primaryDefaultText ?? '',
+        secondaryCultureName: CHILL_SECONDARY_TEXT_CULTURE,
+        secondaryDefaultText: secondaryDefaultText ?? ''
+      },
+      fallbackText
+    });
+
+    this.scheduleTextQueueFlush();
+  }
+
+  private scheduleTextQueueFlush(): void {
+    if (this.textQueueHandle !== null) {
+      return;
+    }
+
+    this.textQueueHandle = globalThis.setTimeout(() => {
+      this.textQueueHandle = null;
+      void this.flushTextQueue();
+    }, TEXT_QUEUE_DELAY_MS);
+  }
+
+  private async flushTextQueue(): Promise<void> {
+    const entries = Array.from(this.pendingTextRequests.entries());
+    if (entries.length === 0) {
+      return;
+    }
+
+    this.pendingTextRequests.clear();
+    entries.forEach(([key]) => this.inFlightTextRequests.add(key));
+
+    try {
+      const responses = entries.length === 1
+        ? [await firstValueFrom(this.chill.getText(entries[0][1].request))]
+        : await firstValueFrom(this.chill.getTexts(entries.map(([, entry]) => entry.request)));
+      entries.forEach(([key, entry], index) => {
+        const translatedText = this.readTextResponseValue(responses[index], entry.fallbackText);
+        this.textCache.set(key, translatedText);
+        this.inFlightTextRequests.delete(key);
+        this.resolvePendingTextRequest(key, translatedText);
+      });
+    } catch (error) {
+      this.logDetailedError(entries.length === 1 ? 'getText()' : 'getTexts()', error);
+      entries.forEach(([key, entry]) => {
+        this.textCache.set(key, entry.fallbackText);
+        this.inFlightTextRequests.delete(key);
+        this.resolvePendingTextRequest(key, entry.fallbackText);
+      });
+    }
+
+    this.textVersion.update((value) => value + 1);
+  }
+
+  private resolvePendingTextRequest(key: string, value: string): void {
+    const resolvers = this.pendingTextResolvers.get(key);
+    if (!resolvers) {
+      return;
+    }
+
+    this.pendingTextResolvers.delete(key);
+    resolvers.forEach((resolve) => resolve(value));
+  }
+
+  private readTextResponseValue(response: JsonObject | null | undefined, fallbackText: string): string {
+    const value = response?.['Value'];
+    return typeof value === 'string' && value.trim() ? value.trim() : fallbackText;
+  }
+
+  private normalizeLabelGuid(labelGuid: string): string {
+    return labelGuid.trim().toUpperCase();
+  }
+
+  private selectDefaultText(primaryDefaultText: string, secondaryDefaultText: string): string {
+    const primaryText = primaryDefaultText.trim();
+    const secondaryText = secondaryDefaultText.trim();
+
+    if (this.culturesMatch(CHILL_CULTURE, CHILL_SECONDARY_TEXT_CULTURE) && secondaryText) {
+      return secondaryText;
+    }
+
+    if (this.culturesMatch(CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE) && primaryText) {
+      return primaryText;
+    }
+
+    return primaryText || secondaryText;
+  }
+
+  private culturesMatch(left: string, right: string): boolean {
+    return left.trim().toLowerCase() === right.trim().toLowerCase();
+  }
+
+  private logStartupDiagnostics(): void {
+    console.log('[ChillService] Startup', {
+      baseUrl: CHILL_BASE_URL,
+      culture: CHILL_CULTURE,
+      hasStoredSession: this.sessionState() !== null
+    });
+
+    try {
+      const version = this.version();
+      if (version === this.T('1EB1A234-D374-48B1-9E14-C9A7BAE1C31D', 'Client version is unavailable on the current ChillSharp instance.', 'La versione del client non è disponibile nell\'istanza corrente di ChillSharp.')) {
+        console.warn('[ChillService] Client version unavailable', {
+          reason: version
+        });
+      } else {
+        console.log('[ChillService] Client version', version);
+      }
+    } catch (error) {
+      this.logDetailedError('version()', error);
+    }
+
+    this.chill.test().subscribe({
+      next: (response: string) => {
+        console.log('[ChillService] test() success', {
+          response: response.trim()
+        });
+      },
+      error: (error: unknown) => {
+        this.logDetailedError('test()', error);
+      }
+    });
   }
 
   private rethrowFriendlyError(error: unknown) {
@@ -169,5 +590,31 @@ export class ChillService {
     }
 
     return responseText;
+  }
+
+  private logDetailedError(context: string, error: unknown): void {
+    if (error instanceof ChillSharpClientError) {
+      console.error(`[ChillService] ${context} failed`, {
+        name: error.name,
+        message: error.message,
+        statusCode: error.statusCode,
+        responseText: error.responseText,
+        cause: (error as Error & { cause?: unknown }).cause,
+        stack: error.stack
+      });
+      return;
+    }
+
+    if (error instanceof Error) {
+      console.error(`[ChillService] ${context} failed`, {
+        name: error.name,
+        message: error.message,
+        cause: (error as Error & { cause?: unknown }).cause,
+        stack: error.stack
+      });
+      return;
+    }
+
+    console.error(`[ChillService] ${context} failed`, error);
   }
 }

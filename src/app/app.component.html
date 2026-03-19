@@ -1,15 +1,17 @@
 <div class="app-shell">
   <header class="app-header">
     <div>
-      <p class="brand-mark">Cini Home</p>
-      <p class="brand-copy">Angular auth shell backed by `chill-sharp-ng-client`.</p>
+      <p class="brand-mark">{{ chill.T('F339653B-60A0-4589-B6EA-3BD8220D17EE', 'Cini Home', 'Cini Home') }}</p>
+      <p class="brand-copy">{{ chill.T('3075E125-BE24-49DD-B44C-69C1FC6341D3', 'Angular auth shell backed by `chill-sharp-ng-client`.', 'Shell di autenticazione Angular basata su `chill-sharp-ng-client`.') }}</p>
     </div>
 
-    <nav class="top-nav" aria-label="Primary">
-      <a routerLink="/login" routerLinkActive="active">Login</a>
-      <a routerLink="/register" routerLinkActive="active">Register</a>
-      <a routerLink="/reset-password" routerLinkActive="active">Reset password</a>
-      <a routerLink="/confirm-reset" routerLinkActive="active">Confirm reset</a>
+    <nav class="top-nav" [attr.aria-label]="chill.T('CFE70D4E-2B6C-4431-90CC-0D42CCFA5408', 'Primary', 'Principale')">
+      <a routerLink="/login" routerLinkActive="active">{{ chill.T('0C4F53D0-2087-486B-9F2A-AEBCC226AF09', 'Login', 'Accesso') }}</a>
+      <a routerLink="/register" routerLinkActive="active">{{ chill.T('0A777B5C-F7D1-4084-B32F-D5162E100AF6', 'Register', 'Registrazione') }}</a>
+      <a routerLink="/reset-password" routerLinkActive="active">{{ chill.T('1322FAE4-DBD5-4C8D-8988-FA6035551E02', 'Reset password', 'Reimposta password') }}</a>
+      <a routerLink="/confirm-reset" routerLinkActive="active">{{ chill.T('5346E633-5DF8-4A90-8349-7D5622312A84', 'Confirm reset', 'Conferma reimpostazione') }}</a>
+      <a routerLink="/crud" routerLinkActive="active">{{ chill.T('F0D29662-8A8B-4B57-80F5-EE79A38F8B08', 'CRUD', 'CRUD') }}</a>
+      <a routerLink="/atlas/event-viewer" routerLinkActive="active">{{ chill.T('E81CE558-CC32-477D-B4B0-8EA226D50A3A', 'Event viewer', 'Visualizzatore eventi') }}</a>
     </nav>
   </header>
 

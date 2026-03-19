@@ -1,0 +1,42 @@
+<section class="chill-form-shell">
+  @if (schema()?.displayName) {
+    <header class="form-header">
+      <p class="form-kicker">{{ chill.T('2DDE962B-086C-47B1-8A48-B16F0E34C0A3', 'Chill schema', 'Schema Chill') }}</p>
+      <h2>{{ schema()?.displayName }}</h2>
+    </header>
+  }
+
+  @if (columns().length === 0) {
+    <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
+  } @else {
+    <form class="chill-form" (ngSubmit)="submit()">
+      @for (property of columns(); track property.name) {
+        <label class="field">
+          <span>{{ property.displayName || property.name }}</span>
+
+          @if (fieldType(property) === 'checkbox') {
+            <input
+              type="checkbox"
+              [ngModel]="fields()[property.name]"
+              (ngModelChange)="updateBooleanField(property.name, $event)"
+              [name]="property.name" />
+          } @else if (isMultiline(property)) {
+            <textarea
+              rows="4"
+              [ngModel]="fields()[property.name]"
+              (ngModelChange)="updateTextField(property.name, $event)"
+              [name]="property.name"></textarea>
+          } @else {
+            <input
+              [type]="fieldType(property)"
+              [ngModel]="fields()[property.name]"
+              (ngModelChange)="updateTextField(property.name, $event)"
+              [name]="property.name" />
+          }
+        </label>
+      }
+
+      <button type="submit">{{ submitLabel() }}</button>
+    </form>
+  }
+</section>

@@ -1,0 +1,56 @@
+<section class="crud-page">
+  <header class="hero">
+    <p class="eyebrow">{{ chill.T('F3D22CB0-BE93-4405-95E9-CE28A9F8A31B', 'CRUD', 'CRUD') }}</p>
+    <h1>{{ chill.T('734D02AF-C7EA-48D4-BF23-1A31AEB4C356', 'Query browser', 'Esplora query') }}</h1>
+    <p class="lede">{{ chill.T('FE5FE5AB-A17B-40C2-86A7-E23D7E2B13B8', 'Select a query schema, fill its properties, and browse the returned entities. This page is read-only and does not implement create or delete actions.', 'Seleziona uno schema di query, compila le sue proprietà e consulta le entità restituite. Questa pagina è in sola lettura e non implementa azioni di creazione o eliminazione.') }}</p>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="notice error">{{ errorMessage() }}</div>
+  }
+
+  <section class="selector-panel">
+    <label class="selector-field" for="query-schema-select">
+      <span>{{ chill.T('C7A65EF6-D4A4-40F7-83A9-C513170D3036', 'Query schema', 'Schema di query') }}</span>
+      <select
+        id="query-schema-select"
+        [ngModel]="selectedQueryType()"
+        (ngModelChange)="selectQuerySchema($event)"
+        [disabled]="isLoadingSchemaList() || querySchemas().length === 0"
+        name="querySchema">
+        <option value="">{{ chill.T('564D1E7C-D967-4E38-BBF5-9CC8A6DB365F', 'Select a query schema', 'Seleziona uno schema di query') }}</option>
+        @for (schema of querySchemas(); track schema.chillType) {
+          <option [value]="schema.chillType">{{ schemaLabel(schema) }}</option>
+        }
+      </select>
+    </label>
+  </section>
+
+  @if (isLoadingSchemaList()) {
+    <div class="notice">{{ chill.T('77C1E6C4-D380-40C8-9BA8-31A611A9DA15', 'Loading query schemas...', 'Caricamento degli schemi di query...') }}</div>
+  } @else if (isLoadingSchema()) {
+    <div class="notice">{{ chill.T('FE514A29-58AB-4842-ABDB-D348D05385E8', 'Loading selected schema...', 'Caricamento dello schema selezionato...') }}</div>
+  } @else if (querySchema()) {
+    <div class="layout">
+      <section class="panel">
+        <app-chill-form
+          [schema]="querySchema()"
+          [query]="queryModel()"
+          [submitLabel]="isSearching()
+            ? chill.T('D30D4FEA-469D-4FA0-A737-E5B7D280A758', 'Searching...', 'Ricerca in corso...')
+            : chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca')"
+          (formSubmit)="search($event)" />
+      </section>
+
+      <section class="panel">
+        @if (isSearching()) {
+          <div class="notice">{{ chill.T('6734CE10-8F49-4E20-8ADB-C6AEF407399E', 'Running query...', 'Esecuzione query in corso...') }}</div>
+        }
+
+        <app-chill-table
+          [schema]="resultSchema()"
+          [entities]="results()" />
+      </section>
+    </div>
+  }
+</section>

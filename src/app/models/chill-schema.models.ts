@@ -15,6 +15,7 @@ export interface ChillSchema {
   chillViewCode?: string;
   displayName?: string;
   queryRelatedChillType?: string;
+  metadata?: Record<string, string>;
   properties: ChillPropertySchema[];
 }
 

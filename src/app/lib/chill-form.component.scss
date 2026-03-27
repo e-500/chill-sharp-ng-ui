@@ -7,6 +7,43 @@
   gap: 1rem;
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.layout-button {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.layout-button.secondary {
+  border-radius: 1rem;
+}
+
+.column-count {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.column-count input {
+  width: 5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .form-header h2,
 .form-header p {
   margin: 0;
@@ -30,34 +67,60 @@
   box-shadow: var(--shadow);
 }
 
-.field {
+.form-grid {
   display: grid;
-  gap: 0.45rem;
+  gap: 1rem;
 }
 
-.field span {
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.field input,
-.field textarea {
-  width: 100%;
-  padding: 0.9rem 1rem;
+.form-cell {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
   border-radius: 1rem;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(23, 49, 60, 0.08);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.form-cell.edit-mode {
+  cursor: grab;
+}
+
+.form-cell.empty-cell {
+  min-height: 5rem;
+}
+
+.cell-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
   color: var(--text-main);
+  font-weight: 600;
 }
 
-.field input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
+.span-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
-.field textarea {
-  resize: vertical;
+.span-controls button {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+}
+
+.empty-cell-body {
+  min-height: 3rem;
+  border-radius: 0.85rem;
+}
+
+.empty-cell-body.edit-mode {
+  border: 1px dashed var(--border-color);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 button[type='submit'] {
@@ -78,4 +141,8 @@ button[type='submit'] {
   background: rgba(255, 255, 255, 0.65);
   border: 1px dashed var(--border-color);
   color: var(--text-muted);
+}
+
+.error-state {
+  color: #9b1c1c;
 }

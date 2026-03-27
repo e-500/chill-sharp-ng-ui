@@ -1,0 +1,81 @@
+:host {
+  display: block;
+}
+
+.polymorphic-fields {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field span {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-main);
+}
+
+.field input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field-error {
+  color: #9b1c1c;
+  font-size: 0.85rem;
+}
+
+.lookup {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lookup-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+}
+
+.lookup-search,
+.lookup-clear,
+.lookup-result {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.lookup-results {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.lookup-result {
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .lookup-bar {
+    grid-template-columns: 1fr;
+  }
+}

@@ -190,6 +190,28 @@ export class ChillService {
     );
   }
 
+  setSchema(schema: ChillSchema) {
+    return this.chill.setSchema({
+      ...schema,
+      chillType: schema.chillType ?? '',
+      chillViewCode: schema.chillViewCode ?? '',
+      displayName: schema.displayName ?? '',
+      queryRelatedChillType: schema.queryRelatedChillType ?? null,
+      metadata: schema.metadata ?? {},
+      properties: (schema.properties ?? []).map((property) => ({
+        ...property,
+        name: property.name,
+        displayName: property.displayName ?? property.name,
+        propertyType: property.propertyType ?? 0,
+        chillType: property.chillType ?? null,
+        metadata: property.metadata ?? {}
+      }))
+    }).pipe(
+      map((response) => response as ChillSchema | null),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
   getSchemaList(cultureName?: string) {
     const client = this.chill as unknown as ChillSharpNgClientSchemaListSupport;
 
@@ -598,7 +620,7 @@ export class ChillService {
     );
   }
 
-  toJsonValue(schema: ChillSchema | null, propertyName: string, value: string | boolean | undefined): JsonValue {
+  toJsonValue(schema: ChillSchema | null, propertyName: string, value: JsonValue | undefined): JsonValue {
     const property = schema?.properties.find((candidate) => candidate.name === propertyName);
     return this.serializePropertyValue(property, value);
   }
@@ -817,14 +839,28 @@ export class ChillService {
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
-  private serializePropertyValue(property: ChillPropertySchema | undefined, value: string | boolean | undefined): JsonValue {
+  private serializePropertyValue(property: ChillPropertySchema | undefined, value: JsonValue | undefined): JsonValue {
     const propertyType = property?.propertyType ?? CHILL_PROPERTY_TYPE.Unknown;
 
     if (typeof value === 'boolean') {
       return value;
     }
 
-    const normalized = value?.trim() ?? '';
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (this.isJsonObject(value)) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    const normalized = typeof value === 'string'
+      ? value.trim()
+      : '';
     if (!normalized) {
       return this.emptySerializedValue(propertyType);
     }

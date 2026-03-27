@@ -6,37 +6,94 @@
     </header>
   }
 
-  @if (columns().length === 0) {
+  <div class="form-actions">
+    <button type="button" class="layout-button" (click)="toggleEditMode()" [disabled]="isSavingLayout()">
+      @if (isSavingLayout()) {
+        {{ chill.T('F9BFE458-EA0D-4E27-A8A9-C7EE0C02F9FB', 'Saving layout...', 'Salvataggio layout...') }}
+      } @else if (isEditMode()) {
+        {{ chill.T('D7EA89E2-4AF2-455A-8FA9-33540E61D7C5', 'Done', 'Fine') }}
+      } @else {
+        {{ chill.T('872638CF-0346-4351-A53A-62A6B78B94FE', 'Edit mode', 'Modalita modifica') }}
+      }
+    </button>
+
+    @if (isEditMode()) {
+      <label class="column-count">
+        <span>{{ chill.T('665D0BFB-D1BB-4D53-B58A-C578CA559A0B', 'Columns', 'Colonne') }}</span>
+        <input
+          type="number"
+          min="1"
+          [ngModel]="layoutState().columnCount"
+          (ngModelChange)="updateColumnCount($event)"
+          name="form-column-count" />
+      </label>
+
+      <button type="button" class="layout-button secondary" (click)="addEmptyCell()">
+        {{ chill.T('7B8C7557-FB39-4C6C-B70F-D70F87EC7517', 'Add empty cell', 'Aggiungi cella vuota') }}
+      </button>
+
+      <button type="button" class="layout-button secondary" (click)="resetLayout()">
+        {{ chill.T('408CE646-58A0-4657-8192-D1C79BFE7F91', 'Reset', 'Reset') }}
+      </button>
+    }
+  </div>
+
+  @if (layoutError()) {
+    <div class="empty-state error-state">{{ layoutError() }}</div>
+  }
+
+  @if (properties().length === 0) {
     <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
   } @else {
     <form class="chill-form" (ngSubmit)="submit()">
-      @for (property of columns(); track property.name) {
-        <label class="field">
-          <span>{{ property.displayName || property.name }}</span>
+      <div class="form-grid" [style.grid-template-columns]="gridTemplateColumns()">
+        @for (item of layoutItems(); track trackByProperty($index, item)) {
+          <section
+            class="form-cell"
+            [class.empty-cell]="item.kind === 'empty'"
+            [class.edit-mode]="isEditMode()"
+            [style.grid-column]="'span ' + item.span"
+            [draggable]="isEditMode()"
+            (dragstart)="beginDrag(item.id)"
+            (dragover)="allowDrop($event)"
+            (drop)="dropProperty(item.id)"
+            (dragend)="endDrag()">
+            @if (isEditMode()) {
+              <div class="cell-toolbar">
+                <span>
+                  @if (item.kind === 'property') {
+                    {{ item.property.displayName || item.property.name }}
+                  } @else {
+                    {{ chill.T('278389E7-9C0F-4849-B7C8-B904CC0E4AAA', 'Empty cell', 'Cella vuota') }}
+                  }
+                </span>
+                <div class="span-controls">
+                  <button type="button" (click)="decreaseSpan(item.id)">-</button>
+                  <span>{{ item.span }}</span>
+                  <button type="button" (click)="increaseSpan(item.id)">+</button>
+                </div>
+              </div>
+            }
+            @else 
+            {
+              @if (item.kind === 'property') {
+                <app-chill-polymorphic-input
+                  [source]="workingSource()"
+                  [schema]="schema()"
+                  [propertyNames]="[item.property.name]"
+                  (valueChange)="updateFields($event)"
+                  (validityChange)="updatePropertyValidity(item.property.name, $event)" />
+              } @else {
+                <div class="empty-cell-body" [class.edit-mode]="isEditMode()"></div>
+              }
+            }
+          </section>
+        }
+      </div>
 
-          @if (fieldType(property) === 'checkbox') {
-            <input
-              type="checkbox"
-              [ngModel]="fields()[property.name]"
-              (ngModelChange)="updateBooleanField(property.name, $event)"
-              [name]="property.name" />
-          } @else if (isMultiline(property)) {
-            <textarea
-              rows="4"
-              [ngModel]="fields()[property.name]"
-              (ngModelChange)="updateTextField(property.name, $event)"
-              [name]="property.name"></textarea>
-          } @else {
-            <input
-              [type]="fieldType(property)"
-              [ngModel]="fields()[property.name]"
-              (ngModelChange)="updateTextField(property.name, $event)"
-              [name]="property.name" />
-          }
-        </label>
+      @if (!isEditMode()) {
+        <button type="submit" [disabled]="!canSubmit()">{{ submitLabel() }}</button>
       }
-
-      <button type="submit">{{ submitLabel() }}</button>
     </form>
   }
 </section>

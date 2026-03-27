@@ -7,6 +7,21 @@
   gap: 1rem;
 }
 
+.table-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.layout-button {
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
 .table-header h2,
 .table-header p {
   margin: 0;
@@ -57,6 +72,28 @@
   overflow-wrap: anywhere;
 }
 
+.column-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.column-name-input {
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.column-editor input[type='checkbox'] {
+  margin: 0;
+}
+
 .chill-table tbody tr:last-child td {
   border-bottom: 0;
 }
@@ -64,6 +101,10 @@
 .empty-state,
 .empty-row {
   color: var(--text-muted);
+}
+
+.error-state {
+  color: #9b1c1c;
 }
 
 .empty-state {

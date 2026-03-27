@@ -1,0 +1,68 @@
+<div class="polymorphic-fields">
+  @for (property of properties(); track property.name) {
+    <label class="field">
+      <span>{{ property.displayName || property.name }}</span>
+
+      @if (isCheckbox(property)) {
+        <input
+          type="checkbox"
+          [ngModel]="booleanValue(property.name)"
+          (ngModelChange)="updateBoolean(property, $event)"
+          [name]="property.name" />
+      } @else if (isLookup(property)) {
+        <div class="lookup">
+          <div class="lookup-bar">
+            <input
+              type="text"
+              [ngModel]="lookupTerm(property.name)"
+              (ngModelChange)="updateLookupTerm(property, $event)"
+              [name]="property.name"
+              [placeholder]="placeholder(property) || 'Search by FullTextSearch'" />
+            <button type="button" class="lookup-search" (click)="searchLookup(property)" [disabled]="lookupIsSearching(property.name)">
+              {{ lookupIsSearching(property.name)
+                ? chill.T('ABAF5996-C2BB-4F85-BE0F-CC75883A648B', 'Searching...', 'Ricerca in corso...')
+                : chill.T('F336A244-F631-4A35-A953-4107F991F454', 'Search', 'Cerca') }}
+            </button>
+            <button type="button" class="lookup-clear" (click)="clearLookup(property)">
+              {{ chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci') }}
+            </button>
+          </div>
+
+          @if (lookupResults(property.name).length > 0) {
+            <div class="lookup-results">
+              @for (result of lookupResults(property.name); track $index) {
+                <button type="button" class="lookup-result" (click)="selectLookupResult(property, result)">
+                  {{ lookupLabel(result) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+                </button>
+              }
+            </div>
+          }
+
+          @if (lookupError(property.name)) {
+            <small class="field-error">{{ lookupError(property.name) }}</small>
+          }
+        </div>
+      } @else if (isTextarea(property)) {
+        <textarea
+          rows="4"
+          [ngModel]="textValue(property.name)"
+          (ngModelChange)="updateText(property, $event)"
+          [name]="property.name"
+          [placeholder]="placeholder(property)"></textarea>
+      } @else {
+        <input
+          [type]="inputType(property)"
+          [step]="inputStep(property)"
+          [ngModel]="textValue(property.name)"
+          (ngModelChange)="updateText(property, $event)"
+          (blur)="normalizeTextOnBlur(property)"
+          [name]="property.name"
+          [placeholder]="placeholder(property)" />
+      }
+
+      @if (validationMessage(property.name)) {
+        <small class="field-error">{{ validationMessage(property.name) }}</small>
+      }
+    </label>
+  }
+</div>

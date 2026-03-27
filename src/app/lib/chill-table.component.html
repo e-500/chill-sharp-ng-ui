@@ -6,15 +6,55 @@
     </header>
   }
 
-  @if (columns().length === 0) {
+  <div class="table-actions">
+    <button type="button" class="layout-button" (click)="toggleEditLayoutMode()" [disabled]="isSavingLayout()">
+      @if (isSavingLayout()) {
+        {{ chill.T('B46C82D8-443E-45DE-8D49-C270656B511E', 'Saving layout...', 'Salvataggio layout...') }}
+      } @else if (isEditLayoutMode()) {
+        {{ chill.T('7C681F13-4245-447F-B66A-D9A3A500D322', 'Done', 'Fine') }}
+      } @else {
+        {{ chill.T('9D0B43AC-47B4-4C63-98C7-DB0118C9C0CF', 'Edit layout mode', 'Modalita modifica layout') }}
+      }
+    </button>
+  </div>
+
+  @if (layoutError()) {
+    <div class="empty-state error-state">{{ layoutError() }}</div>
+  }
+
+  @if (visibleColumns().length === 0) {
     <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
   } @else {
     <div class="table-wrap">
       <table class="chill-table">
         <thead>
           <tr>
-            @for (column of columns(); track column.name) {
-              <th scope="col">{{ column.displayName || column.name }}</th>
+            @for (column of visibleColumns(); track column.name) {
+              <th
+                scope="col"
+                [draggable]="isEditLayoutMode()"
+                (dragstart)="beginDrag(column.name)"
+                (dragover)="allowDrop($event)"
+                (drop)="dropColumn(column.name)"
+                (dragend)="endDrag()">
+                @if (isEditLayoutMode()) {
+                  <label class="column-editor">
+                    <input
+                      type="checkbox"
+                      [ngModel]="column.hidden"
+                      (ngModelChange)="updateColumnHidden(column.name, $event)"
+                      [name]="'hidden-' + column.name" />
+                    <input
+                      type="text"
+                      class="column-name-input"
+                      [ngModel]="column.displayName"
+                      (ngModelChange)="updateColumnDisplayName(column.name, $event)"
+                      [name]="'displayName-' + column.name" />
+                  </label>
+                } @else {
+                  {{ column.displayName || column.name }}
+                }
+              </th>
             }
           </tr>
         </thead>
@@ -22,12 +62,12 @@
         <tbody>
           @if (entities().length === 0) {
             <tr>
-              <td [attr.colspan]="columns().length" class="empty-row">{{ chill.T('D43AB4B7-3FD0-486C-88FF-7214FB45A1CA', 'No entities to display.', 'Nessuna entità da visualizzare.') }}</td>
+              <td [attr.colspan]="visibleColumns().length" class="empty-row">{{ chill.T('D43AB4B7-3FD0-486C-88FF-7214FB45A1CA', 'No entities to display.', 'Nessuna entità da visualizzare.') }}</td>
             </tr>
           } @else {
             @for (entity of entities(); track trackByEntity($index, entity)) {
               <tr>
-                @for (column of columns(); track column.name) {
+                @for (column of visibleColumns(); track column.name) {
                   <td [title]="cellText(entity, column)">
                     {{ cellText(entity, column) }}
                   </td>

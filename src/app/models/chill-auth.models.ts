@@ -88,6 +88,7 @@ export enum PermissionEffect {
 }
 
 export enum PermissionAction {
+  FullControl = 0,
   Query = 1,
   Create = 2,
   Update = 3,
@@ -117,6 +118,18 @@ export interface AuthPermissionRule {
   createdUtc?: string;
 }
 
+export interface EditableAuthPermissionRule {
+  guid?: string;
+  effect: PermissionEffect;
+  action: PermissionAction;
+  scope: PermissionScope;
+  module: string;
+  entityName?: string;
+  propertyName?: string;
+  appliesToAllProperties: boolean;
+  description: string;
+}
+
 export interface CreateAuthPermissionRuleRequest {
   userGuid?: string;
   roleGuid?: string;
@@ -128,4 +141,16 @@ export interface CreateAuthPermissionRuleRequest {
   propertyName?: string;
   appliesToAllProperties: boolean;
   description: string;
+}
+
+export interface AuthUserAccessDetails {
+  user: AuthUser;
+  roles: AuthRole[];
+  permissions: AuthPermissionRule[];
+}
+
+export interface AuthRoleAccessDetails {
+  role: AuthRole;
+  users: AuthUser[];
+  permissions: AuthPermissionRule[];
 }

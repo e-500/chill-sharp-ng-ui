@@ -4,10 +4,7 @@ import { ChillService } from '../../services/chill.service';
 import { PermissionsPageComponent } from './permissions-page.component';
 
 describe('PermissionsPageComponent', () => {
-  let component: PermissionsPageComponent;
-  let fixture: ComponentFixture<PermissionsPageComponent>;
-
-  beforeEach(async () => {
+  async function createComponent(canManagePermissions: boolean): Promise<ComponentFixture<PermissionsPageComponent>> {
     await TestBed.configureTestingModule({
       imports: [PermissionsPageComponent],
       providers: [
@@ -16,6 +13,10 @@ describe('PermissionsPageComponent', () => {
           useValue: {
             T: (_labelGuid: string, primaryDefaultText: string, secondaryDefaultText: string) => secondaryDefaultText || primaryDefaultText,
             formatError: (error: unknown) => `${error ?? ''}`,
+            session: () => ({
+              userId: 'user-1',
+              userName: 'root'
+            }),
             getAuthUsers: () => of([
               {
                 guid: 'user-1',
@@ -23,7 +24,7 @@ describe('PermissionsPageComponent', () => {
                 userName: 'root',
                 displayName: 'Root',
                 isActive: true,
-                canManagePermissions: true
+                canManagePermissions
               }
             ]),
             getAuthRoles: () => of([
@@ -34,49 +35,68 @@ describe('PermissionsPageComponent', () => {
                 isActive: true
               }
             ]),
-            getAuthUserRoles: () => of([]),
-            getAuthPermissionRules: () => of([]),
-            updateAuthUser: () => of({
-              guid: 'user-1',
-              externalId: 'ext-1',
-              userName: 'root',
-              displayName: 'Root',
-              isActive: true,
-              canManagePermissions: true
+            getAuthUserAccess: () => of({
+              user: {
+                guid: 'user-1',
+                externalId: 'ext-1',
+                userName: 'root',
+                displayName: 'Root',
+                isActive: true,
+                canManagePermissions: true
+              },
+              roles: [],
+              permissions: []
             }),
-            assignAuthRole: () => of(void 0),
-            removeAuthRole: () => of(void 0),
-            createAuthRole: () => of({
-              guid: 'role-2',
-              name: 'Editors',
-              description: 'Edit role',
-              isActive: true
+            saveAuthUserAccess: () => of({
+              user: {
+                guid: 'user-1',
+                externalId: 'ext-1',
+                userName: 'root',
+                displayName: 'Root',
+                isActive: true,
+                canManagePermissions: true
+              },
+              roles: [],
+              permissions: []
             }),
-            createAuthPermissionRule: () => of({
-              guid: 'rule-1',
-              userGuid: 'user-1',
-              roleGuid: '',
-              effect: 1,
-              action: 1,
-              scope: 1,
-              module: 'Auth',
-              entityName: '',
-              propertyName: '',
-              appliesToAllProperties: false,
-              description: ''
+            getAuthRoleAccess: () => of({
+              role: {
+                guid: 'role-1',
+                name: 'Administrators',
+                description: 'Admin role',
+                isActive: true
+              },
+              users: [],
+              permissions: []
             }),
-            deleteAuthPermissionRule: () => of(void 0)
+            saveAuthRoleAccess: () => of({
+              role: {
+                guid: 'role-1',
+                name: 'Administrators',
+                description: 'Admin role',
+                isActive: true
+              },
+              users: [],
+              permissions: []
+            })
           }
         }
       ]
     }).compileComponents();
 
-    fixture = TestBed.createComponent(PermissionsPageComponent);
-    component = fixture.componentInstance;
+    const fixture = TestBed.createComponent(PermissionsPageComponent);
     fixture.detectChanges();
+    return fixture;
+  }
+
+  it('shows an empty state when the current user cannot manage permissions', async () => {
+    const fixture = await createComponent(false);
+    expect(fixture.nativeElement.textContent).toContain('Non disponi dei permessi sufficienti per gestire i permessi.');
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  it('shows user and role tabs when the current user can manage permissions', async () => {
+    const fixture = await createComponent(true);
+    expect(fixture.nativeElement.textContent).toContain('Utenti');
+    expect(fixture.nativeElement.textContent).toContain('Ruoli');
   });
 });

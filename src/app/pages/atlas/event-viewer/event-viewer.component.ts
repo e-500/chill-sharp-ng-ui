@@ -144,7 +144,7 @@ export class EventViewerComponent implements OnInit {
     return {
       ...query,
       chillType: query.chillType?.trim() || this.querySchema()?.chillType?.trim() || EVENT_QUERY_TYPE,
-      resultProperties: resultSchema?.properties?.map((property) => ({ Name: property.name })) ?? []
+      resultProperties: resultSchema?.properties?.map((property) => ({ PropertyName: property.name })) ?? []
     };
   }
 

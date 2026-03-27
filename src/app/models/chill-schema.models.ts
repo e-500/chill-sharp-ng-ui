@@ -3,6 +3,8 @@ import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 export interface ChillPropertySchema {
   name: string;
   displayName?: string;
+  propertyType?: number;
+  chillType?: string | null;
   dateFormat?: string;
   customFormat?: string;
   metadata?: Record<string, string>;

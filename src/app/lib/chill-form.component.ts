@@ -18,7 +18,7 @@ type FieldValueMap = Record<string, string | boolean>;
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './chill-form.component.html',
-  styleUrl: './chill-form.component.scss'
+  styleUrl: './chill-form.component.scss'   
 })
 export class ChillFormComponent {
   readonly chill = inject(ChillService);
@@ -144,7 +144,7 @@ export class ChillFormComponent {
     const entity = this.entity();
     return {
       ...(entity ?? {}),
-      Properties: this.buildPropertiesObject()
+      properties: this.buildPropertiesObject()
     };
   }
 
@@ -152,35 +152,19 @@ export class ChillFormComponent {
     const query = this.query();
     return {
       ...(query ?? {}),
-      Properties: this.buildPropertiesObject()
+      properties: this.buildPropertiesObject()
     };
   }
 
   private buildPropertiesObject(): Record<string, JsonValue> {
     const properties: Record<string, JsonValue> = {};
+    const schema = this.schema();
 
     for (const property of this.columns()) {
       const rawValue = this.fields()[property.name];
-      properties[property.name] = this.toJsonValue(rawValue, property);
+      properties[property.name] = this.chill.toJsonValue(schema, property.name, rawValue);
     }
 
     return properties;
-  }
-
-  private toJsonValue(value: string | boolean | undefined, property: ChillPropertySchema): JsonValue {
-    if (typeof value === 'boolean') {
-      return value;
-    }
-
-    const normalized = value?.trim() ?? '';
-    if (!normalized) {
-      return '';
-    }
-
-    if (this.fieldType(property) === 'number' && !Number.isNaN(Number(normalized))) {
-      return Number(normalized);
-    }
-
-    return normalized;
   }
 }

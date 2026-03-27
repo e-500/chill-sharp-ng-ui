@@ -1,0 +1,144 @@
+@if (lookupErrorMessage()) {
+  <div class="notice error">{{ lookupErrorMessage() }}</div>
+}
+
+<section class="box-card">
+  <header class="card-header">
+    <h3>{{ chill.T('64D855B5-1A89-4D6B-BD59-B201182BDBEF', 'Permission rules', 'Regole permesso') }}</h3>
+    <p>{{ chill.T('C04B7E13-FB43-4E9B-B9DA-DB4E6E49590A', 'Configure module, entity, and property permission rules.', 'Configura regole permesso per modulo, entità e proprietà.') }}</p>
+  </header>
+
+  <div class="permission-list">
+    @for (rule of rows(); track rule.localId) {
+      <article class="permission-card">
+        @if (isEditingRow(rule.localId)) {
+          <div class="form-grid">
+            <label class="field">
+              <span>{{ chill.T('678D4A79-804B-4D8F-B986-B08F4E3EC22F', 'Effect', 'Effetto') }}</span>
+              <select [ngModel]="rule.effect" (ngModelChange)="updatePermissionRow(rule.localId, 'effect', +$event)">
+                @for (option of permissionEffectOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('7E4DDC4C-D4E7-4427-BC9A-08AEF926A0FE', 'Action', 'Azione') }}</span>
+              <select [ngModel]="rule.action" (ngModelChange)="updatePermissionRow(rule.localId, 'action', +$event)">
+                @for (option of permissionActionOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('88724B00-D84F-44C8-AFC9-BC6C94A8D5E6', 'Scope', 'Ambito') }}</span>
+              <select [ngModel]="rule.scope" (ngModelChange)="updatePermissionRow(rule.localId, 'scope', +$event)">
+                @for (option of permissionScopeOptions; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('2E4F99D0-8747-4A72-8394-C53F144D6CB2', 'Module', 'Modulo') }}</span>
+              <select [ngModel]="rule.module" (ngModelChange)="updatePermissionRow(rule.localId, 'module', $event)">
+                <option value="">{{ chill.T('5D5D7655-697B-442C-BB16-67250D755916', 'Select module', 'Seleziona modulo') }}</option>
+                @for (module of moduleOptions(); track module) {
+                  <option [value]="module">{{ module }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('22268D8E-642A-45A4-A923-D5BC560C59EA', 'Entity name', 'Nome entità') }}</span>
+              <select
+                [ngModel]="rule.entityName"
+                [disabled]="rule.scope === 1 || !rule.module"
+                (ngModelChange)="updatePermissionRow(rule.localId, 'entityName', $event)">
+                <option value="">
+                  {{ rule.action === 1
+                    ? chill.T('3CC838AF-33F8-45DF-A5EB-6BB6DD0A7C6B', 'Select query', 'Seleziona query')
+                    : chill.T('BA36F4A9-7F62-4E0A-A79A-0F24311E24E2', 'Select entity', 'Seleziona entità') }}
+                </option>
+                @for (entity of entityOptionsFor(rule); track entity) {
+                  <option [value]="entity">{{ entity }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{{ chill.T('B947A33E-97FD-49A0-B59B-D2D77838DA25', 'Property name', 'Nome proprietà') }}</span>
+              <select
+                [ngModel]="propertySelectValueFor(rule)"
+                [disabled]="rule.scope !== 3 || !rule.entityName"
+                (ngModelChange)="updatePropertySelection(rule.localId, $event)">
+                <option value="">{{ chill.T('40B20240-3BC0-43C2-8F2A-AF9525206458', 'Select property', 'Seleziona proprietà') }}</option>
+                <option value="__all__">{{ chill.T('20D5D424-D258-4F52-8D4A-5C3E1F6892E1', 'ALL | Tutte', 'ALL | Tutte') }}</option>
+                @for (property of propertyOptionsFor(rule); track property) {
+                  <option [value]="property">{{ property }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field full-width">
+              <span>{{ chill.T('97A7BFE7-22A7-4665-B0D8-C75506A8F794', 'Description', 'Descrizione') }}</span>
+              <textarea rows="2" [ngModel]="rule.description" (ngModelChange)="updatePermissionRow(rule.localId, 'description', $event)"></textarea>
+            </label>
+          </div>
+
+          <div class="permission-actions">
+            <label class="toggle">
+              <input type="checkbox" [ngModel]="rule.appliesToAllProperties" [disabled]="rule.scope !== 3" (ngModelChange)="updatePermissionRow(rule.localId, 'appliesToAllProperties', $event)" />
+              <span>{{ chill.T('2B72F81F-D445-4F56-B86D-98D7C24A3B4B', 'Apply to all properties', 'Applica a tutte le proprietà') }}</span>
+            </label>
+
+            <div class="action-row">
+              <button type="button" class="secondary" (click)="stopEditingRow(rule.localId)">
+                {{ chill.T('D860F9DB-C5B7-4C29-A60B-D0A7C8321CB4', 'Done', 'Chiudi') }}
+              </button>
+
+              <button type="button" class="secondary danger" (click)="removePermissionRow(rule.localId)">
+                {{ chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete', 'Elimina') }}
+              </button>
+            </div>
+          </div>
+        } @else {
+          <div class="permission-summary">
+            <div class="summary-main">
+              <strong>{{ effectLabel(rule.effect) }} {{ actionLabel(rule.action) }}</strong>
+              <span>{{ scopeLabel(rule.scope) }}: {{ targetLabel(rule) }}</span>
+              <small>{{ descriptionLabel(rule) }}</small>
+            </div>
+
+            <div class="summary-meta">
+              <span class="summary-chip">{{ rule.module || chill.T('0D6742DB-C4D4-4B68-ABCD-5F7B168499BF', 'No module', 'Nessun modulo') }}</span>
+              @if (rule.entityName) {
+                <span class="summary-chip">{{ rule.entityName }}</span>
+              }
+              @if (rule.scope === 3 && rule.appliesToAllProperties) {
+                <span class="summary-chip">{{ chill.T('13D7F183-7FB4-42F7-B6CF-DA43269331EA', 'All properties', 'Tutte le proprietà') }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="permission-actions compact-actions">
+            <button type="button" class="secondary" (click)="startEditingRow(rule.localId)">
+              {{ chill.T('314E7191-5C3A-4A96-8D01-AC4C17FF757F', 'Edit', 'Modifica') }}
+            </button>
+
+            <button type="button" class="secondary danger" (click)="removePermissionRow(rule.localId)">
+              {{ chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete', 'Elimina') }}
+            </button>
+          </div>
+        }
+      </article>
+    } @empty {
+      <div class="empty-state">{{ chill.T('1801F875-1D00-4D0B-BE62-C72471A645B2', 'No permission rules for the selected target.', 'Nessuna regola permesso per la destinazione selezionata.') }}</div>
+    }
+  </div>
+
+  <button type="button" class="secondary" (click)="addPermissionRule()">
+    {{ chill.T('B4F053A6-0B3E-43A3-9B7D-5124EF2A3952', 'Create permission rule', 'Crea regola permesso') }}
+  </button>
+</section>

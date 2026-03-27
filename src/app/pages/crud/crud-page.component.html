@@ -2,7 +2,7 @@
   <header class="hero">
     <p class="eyebrow">{{ chill.T('F3D22CB0-BE93-4405-95E9-CE28A9F8A31B', 'CRUD', 'CRUD') }}</p>
     <h1>{{ chill.T('734D02AF-C7EA-48D4-BF23-1A31AEB4C356', 'Query browser', 'Esplora query') }}</h1>
-    <p class="lede">{{ chill.T('FE5FE5AB-A17B-40C2-86A7-E23D7E2B13B8', 'Select a query schema, fill its properties, and browse the returned entities. This page is read-only and does not implement create or delete actions.', 'Seleziona uno schema di query, compila le sue proprietà e consulta le entità restituite. Questa pagina è in sola lettura e non implementa azioni di creazione o eliminazione.') }}</p>
+    <p class="lede">{{ chill.T('FE5FE5AB-A17B-40C2-86A7-E23D7E2B13B8', 'Select a query schema, fill its properties, browse the returned entities, and create a new item with the same view schema.', 'Seleziona uno schema di query, compila le sue proprietà, consulta le entità restituite e crea un nuovo elemento con lo stesso schema di vista.') }}</p>
   </header>
 
   @if (errorMessage()) {
@@ -50,6 +50,26 @@
         <app-chill-table
           [schema]="resultSchema()"
           [entities]="results()" />
+
+        @if (resultSchema()) {
+          <div class="actions">
+            <button type="button" (click)="add()" [disabled]="isSaving() || isLoadingSchema()">
+              {{ chill.T('23A5536E-8A94-4469-977C-D3BB57E5E621', 'Add', 'Aggiungi') }}
+            </button>
+          </div>
+        }
+
+        @if (isCreateFormVisible() && createModel() && resultSchema()) {
+          <section class="panel">
+            <app-chill-form
+              [schema]="resultSchema()"
+              [entity]="createModel()"
+              [submitLabel]="isSaving()
+                ? chill.T('D67E55D8-C6DF-4E9A-9E79-E6EDE4A362D6', 'Saving...', 'Salvataggio in corso...')
+                : chill.T('B8076F7C-34A3-4C28-B4FC-F7D673C0D088', 'Save', 'Salva')"
+              (formSubmit)="create($event)" />
+          </section>
+        }
       </section>
     </div>
   }

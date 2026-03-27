@@ -62,6 +62,9 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "port": 6200
+          },
           "configurations": {
             "production": {
               "buildTarget": "cini-home:build:production"

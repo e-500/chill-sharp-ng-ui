@@ -18,17 +18,17 @@ describe('EventViewerComponent', () => {
             T: (_labelGuid: string, primaryDefaultText: string, secondaryDefaultText: string) => secondaryDefaultText || primaryDefaultText,
             getSchemaList: () => of([
               {
-                Name: 'EventQuery',
-                ChillType: 'Model.Query.EventQuery',
-                Type: 'Query',
-                RelatedChillType: 'Model.Event'
+                name: 'EventQuery',
+                chillType: 'Model.Query.EventQuery',
+                type: 'Query',
+                relatedChillType: 'Model.Event'
               }
             ]),
             getSchema: (chillType: string) => of({
-              ChillType: chillType,
-              DisplayName: chillType,
-              QueryRelatedChillType: chillType === 'Model.Query.EventQuery' ? 'Model.Event' : undefined,
-              Properties: []
+              chillType: chillType,
+              displayName: chillType,
+              queryRelatedChillType: chillType === 'Model.Query.EventQuery' ? 'Model.Event' : undefined,
+              properties: []
             }),
             query: () => of([])
           }

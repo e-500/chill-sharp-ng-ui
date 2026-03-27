@@ -22,12 +22,15 @@ export class CrudPageComponent implements OnInit {
   readonly isLoadingSchemaList = signal(true);
   readonly isLoadingSchema = signal(false);
   readonly isSearching = signal(false);
+  readonly isSaving = signal(false);
   readonly errorMessage = signal('');
   readonly querySchemas = signal<ChillSchemaListItem[]>([]);
   readonly selectedQueryType = signal('');
   readonly querySchema = signal<ChillSchema | null>(null);
   readonly resultSchema = signal<ChillSchema | null>(null);
   readonly queryModel = signal<ChillQuery | null>(null);
+  readonly createModel = signal<ChillEntity | null>(null);
+  readonly isCreateFormVisible = signal(false);
   readonly results = signal<ChillEntity[]>([]);
 
   ngOnInit(): void {
@@ -39,6 +42,8 @@ export class CrudPageComponent implements OnInit {
     this.selectedQueryType.set(normalizedType);
     this.errorMessage.set('');
     this.results.set([]);
+    this.createModel.set(null);
+    this.isCreateFormVisible.set(false);
 
     if (!normalizedType) {
       this.querySchema.set(null);
@@ -110,6 +115,8 @@ export class CrudPageComponent implements OnInit {
           this.querySchema.set(null);
           this.resultSchema.set(null);
           this.queryModel.set(null);
+          this.createModel.set(null);
+          this.isCreateFormVisible.set(false);
           this.results.set([]);
           this.errorMessage.set(this.chill.T('80085620-C926-4F8C-820D-672EE1E7B4AF', 'The selected query schema is unavailable.', 'Lo schema di query selezionato non è disponibile.'));
           this.isLoadingSchema.set(false);
@@ -118,12 +125,19 @@ export class CrudPageComponent implements OnInit {
 
         this.querySchema.set(schema);
         this.queryModel.set(this.createQueryModel(schema));
-        void this.loadResultSchema(schema.queryRelatedChillType?.trim() ?? '');
+        this.createModel.set(null);
+        this.isCreateFormVisible.set(false);
+        void this.loadResultSchema(
+          schema.queryRelatedChillType?.trim() ?? '',
+          schema.chillViewCode?.trim() || DEFAULT_VIEW_CODE
+        );
       },
       error: (error: unknown) => {
         this.querySchema.set(null);
         this.resultSchema.set(null);
         this.queryModel.set(null);
+        this.createModel.set(null);
+        this.isCreateFormVisible.set(false);
         this.results.set([]);
         this.errorMessage.set(this.chill.formatError(error));
         this.isLoadingSchema.set(false);
@@ -131,24 +145,81 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
-  private async loadResultSchema(relatedChillType: string): Promise<void> {
+  add(): void {
+    const schema = this.resultSchema();
+    if (!schema) {
+      return;
+    }
+
+    this.errorMessage.set('');
+    this.createModel.set({
+      chillType: schema.chillType?.trim() ?? '',
+      properties: {}
+    });
+    this.isCreateFormVisible.set(true);
+  }
+
+  create(event: ChillFormSubmitEvent): void {
+    if (event.kind !== 'entity') {
+      return;
+    }
+
+    const schema = this.resultSchema();
+    if (!schema) {
+      return;
+    }
+
+    const entity = this.normalizeCreateEntity(event.value as ChillEntity, schema);
+    this.isSaving.set(true);
+    this.errorMessage.set('');
+    this.createModel.set(entity);
+
+    this.chill.create(entity as JsonObject).subscribe({
+      next: () => {
+        this.isSaving.set(false);
+        this.isCreateFormVisible.set(false);
+        this.createModel.set({
+          chillType: schema.chillType?.trim() ?? '',
+          properties: {}
+        });
+        this.refreshResults();
+      },
+      error: (error: unknown) => {
+        this.errorMessage.set(this.chill.formatError(error));
+        this.isSaving.set(false);
+      }
+    });
+  }
+
+  private async loadResultSchema(relatedChillType: string, chillViewCode: string): Promise<void> {
     if (!relatedChillType) {
       this.resultSchema.set(null);
+      this.createModel.set(null);
+      this.isCreateFormVisible.set(false);
       this.errorMessage.set(this.chill.T('C187D4C0-DB14-476E-9A40-F6D086C2D7A5', 'The selected query schema does not define QueryRelatedChillType.', 'Lo schema di query selezionato non definisce QueryRelatedChillType.'));
       this.isLoadingSchema.set(false);
       return;
     }
 
-    this.chill.getSchema(relatedChillType, DEFAULT_VIEW_CODE).subscribe({
+    this.chill.getSchema(relatedChillType, chillViewCode).subscribe({
       next: (schema) => {
         this.resultSchema.set(schema);
+        this.createModel.set(schema
+          ? {
+              chillType: schema.chillType?.trim() ?? relatedChillType,
+              properties: {}
+            }
+          : null);
         if (!schema) {
+          this.isCreateFormVisible.set(false);
           this.errorMessage.set(this.chill.T('A6A6949E-F0D4-42F5-A8AE-E15B1B174084', 'The result schema is unavailable.', 'Lo schema dei risultati non è disponibile.'));
         }
         this.isLoadingSchema.set(false);
       },
       error: (error: unknown) => {
         this.resultSchema.set(null);
+        this.createModel.set(null);
+        this.isCreateFormVisible.set(false);
         this.errorMessage.set(this.chill.formatError(error));
         this.isLoadingSchema.set(false);
       }
@@ -167,18 +238,46 @@ export class CrudPageComponent implements OnInit {
     return {
       ...query,
       chillType: query.chillType?.trim() || this.querySchema()?.chillType?.trim() || this.selectedQueryType(),
-      resultProperties: resultSchema?.properties?.map((property) => ({ Name: property.name })) ?? []
+      resultProperties: resultSchema?.properties?.map((property) => ({ PropertyName: property.name })) ?? []
     };
+  }
+
+  private normalizeCreateEntity(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    const entityChillType = this.readStringValue(entity['chillType']);
+    return {
+      ...entity,
+      chillType: entityChillType || schema.chillType?.trim() || this.querySchema()?.queryRelatedChillType?.trim() || '',
+      properties: entity.properties ?? {}
+    };
+  }
+
+  private refreshResults(): void {
+    const query = this.queryModel();
+    if (!query) {
+      return;
+    }
+
+    this.isSearching.set(true);
+    this.chill.query(this.normalizeQuery(query)).subscribe({
+      next: (response) => {
+        this.results.set(this.extractEntities(response));
+        this.isSearching.set(false);
+      },
+      error: (error: unknown) => {
+        this.errorMessage.set(this.chill.formatError(error));
+        this.isSearching.set(false);
+      }
+    });
   }
 
   private extractEntities(response: JsonObject): ChillEntity[] {
     const candidates = [
       response,
-      response['Results'],
-      response['Entities'],
-      response['Items'],
-      response['Value'],
-      response['Data']
+      response['results'],
+      response['entities'],
+      response['items'],
+      response['value'],
+      response['data']
     ];
 
     for (const candidate of candidates) {
@@ -201,6 +300,12 @@ export class CrudPageComponent implements OnInit {
 
   private isJsonObject(value: JsonValue | undefined): value is JsonObject {
     return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  private readStringValue(value: JsonValue | undefined): string {
+    return typeof value === 'string'
+      ? value.trim()
+      : '';
   }
 
   private isQuerySchema(item: ChillSchemaListItem): boolean {

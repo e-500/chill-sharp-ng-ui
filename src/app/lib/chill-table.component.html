@@ -1,22 +1,35 @@
 <section class="chill-table-shell">
   @if (schema()?.displayName) {
     <header class="table-header">
-      <p class="table-kicker">{{ chill.T('2DDE962B-086C-47B1-8A48-B16F0E34C0A3', 'Chill schema', 'Schema Chill') }}</p>
+      <p class="table-kicker"><app-chill-i18n-label [labelGuid]="'2DDE962B-086C-47B1-8A48-B16F0E34C0A3'" [primaryDefaultText]="'Chill schema'" [secondaryDefaultText]="'Schema Chill'" /></p>
       <h2>{{ schema()?.displayName }}</h2>
     </header>
   }
 
-  <div class="table-actions">
-    <button type="button" class="layout-button" (click)="toggleEditLayoutMode()" [disabled]="isSavingLayout()">
-      @if (isSavingLayout()) {
-        {{ chill.T('B46C82D8-443E-45DE-8D49-C270656B511E', 'Saving layout...', 'Salvataggio layout...') }}
-      } @else if (isEditLayoutMode()) {
-        {{ chill.T('7C681F13-4245-447F-B66A-D9A3A500D322', 'Done', 'Fine') }}
-      } @else {
-        {{ chill.T('9D0B43AC-47B4-4C63-98C7-DB0118C9C0CF', 'Edit layout mode', 'Modalita modifica layout') }}
+  @if (layout.isLayoutEditingEnabled()) {
+    <div class="table-actions">
+      @if (isEditLayoutMode() && hiddenColumns().length > 0) {
+        <label class="hidden-column-picker">
+          <span>{{ chill.T('3758A6E6-85C1-481D-BF57-A531E79661B8', 'Show column', 'Mostra colonna') }}</span>
+          <select #hiddenColumnSelect (change)="revealColumn(hiddenColumnSelect.value); hiddenColumnSelect.value = ''">
+            <option value="">{{ chill.T('D1A15B17-B3C2-49A8-90AA-BAE81ECA8D69', 'Select hidden column', 'Seleziona colonna nascosta') }}</option>
+            @for (column of hiddenColumns(); track column.name) {
+              <option [value]="column.name">{{ column.displayName || column.name }}</option>
+            }
+          </select>
+        </label>
       }
-    </button>
-  </div>
+      <button type="button" class="layout-button" (click)="toggleEditLayoutMode()" [disabled]="isSavingLayout()">
+        @if (isSavingLayout()) {
+          <app-chill-i18n-button-label [labelGuid]="'B46C82D8-443E-45DE-8D49-C270656B511E'" [primaryDefaultText]="'Saving layout...'" [secondaryDefaultText]="'Salvataggio layout...'" />
+        } @else if (isEditLayoutMode()) {
+          <app-chill-i18n-button-label [labelGuid]="'7C681F13-4245-447F-B66A-D9A3A500D322'" [primaryDefaultText]="'Done'" [secondaryDefaultText]="'Fine'" />
+        } @else {
+          <app-chill-i18n-button-label [labelGuid]="'9D0B43AC-47B4-4C63-98C7-DB0118C9C0CF'" [primaryDefaultText]="'Edit layout mode'" [secondaryDefaultText]="'Modalita modifica layout'" />
+        }
+      </button>
+    </div>
+  }
 
   @if (layoutError()) {
     <div class="empty-state error-state">{{ layoutError() }}</div>
@@ -26,9 +39,15 @@
     <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
   } @else {
     <div class="table-wrap">
-      <table class="chill-table">
+      <table class="chill-table" [class.has-selection-column]="hasSelectionColumn()">
         <thead>
           <tr>
+            @if (hasSelectionColumn()) {
+              <th scope="col" class="selection-column"></th>
+            }
+            @if (hasActionColumn()) {
+              <th scope="col" class="action-column">#</th>
+            }
             @for (column of visibleColumns(); track column.name) {
               <th
                 scope="col"
@@ -41,8 +60,8 @@
                   <label class="column-editor">
                     <input
                       type="checkbox"
-                      [ngModel]="column.hidden"
-                      (ngModelChange)="updateColumnHidden(column.name, $event)"
+                      [ngModel]="!column.hidden"
+                      (ngModelChange)="updateColumnHidden(column.name, !$event)"
                       [name]="'hidden-' + column.name" />
                     <input
                       type="text"
@@ -60,16 +79,63 @@
         </thead>
 
         <tbody>
-          @if (entities().length === 0) {
+          @if (displayedEntities().length === 0) {
             <tr>
-              <td [attr.colspan]="visibleColumns().length" class="empty-row">{{ chill.T('D43AB4B7-3FD0-486C-88FF-7214FB45A1CA', 'No entities to display.', 'Nessuna entità da visualizzare.') }}</td>
+              <td [attr.colspan]="visibleColumns().length + (hasActionColumn() ? 1 : 0) + (hasSelectionColumn() ? 1 : 0)" class="empty-row">{{ chill.T('D43AB4B7-3FD0-486C-88FF-7214FB45A1CA', 'No entities to display.', 'Nessuna entità da visualizzare.') }}</td>
             </tr>
           } @else {
-            @for (entity of entities(); track trackByEntity($index, entity)) {
-              <tr>
+            @for (entity of displayedEntities(); track trackByEntity($index, entity)) {
+              <tr [class.pending-row]="isPendingRow(entity)" [class.deleted-row]="isDeletedRow(entity)">
+                @if (hasSelectionColumn()) {
+                  <td class="selection-column">
+                    <input
+                      type="checkbox"
+                      class="row-selection-checkbox"
+                      [checked]="isRowSelected(entity)"
+                      [disabled]="isRowSelectionDisabled(entity)"
+                      [attr.aria-label]="selectionColumn()?.ariaLabel || chill.T('2EE7A0D9-CDE2-4F72-9BE1-B86A91D4B208', 'Select row', 'Seleziona riga')"
+                      (change)="toggleRowSelection(entity, $any($event.target).checked)" />
+                  </td>
+                }
+                @if (hasActionColumn()) {
+                  <td class="action-column">
+                    <div class="row-action-list">
+                      @for (action of resolvedRowActions(); track $index) {
+                        <button
+                          type="button"
+                          class="row-action-button"
+                          (click)="runRowAction(action, entity)"
+                          [disabled]="isRowActionDisabled(action, entity)"
+                          [attr.aria-label]="action.ariaLabel || chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga')">
+                          {{ rowActionIcon(action) }}
+                        </button>
+                      }
+                    </div>
+                  </td>
+                }
                 @for (column of visibleColumns(); track column.name) {
-                  <td [title]="cellText(entity, column)">
-                    {{ cellText(entity, column) }}
+                  <td
+                    class="data-cell"
+                    [class.is-editing]="isCellEditing(entity, column)"
+                    (dblclick)="activateCellEdit(entity, column)"
+                    (focusout)="handleCellFocusOut($event)">
+                    @if (isCellEditing(entity, column)) {
+                      <div class="data-cell__editor" (keydown)="handleCellEditorKeydown($event)">
+                        <app-chill-polymorphic-input
+                          [form]="activeCellEdit()?.form ?? null"
+                          [schema]="schema()"
+                          [propertyNames]="[column.name]"
+                          [showLabels]="false"
+                          [externalErrors]="rowFieldErrors(entity)"
+                          (valueChange)="handleCellValueChange($event)"
+                          (validityChange)="handleCellValidityChange($event)" />
+                      </div>
+                    } @else {
+                      <app-chill-polymorphic-output
+                        [source]="entity"
+                        [schema]="schema()"
+                        [propertyName]="column.name" />
+                    }
                   </td>
                 }
               </tr>

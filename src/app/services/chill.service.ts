@@ -1,9 +1,11 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { AsyncValidatorFn, FormControl, FormGroup } from '@angular/forms';
 import {
   ChillSharpClientError,
   ChillSharpNgClient,
   type AuthPermissionRuleItem as ChillSharpAuthPermissionRuleItem,
   type AuthRoleDetailsResponse,
+  type RegisterAuthIdentityRequest,
   type AuthUserDetailsResponse,
   type GetTextRequest,
   type JsonObject,
@@ -11,6 +13,7 @@ import {
   type SetAuthRoleRequest,
   type SetAuthUserRequest
 } from 'chill-sharp-ng-client';
+import type { ChillValidationError } from 'chill-sharp-ts-client';
 import { Observable, catchError, firstValueFrom, from, map, switchMap, tap, throwError } from 'rxjs';
 import type {
   AuthRoleAccessDetails,
@@ -35,6 +38,7 @@ import type {
 import { PermissionAction, PermissionEffect, PermissionScope } from '../models/chill-auth.models';
 import type {
   ChillEntityChangeNotification,
+  ChillEntity,
   ChillPropertySchema,
   ChillQuery,
   ChillSchema,
@@ -104,6 +108,27 @@ interface ChillSharpNgClientPermissionLookupSupport {
   getAuthQueryList?: (module?: string | null) => Observable<unknown>;
   getAuthEntityList?: (module?: string | null) => Observable<unknown>;
   getAuthPropertyList?: (chillType: string) => Observable<unknown>;
+}
+
+interface ChillSharpNgClientValidationSupport {
+  validate?: (dto: JsonObject) => Observable<unknown>;
+  getRawClient?: () => {
+    validate?: (dto: JsonObject) => Promise<unknown>;
+  };
+}
+
+export type ChillPreparedFormControls<TSchema extends ChillSchema> = Record<
+  Extract<TSchema['properties'][number], { name: string }>['name'],
+  FormControl<JsonValue>
+>;
+
+interface PrepareFormOptions<TSchema extends ChillSchema> {
+  createControlAsyncValidators?: (context: {
+    schema: TSchema;
+    property: ChillPropertySchema;
+    source?: ChillEntity | ChillQuery | null;
+    getForm: () => FormGroup<ChillPreparedFormControls<TSchema>>;
+  }) => AsyncValidatorFn | AsyncValidatorFn[] | null;
 }
 
 @Injectable({
@@ -237,6 +262,26 @@ export class ChillService {
         'Il client ChillSharp corrente non espone getSchemaList().'
       )
     ));
+  }
+
+  setText(labelGuid: string, value: string, cultureName = CHILL_CULTURE) {
+    const normalizedLabelGuid = this.normalizeLabelGuid(labelGuid);
+    const normalizedValue = value.trim();
+
+    return this.chill.setText({
+      labelGuid: normalizedLabelGuid,
+      cultureName,
+      value: normalizedValue
+    }).pipe(
+      map((response) => {
+        const resolvedLabelGuid = this.readJsonString(response, 'LabelGuid') ?? normalizedLabelGuid;
+        const resolvedValue = this.readJsonString(response, 'Value') ?? normalizedValue;
+        this.textCache.set(this.normalizeLabelGuid(resolvedLabelGuid), resolvedValue);
+        this.textVersion.update((current) => current + 1);
+        return resolvedValue;
+      }),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
   }
 
   watchEntityChanges(chillType: string, guid?: string | null) {
@@ -613,9 +658,51 @@ export class ChillService {
     );
   }
 
+  autocomplete(request: JsonObject) {
+    return this.chill.autocomplete(request).pipe(
+      map((response) => response as JsonObject),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  find(request: JsonObject) {
+    return this.chill.find(request).pipe(
+      map((response) => response as JsonObject | null),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  validate(request: JsonObject) {
+    return this.chill.validate(request).pipe(
+      map((response) => (response ?? []) as ChillValidationError[]),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
   create(request: JsonObject) {
     return this.chill.create(request).pipe(
       map((response) => response as JsonObject),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  update(request: JsonObject) {
+    return this.chill.update(request).pipe(
+      map((response) => response as JsonObject),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  delete(request: JsonObject) {
+    return this.chill.delete(request).pipe(
+      map(() => void 0),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  chunk(operations: JsonObject[]) {
+    return this.chill.chunk(operations).pipe(
+      map((response) => response as JsonObject[]),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -625,8 +712,39 @@ export class ChillService {
     return this.serializePropertyValue(property, value);
   }
 
+  prepareForm<TSchema extends ChillSchema>(
+    schema: TSchema,
+    source?: ChillEntity | ChillQuery | null,
+    options?: PrepareFormOptions<TSchema>
+  ): FormGroup<ChillPreparedFormControls<TSchema>> {
+    const controls = Object.fromEntries(
+      (schema.properties ?? []).map((property) => [
+        property.name,
+        new FormControl<JsonValue>(this.readPreparedFormValue(source, property), { nonNullable: true })
+      ])
+    ) as ChillPreparedFormControls<TSchema>;
+    const form = new FormGroup<ChillPreparedFormControls<TSchema>>(controls);
+
+    for (const property of schema.properties ?? []) {
+      const control = controls[property.name as keyof ChillPreparedFormControls<TSchema>];
+      const asyncValidators = options?.createControlAsyncValidators?.({
+        schema,
+        property,
+        source,
+        getForm: () => form
+      });
+      if (!control || !asyncValidators) {
+        continue;
+      }
+
+      control.setAsyncValidators(asyncValidators);
+    }
+
+    return form;
+  }
+
   register(request: RegisterRequest) {
-    return this.chill.registerAuthAccount(request as unknown as JsonObject).pipe(
+    return this.chill.registerAuthAccount(this.toRegisterAuthIdentityRequest(request)).pipe(
       map((response) => this.toTokenResponse(response as JsonObject)),
       tap((response) => this.persistSession(response)),
       catchError((error) => this.rethrowFriendlyError(error))
@@ -839,6 +957,25 @@ export class ChillService {
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
+  private readPreparedFormValue(source: ChillEntity | ChillQuery | null | undefined, property: ChillPropertySchema): JsonValue {
+    const propertyName = property.name.trim();
+    if (!source || !propertyName) {
+      return this.emptySerializedValue(property.propertyType ?? CHILL_PROPERTY_TYPE.Unknown);
+    }
+
+    const properties = source.properties;
+    if (properties && propertyName in properties) {
+      return this.serializePropertyValue(property, properties[propertyName]);
+    }
+
+    if (propertyName in source) {
+      return this.serializePropertyValue(property, source[propertyName]);
+    }
+
+    const pascalCaseName = `${propertyName[0]?.toUpperCase() ?? ''}${propertyName.slice(1)}`;
+    return this.serializePropertyValue(property, source[pascalCaseName]);
+  }
+
   private serializePropertyValue(property: ChillPropertySchema | undefined, value: JsonValue | undefined): JsonValue {
     const propertyType = property?.propertyType ?? CHILL_PROPERTY_TYPE.Unknown;
 
@@ -984,18 +1121,33 @@ export class ChillService {
       .filter((guid) => guid.length > 0);
     const permissions = response.permissions.map((permission) => this.toAuthPermissionRuleItem(permission));
 
-    return {
-      guid: response.guid,
-      externalId: overrides?.externalId ?? response.externalId,
-      userName: overrides?.userName ?? response.userName,
-      displayName: overrides?.displayName ?? response.displayName,
-      isActive: overrides?.isActive ?? response.isActive,
-      canManagePermissions: overrides?.canManagePermissions ?? response.canManagePermissions,
-      canManageSchema: response.canManageSchema,
-      roleGuids: mutateRoleGuids ? mutateRoleGuids(roleGuids) : roleGuids,
-      permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
-    };
-  }
+      return {
+        guid: response.guid,
+        externalId: overrides?.externalId ?? response.externalId,
+        userName: overrides?.userName ?? response.userName,
+        displayName: overrides?.displayName ?? response.displayName,
+        displayCultureName: response.displayCultureName,
+        displayTimeZone: response.displayTimeZone,
+        displayDateFormat: response.displayDateFormat,
+        displayNumberFormat: response.displayNumberFormat,
+        isActive: overrides?.isActive ?? response.isActive,
+        canManagePermissions: overrides?.canManagePermissions ?? response.canManagePermissions,
+        canManageSchema: response.canManageSchema,
+        roleGuids: mutateRoleGuids ? mutateRoleGuids(roleGuids) : roleGuids,
+        permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
+      };
+    }
+
+    private toRegisterAuthIdentityRequest(request: RegisterRequest): RegisterAuthIdentityRequest {
+      return {
+        userName: request.UserName,
+        email: request.Email?.trim() || null,
+        password: request.Password,
+        displayName: request.DisplayName,
+        displayCultureName: request.DisplayCultureName,
+        createChillAuthUser: request.CreateChillAuthUser
+      };
+    }
 
   private buildSetAuthRoleRequest(
     response: AuthRoleDetailsResponse | null,

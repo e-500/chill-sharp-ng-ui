@@ -1,45 +1,62 @@
 <section class="chill-form-shell">
   @if (schema()?.displayName) {
     <header class="form-header">
-      <p class="form-kicker">{{ chill.T('2DDE962B-086C-47B1-8A48-B16F0E34C0A3', 'Chill schema', 'Schema Chill') }}</p>
+      <p class="form-kicker"><app-chill-i18n-label [labelGuid]="'2DDE962B-086C-47B1-8A48-B16F0E34C0A3'" [primaryDefaultText]="'Chill schema'" [secondaryDefaultText]="'Schema Chill'" /></p>
       <h2>{{ schema()?.displayName }}</h2>
     </header>
   }
 
-  <div class="form-actions">
-    <button type="button" class="layout-button" (click)="toggleEditMode()" [disabled]="isSavingLayout()">
-      @if (isSavingLayout()) {
-        {{ chill.T('F9BFE458-EA0D-4E27-A8A9-C7EE0C02F9FB', 'Saving layout...', 'Salvataggio layout...') }}
-      } @else if (isEditMode()) {
-        {{ chill.T('D7EA89E2-4AF2-455A-8FA9-33540E61D7C5', 'Done', 'Fine') }}
-      } @else {
-        {{ chill.T('872638CF-0346-4351-A53A-62A6B78B94FE', 'Edit mode', 'Modalita modifica') }}
+  @if (layout.isLayoutEditingEnabled()) {
+    <div class="form-actions">
+      <button type="button" class="layout-button" (click)="toggleEditMode()" [disabled]="isSavingLayout()">
+        @if (isSavingLayout()) {
+          <app-chill-i18n-button-label [labelGuid]="'F9BFE458-EA0D-4E27-A8A9-C7EE0C02F9FB'" [primaryDefaultText]="'Saving layout...'" [secondaryDefaultText]="'Salvataggio layout...'" />
+        } @else if (isEditMode()) {
+          <app-chill-i18n-button-label [labelGuid]="'D7EA89E2-4AF2-455A-8FA9-33540E61D7C5'" [primaryDefaultText]="'Done'" [secondaryDefaultText]="'Fine'" />
+        } @else {
+          <app-chill-i18n-button-label [labelGuid]="'872638CF-0346-4351-A53A-62A6B78B94FE'" [primaryDefaultText]="'Edit mode'" [secondaryDefaultText]="'Modalita modifica'" />
+        }
+      </button>
+
+      @if (isEditMode()) {
+        <label class="column-count">
+          <span><app-chill-i18n-label [labelGuid]="'665D0BFB-D1BB-4D53-B58A-C578CA559A0B'" [primaryDefaultText]="'Columns'" [secondaryDefaultText]="'Colonne'" /></span>
+          <select
+            [ngModel]="layoutState().columnCount"
+            (ngModelChange)="updateColumnCount($event)"
+            name="form-column-count">
+            @for (columnCount of columnOptions; track columnCount) {
+              <option [ngValue]="columnCount">{{ columnCount }}</option>
+            }
+          </select>
+        </label>
+
+        <button type="button" class="layout-button secondary" (click)="addEmptyCell()">
+          <app-chill-i18n-button-label [labelGuid]="'7B8C7557-FB39-4C6C-B70F-D70F87EC7517'" [primaryDefaultText]="'Add empty cell'" [secondaryDefaultText]="'Aggiungi cella vuota'" />
+        </button>
+
+        <button type="button" class="layout-button secondary" (click)="resetLayout()">
+          <app-chill-i18n-button-label [labelGuid]="'408CE646-58A0-4657-8192-D1C79BFE7F91'" [primaryDefaultText]="'Reset'" [secondaryDefaultText]="'Reset'" />
+        </button>
       }
-    </button>
-
-    @if (isEditMode()) {
-      <label class="column-count">
-        <span>{{ chill.T('665D0BFB-D1BB-4D53-B58A-C578CA559A0B', 'Columns', 'Colonne') }}</span>
-        <input
-          type="number"
-          min="1"
-          [ngModel]="layoutState().columnCount"
-          (ngModelChange)="updateColumnCount($event)"
-          name="form-column-count" />
-      </label>
-
-      <button type="button" class="layout-button secondary" (click)="addEmptyCell()">
-        {{ chill.T('7B8C7557-FB39-4C6C-B70F-D70F87EC7517', 'Add empty cell', 'Aggiungi cella vuota') }}
-      </button>
-
-      <button type="button" class="layout-button secondary" (click)="resetLayout()">
-        {{ chill.T('408CE646-58A0-4657-8192-D1C79BFE7F91', 'Reset', 'Reset') }}
-      </button>
-    }
-  </div>
+    </div>
+  }
 
   @if (layoutError()) {
     <div class="empty-state error-state">{{ layoutError() }}</div>
+  }
+
+  @if (resolvedSubmitError()) {
+    <div class="notice error notice-dismissible">
+      <span>{{ resolvedSubmitError() }}</span>
+      <button type="button" class="notice-close" (click)="clearSubmitError()" [attr.aria-label]="chill.T('0C4C06EF-A105-468F-B1E2-AEA8EB96A4DC', 'Dismiss error', 'Chiudi errore')">x</button>
+    </div>
+  }
+
+  @if (genericValidationMessage()) {
+    <div class="notice error">
+      <span>{{ genericValidationMessage() }}</span>
+    </div>
   }
 
   @if (properties().length === 0) {
@@ -78,11 +95,12 @@
             {
               @if (item.kind === 'property') {
                 <app-chill-polymorphic-input
-                  [source]="workingSource()"
+                  [form]="form()"
                   [schema]="schema()"
                   [propertyNames]="[item.property.name]"
-                  (valueChange)="updateFields($event)"
-                  (validityChange)="updatePropertyValidity(item.property.name, $event)" />
+                  [externalErrors]="serverFieldErrors()"
+                  (validityChange)="updatePropertyValidity(item.property.name, $event)"
+                  (fieldBlur)="handlePropertyBlur($event)" />
               } @else {
                 <div class="empty-cell-body" [class.edit-mode]="isEditMode()"></div>
               }
@@ -91,8 +109,17 @@
         }
       </div>
 
-      @if (!isEditMode()) {
-        <button type="submit" [disabled]="!canSubmit()">{{ submitLabel() }}</button>
+      @if (!isEditMode() && renderSubmitInsideForm()) {
+        <button type="submit" [disabled]="!canSubmit()">
+          @if (submitLabelGuid() && submitPrimaryDefaultText() && submitSecondaryDefaultText()) {
+            <app-chill-i18n-button-label
+              [labelGuid]="submitLabelGuid()!"
+              [primaryDefaultText]="submitPrimaryDefaultText()!"
+              [secondaryDefaultText]="submitSecondaryDefaultText()!" />
+          } @else {
+            {{ submitLabel() }}
+          }
+        </button>
       }
     </form>
   }

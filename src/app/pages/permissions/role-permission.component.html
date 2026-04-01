@@ -10,40 +10,42 @@
   <div class="editor-layout">
     <aside class="sidebar-card">
       <header class="card-header">
-        <h2>{{ chill.T('B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6', 'Roles', 'Ruoli') }}</h2>
-        <p>{{ chill.T('FF8CDA0A-D049-41AD-82E7-8A24F0E41357', 'Search and select a role to edit direct permissions and assigned users.', 'Cerca e seleziona un ruolo per modificare permessi diretti e utenti assegnati.') }}</p>
+        <h2><app-chill-i18n-label [labelGuid]="'B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6'" [primaryDefaultText]="'Roles'" [secondaryDefaultText]="'Ruoli'" /></h2>
+        <p><app-chill-i18n-label [labelGuid]="'FF8CDA0A-D049-41AD-82E7-8A24F0E41357'" [primaryDefaultText]="'Search and select a role to edit direct permissions and assigned users.'" [secondaryDefaultText]="'Cerca e seleziona un ruolo per modificare permessi diretti e utenti assegnati.'" /></p>
       </header>
 
       <label class="search-field">
-        <span>{{ chill.T('D7906DD5-5C74-4CD1-B2D7-8D72510E1C22', 'Search roles', 'Cerca ruoli') }}</span>
+        <span><app-chill-i18n-label [labelGuid]="'D7906DD5-5C74-4CD1-B2D7-8D72510E1C22'" [primaryDefaultText]="'Search roles'" [secondaryDefaultText]="'Cerca ruoli'" /></span>
         <input [ngModel]="searchTerm()" (ngModelChange)="updateSearchTerm($event)" />
       </label>
 
       <section class="create-card">
         <header class="card-header">
-          <h3>{{ chill.T('E9C30E5D-CBC8-4E48-A01F-4C4DF9C7E13B', 'Create role', 'Crea ruolo') }}</h3>
-          <p>{{ chill.T('D1677B35-67BE-43E9-8D64-3040986B0B0C', 'Create roles that can then be assigned to users and targeted by permission rules.', 'Crea ruoli che possono poi essere assegnati agli utenti e usati come destinazione delle regole permesso.') }}</p>
+          <h3><app-chill-i18n-label [labelGuid]="'E9C30E5D-CBC8-4E48-A01F-4C4DF9C7E13B'" [primaryDefaultText]="'Create role'" [secondaryDefaultText]="'Crea ruolo'" /></h3>
+          <p><app-chill-i18n-label [labelGuid]="'D1677B35-67BE-43E9-8D64-3040986B0B0C'" [primaryDefaultText]="'Create roles that can then be assigned to users and targeted by permission rules.'" [secondaryDefaultText]="'Crea ruoli che possono poi essere assegnati agli utenti e usati come destinazione delle regole permesso.'" /></p>
         </header>
 
         <label class="field">
-          <span>{{ chill.T('7767C44A-8F47-4E39-BB2A-0B297887A0D3', 'Name', 'Nome') }}</span>
+          <span><app-chill-i18n-label [labelGuid]="'7767C44A-8F47-4E39-BB2A-0B297887A0D3'" [primaryDefaultText]="'Name'" [secondaryDefaultText]="'Nome'" /></span>
           <input [ngModel]="newRole().name" (ngModelChange)="updateNewRoleField('name', $event)" />
         </label>
 
         <label class="field">
-          <span>{{ chill.T('97A7BFE7-22A7-4665-B0D8-C75506A8F794', 'Description', 'Descrizione') }}</span>
+          <span><app-chill-i18n-label [labelGuid]="'97A7BFE7-22A7-4665-B0D8-C75506A8F794'" [primaryDefaultText]="'Description'" [secondaryDefaultText]="'Descrizione'" /></span>
           <textarea rows="2" [ngModel]="newRole().description" (ngModelChange)="updateNewRoleField('description', $event)"></textarea>
         </label>
 
         <label class="toggle">
           <input type="checkbox" [ngModel]="newRole().isActive" (ngModelChange)="updateNewRoleField('isActive', $event)" />
-          <span>{{ chill.T('7A2D49F9-9A14-4FD1-8A8B-9B604CA3796C', 'Role is active', 'Ruolo attivo') }}</span>
+          <span><app-chill-i18n-label [labelGuid]="'7A2D49F9-9A14-4FD1-8A8B-9B604CA3796C'" [primaryDefaultText]="'Role is active'" [secondaryDefaultText]="'Ruolo attivo'" /></span>
         </label>
 
         <button type="button" [disabled]="isCreatingRole()" (click)="createRole()">
-          {{ isCreatingRole()
-            ? chill.T('A18D84D3-A54B-4A34-AB37-BAE0A546ED48', 'Creating...', 'Creazione...')
-            : chill.T('0B47EAA4-33BC-4D1C-B8C6-F75D3A5C8864', 'Create role', 'Crea ruolo') }}
+          @if (isCreatingRole()) {
+            <app-chill-i18n-button-label [labelGuid]="'A18D84D3-A54B-4A34-AB37-BAE0A546ED48'" [primaryDefaultText]="'Creating...'" [secondaryDefaultText]="'Creazione...'" />
+          } @else {
+            <app-chill-i18n-button-label [labelGuid]="'0B47EAA4-33BC-4D1C-B8C6-F75D3A5C8864'" [primaryDefaultText]="'Create role'" [secondaryDefaultText]="'Crea ruolo'" />
+          }
         </button>
       </section>
 
@@ -67,15 +69,17 @@
       } @else {
         <header class="selection-header">
           <div>
-            <p class="section-kicker">{{ chill.T('13D94C61-7FBC-4C9D-A3C1-3B2422F5EFC1', 'Selected role', 'Ruolo selezionato') }}</p>
+            <p class="section-kicker"><app-chill-i18n-label [labelGuid]="'13D94C61-7FBC-4C9D-A3C1-3B2422F5EFC1'" [primaryDefaultText]="'Selected role'" [secondaryDefaultText]="'Ruolo selezionato'" /></p>
             <h2>{{ selectedRole()!.name }}</h2>
             <p>{{ selectedRole()!.description }}</p>
           </div>
 
           <button type="button" [disabled]="saveDisabled()" (click)="save()">
-            {{ isSaving()
-              ? chill.T('32E1A7C8-B09A-4A6B-8EA5-3C5AF84070B2', 'Saving...', 'Salvataggio...')
-              : chill.T('E7E6D035-15D8-4F70-AE2A-23AD04F6B27E', 'Save role access', 'Salva accesso ruolo') }}
+            @if (isSaving()) {
+              <app-chill-i18n-button-label [labelGuid]="'32E1A7C8-B09A-4A6B-8EA5-3C5AF84070B2'" [primaryDefaultText]="'Saving...'" [secondaryDefaultText]="'Salvataggio...'" />
+            } @else {
+              <app-chill-i18n-button-label [labelGuid]="'E7E6D035-15D8-4F70-AE2A-23AD04F6B27E'" [primaryDefaultText]="'Save role access'" [secondaryDefaultText]="'Salva accesso ruolo'" />
+            }
           </button>
         </header>
 
@@ -84,8 +88,8 @@
 
           <section class="box-card">
             <header class="card-header">
-              <h3>{{ chill.T('30CF51EC-A909-446D-97C1-2E9D980606A4', 'Assigned users', 'Utenti assegnati') }}</h3>
-              <p>{{ chill.T('AEEEB4D8-470D-49B3-A3E4-2B0A3B0764D7', 'Choose which users belong to the selected role.', 'Scegli quali utenti appartengono al ruolo selezionato.') }}</p>
+              <h3><app-chill-i18n-label [labelGuid]="'30CF51EC-A909-446D-97C1-2E9D980606A4'" [primaryDefaultText]="'Assigned users'" [secondaryDefaultText]="'Utenti assegnati'" /></h3>
+              <p><app-chill-i18n-label [labelGuid]="'AEEEB4D8-470D-49B3-A3E4-2B0A3B0764D7'" [primaryDefaultText]="'Choose which users belong to the selected role.'" [secondaryDefaultText]="'Scegli quali utenti appartengono al ruolo selezionato.'" /></p>
             </header>
 
             <div class="check-list">

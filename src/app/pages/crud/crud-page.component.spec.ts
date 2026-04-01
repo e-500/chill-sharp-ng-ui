@@ -19,7 +19,7 @@ describe('CrudPageComponent', () => {
             getSchemaList: () => of([
               {
                 name: 'EventQuery',
-                chillType: 'Model.Query.EventQuery',
+                chillType: 'Model.General.EventQuery',
                 type: 'Query',
                 relatedChillType: 'Model.Event'
               }
@@ -27,7 +27,7 @@ describe('CrudPageComponent', () => {
             getSchema: (chillType: string) => of({
               chillType: chillType,
               displayName: chillType,
-              queryRelatedChillType: chillType === 'Model.Query.EventQuery' ? 'Model.Event' : undefined,
+              queryRelatedChillType: chillType === 'Model.General.EventQuery' ? 'Model.Event' : undefined,
               properties: []
             }),
             query: () => of([])

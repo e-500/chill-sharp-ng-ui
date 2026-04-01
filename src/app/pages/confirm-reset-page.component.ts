@@ -2,6 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
+import { ChillI18nButtonLabelComponent } from '../lib/chill-i18n-button-label.component';
 import { ChillService } from '../services/chill.service';
 
 function passwordMatchValidator(control: AbstractControl): ValidationErrors | null {
@@ -13,13 +15,13 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-confirm-reset-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
   template: `
     <section class="auth-page">
       <div class="auth-card wide">
-        <p class="eyebrow">{{ chill.T('A651A560-1828-4D67-8D60-8B97011231D7', 'ChillSharp Auth', 'Autenticazione ChillSharp') }}</p>
-        <h1>{{ chill.T('5346E633-5DF8-4A90-8349-7D5622312A84', 'Confirm reset', 'Conferma reimpostazione') }}</h1>
-        <p class="lede">{{ chill.T('A97AAEAA-92FA-4F47-B7DD-D84824ECE053', 'Submit the UserId, ResetToken, and new password to complete the ChillSharp reset flow.', 'Invia UserId, ResetToken e la nuova password per completare il flusso di reset di ChillSharp.') }}</p>
+        <p class="eyebrow"><app-chill-i18n-label [labelGuid]="'A651A560-1828-4D67-8D60-8B97011231D7'" [primaryDefaultText]="'ChillSharp Auth'" [secondaryDefaultText]="'Autenticazione ChillSharp'" /></p>
+        <h1><app-chill-i18n-label [labelGuid]="'5346E633-5DF8-4A90-8349-7D5622312A84'" [primaryDefaultText]="'Confirm reset'" [secondaryDefaultText]="'Conferma reimpostazione'" /></h1>
+        <p class="lede"><app-chill-i18n-label [labelGuid]="'A97AAEAA-92FA-4F47-B7DD-D84824ECE053'" [primaryDefaultText]="'Submit the UserId, ResetToken, and new password to complete the ChillSharp reset flow.'" [secondaryDefaultText]="'Invia UserId, ResetToken e la nuova password per completare il flusso di reset di ChillSharp.'" /></p>
 
         @if (successMessage()) {
           <div class="notice success">{{ successMessage() }}</div>
@@ -31,22 +33,22 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="auth-form two-columns">
           <label class="full-width">
-            <span>{{ chill.T('CEB1B59C-FD4E-46D4-B11C-F8B33EA4C32E', 'User ID', 'ID utente') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'CEB1B59C-FD4E-46D4-B11C-F8B33EA4C32E'" [primaryDefaultText]="'User ID'" [secondaryDefaultText]="'ID utente'" /></span>
             <input type="text" formControlName="userId" />
           </label>
 
           <label class="full-width">
-            <span>{{ chill.T('3D525E29-B464-49FF-AC72-6D7E05D0F226', 'Reset token', 'Token di reset') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'3D525E29-B464-49FF-AC72-6D7E05D0F226'" [primaryDefaultText]="'Reset token'" [secondaryDefaultText]="'Token di reset'" /></span>
             <textarea rows="5" formControlName="resetToken"></textarea>
           </label>
 
           <label>
-            <span>{{ chill.T('7B9AA727-6032-47E3-917E-EBA35C9C264F', 'New password', 'Nuova password') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'7B9AA727-6032-47E3-917E-EBA35C9C264F'" [primaryDefaultText]="'New password'" [secondaryDefaultText]="'Nuova password'" /></span>
             <input type="password" formControlName="newPassword" autocomplete="new-password" />
           </label>
 
           <label>
-            <span>{{ chill.T('14EB51FA-9D9B-427C-AFD6-CC54031B9B26', 'Confirm password', 'Conferma password') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'14EB51FA-9D9B-427C-AFD6-CC54031B9B26'" [primaryDefaultText]="'Confirm password'" [secondaryDefaultText]="'Conferma password'" /></span>
             <input type="password" formControlName="confirmPassword" autocomplete="new-password" />
           </label>
 
@@ -55,9 +57,11 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
           }
 
           <button type="submit" class="full-width" [disabled]="isSubmitting() || form.invalid">
-            {{ isSubmitting()
-              ? chill.T('34936727-D552-4649-A178-3377D418D5B6', 'Applying reset...', 'Applicazione reset in corso...')
-              : chill.T('5346E633-5DF8-4A90-8349-7D5622312A84', 'Confirm reset', 'Conferma reimpostazione') }}
+            @if (isSubmitting()) {
+              <app-chill-i18n-button-label [labelGuid]="'34936727-D552-4649-A178-3377D418D5B6'" [primaryDefaultText]="'Applying reset...'" [secondaryDefaultText]="'Applicazione reset in corso...'" />
+            } @else {
+              <app-chill-i18n-button-label [labelGuid]="'5346E633-5DF8-4A90-8349-7D5622312A84'" [primaryDefaultText]="'Confirm reset'" [secondaryDefaultText]="'Conferma reimpostazione'" />
+            }
           </button>
         </form>
 
@@ -80,7 +84,7 @@ export class ConfirmResetPageComponent {
   readonly successMessage = signal('');
   readonly form = this.formBuilder.nonNullable.group({
     userId: [this.route.snapshot.queryParamMap.get('userId') ?? '', Validators.required],
-    resetToken: [this.route.snapshot.queryParamMap.get('token') ?? '', Validators.required],
+    resetToken: [this.route.snapshot.paramMap.get('token') ?? this.route.snapshot.queryParamMap.get('token') ?? '', Validators.required],
     newPassword: ['', [Validators.required, Validators.minLength(6)]],
     confirmPassword: ['', [Validators.required, Validators.minLength(6)]]
   }, { validators: passwordMatchValidator });

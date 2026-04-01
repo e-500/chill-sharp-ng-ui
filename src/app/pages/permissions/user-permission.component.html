@@ -10,12 +10,12 @@
   <div class="editor-layout">
     <aside class="sidebar-card">
       <header class="card-header">
-        <h2>{{ chill.T('8455C9A5-BAC8-457C-B726-F79DA6D758DF', 'Users', 'Utenti') }}</h2>
-        <p>{{ chill.T('B8DAEDE3-34D6-4DDC-879D-70A32294DFF7', 'Search and select a user to edit direct permissions and assigned roles.', 'Cerca e seleziona un utente per modificare permessi diretti e ruoli assegnati.') }}</p>
+        <h2><app-chill-i18n-label [labelGuid]="'8455C9A5-BAC8-457C-B726-F79DA6D758DF'" [primaryDefaultText]="'Users'" [secondaryDefaultText]="'Utenti'" /></h2>
+        <p><app-chill-i18n-label [labelGuid]="'B8DAEDE3-34D6-4DDC-879D-70A32294DFF7'" [primaryDefaultText]="'Search and select a user to edit direct permissions and assigned roles.'" [secondaryDefaultText]="'Cerca e seleziona un utente per modificare permessi diretti e ruoli assegnati.'" /></p>
       </header>
 
       <label class="search-field">
-        <span>{{ chill.T('F513F0F0-ACD9-47D6-8251-892B4AA3A21E', 'Search users', 'Cerca utenti') }}</span>
+        <span><app-chill-i18n-label [labelGuid]="'F513F0F0-ACD9-47D6-8251-892B4AA3A21E'" [primaryDefaultText]="'Search users'" [secondaryDefaultText]="'Cerca utenti'" /></span>
         <input [ngModel]="searchTerm()" (ngModelChange)="updateSearchTerm($event)" />
       </label>
 
@@ -39,15 +39,17 @@
       } @else {
         <header class="selection-header">
           <div>
-            <p class="section-kicker">{{ chill.T('EE9FBF12-1D92-477C-BEF5-0A2787DE93D0', 'Selected user', 'Utente selezionato') }}</p>
+            <p class="section-kicker"><app-chill-i18n-label [labelGuid]="'EE9FBF12-1D92-477C-BEF5-0A2787DE93D0'" [primaryDefaultText]="'Selected user'" [secondaryDefaultText]="'Utente selezionato'" /></p>
             <h2>{{ userLabel(selectedUser()!) }}</h2>
             <p>{{ selectedUser()!.userName }}</p>
           </div>
 
           <button type="button" [disabled]="saveDisabled()" (click)="save()">
-            {{ isSaving()
-              ? chill.T('32E1A7C8-B09A-4A6B-8EA5-3C5AF84070B2', 'Saving...', 'Salvataggio...')
-              : chill.T('D9938C0B-5D36-4702-BB53-E46D6154D2FD', 'Save user access', 'Salva accesso utente') }}
+            @if (isSaving()) {
+              <app-chill-i18n-button-label [labelGuid]="'32E1A7C8-B09A-4A6B-8EA5-3C5AF84070B2'" [primaryDefaultText]="'Saving...'" [secondaryDefaultText]="'Salvataggio...'" />
+            } @else {
+              <app-chill-i18n-button-label [labelGuid]="'D9938C0B-5D36-4702-BB53-E46D6154D2FD'" [primaryDefaultText]="'Save user access'" [secondaryDefaultText]="'Salva accesso utente'" />
+            }
           </button>
         </header>
 
@@ -56,8 +58,8 @@
 
           <section class="box-card">
             <header class="card-header">
-              <h3>{{ chill.T('AB54AD2A-2A88-4AF0-8387-39AA4A08F9F6', 'Assigned roles', 'Ruoli assegnati') }}</h3>
-              <p>{{ chill.T('5A697E78-7AE6-4098-95E5-7E3E934D1B55', 'Choose which roles are assigned to the selected user.', 'Scegli quali ruoli sono assegnati all\'utente selezionato.') }}</p>
+              <h3><app-chill-i18n-label [labelGuid]="'AB54AD2A-2A88-4AF0-8387-39AA4A08F9F6'" [primaryDefaultText]="'Assigned roles'" [secondaryDefaultText]="'Ruoli assegnati'" /></h3>
+              <p><app-chill-i18n-label [labelGuid]="'5A697E78-7AE6-4098-95E5-7E3E934D1B55'" [primaryDefaultText]="'Choose which roles are assigned to the selected user.'" [secondaryDefaultText]='"Scegli quali ruoli sono assegnati all&apos;utente selezionato."' /></p>
             </header>
 
             <div class="check-list">

@@ -1,8 +1,8 @@
 <section class="event-viewer-page">
   <header class="hero">
-    <p class="eyebrow">{{ chill.T('70245196-BE31-4C1D-845B-8B3CF17F98AF', 'Atlas', 'Atlas') }}</p>
-    <h1>{{ chill.T('E81CE558-CC32-477D-B4B0-8EA226D50A3A', 'Event viewer', 'Visualizzatore eventi') }}</h1>
-    <p class="lede">{{ chill.T('290D35DD-44F1-45B2-B682-4C42C0ABFDEA', 'Search Chill events through the EventQuery schema and browse the returned entities.', 'Cerca gli eventi Chill tramite lo schema EventQuery e consulta le entità restituite.') }}</p>
+    <p class="eyebrow"><app-chill-i18n-label [labelGuid]="'70245196-BE31-4C1D-845B-8B3CF17F98AF'" [primaryDefaultText]="'Atlas'" [secondaryDefaultText]="'Atlas'" /></p>
+    <h1><app-chill-i18n-label [labelGuid]="'E81CE558-CC32-477D-B4B0-8EA226D50A3A'" [primaryDefaultText]="'Event viewer'" [secondaryDefaultText]="'Visualizzatore eventi'" /></h1>
+    <p class="lede"><app-chill-i18n-label [labelGuid]="'290D35DD-44F1-45B2-B682-4C42C0ABFDEA'" [primaryDefaultText]="'Search Chill events through the EventQuery schema and browse the returned entities.'" [secondaryDefaultText]="'Cerca gli eventi Chill tramite lo schema EventQuery e consulta le entità restituite.'" /></p>
   </header>
 
   @if (errorMessage()) {
@@ -17,6 +17,9 @@
         <app-chill-form
           [schema]="querySchema()"
           [query]="queryModel()"
+          [submitLabelGuid]="isSearching() ? 'F357243A-AE18-44A0-90DB-A7FB2C7E3278' : 'D513421E-1C00-425E-A89B-E736A440474F'"
+          [submitPrimaryDefaultText]="isSearching() ? 'Searching...' : 'Search'"
+          [submitSecondaryDefaultText]="isSearching() ? 'Ricerca in corso...' : 'Cerca'"
           [submitLabel]="isSearching()
             ? chill.T('F357243A-AE18-44A0-90DB-A7FB2C7E3278', 'Searching...', 'Ricerca in corso...')
             : chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca')"

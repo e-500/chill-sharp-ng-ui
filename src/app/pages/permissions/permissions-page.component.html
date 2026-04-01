@@ -1,8 +1,8 @@
 <section class="permissions-page">
   <header class="hero">
-    <p class="eyebrow">{{ chill.T('68ADFBAB-4D1A-42A5-AB39-F099FB870A7C', 'Security', 'Sicurezza') }}</p>
-    <h1>{{ chill.T('830A6D96-0332-4B08-8EC7-B850702B4337', 'Permissions', 'Permessi') }}</h1>
-    <p class="lede">{{ chill.T('B8F5A363-9E5F-4CAA-9296-54FBF31E1C98', 'Manage user roles, permission rules, and the special ability to manage permissions.', 'Gestisci ruoli utente, regole permesso e l\'abilitazione speciale per gestire i permessi.') }}</p>
+    <p class="eyebrow"><app-chill-i18n-label [labelGuid]="'68ADFBAB-4D1A-42A5-AB39-F099FB870A7C'" [primaryDefaultText]="'Security'" [secondaryDefaultText]="'Sicurezza'" /></p>
+    <h1><app-chill-i18n-label [labelGuid]="'830A6D96-0332-4B08-8EC7-B850702B4337'" [primaryDefaultText]="'Permissions'" [secondaryDefaultText]="'Permessi'" /></h1>
+    <p class="lede"><app-chill-i18n-label [labelGuid]="'B8F5A363-9E5F-4CAA-9296-54FBF31E1C98'" [primaryDefaultText]="'Manage user roles, permission rules, and the special ability to manage permissions.'" [secondaryDefaultText]='"Gestisci ruoli utente, regole permesso e l&apos;abilitazione speciale per gestire i permessi."' /></p>
   </header>
 
   @if (errorMessage()) {
@@ -13,16 +13,16 @@
     <div class="notice">{{ chill.T('9559C65E-F793-4A7E-BBE3-52F9400A3444', 'Loading users, roles, and permission rules...', 'Caricamento utenti, ruoli e regole permesso...') }}</div>
   } @else if (!canManagePermissions()) {
     <section class="empty-state">
-      <h2>{{ chill.T('5DEBC3A2-0A07-4B40-B9CF-16C4E3AFA8C1', 'Insufficient permissions', 'Permessi insufficienti') }}</h2>
-      <p>{{ chill.T('0C03BF4E-57B4-47DB-8E71-0B5B3D165CB5', 'You have insufficient permission to handle permissions.', 'Non disponi dei permessi sufficienti per gestire i permessi.') }}</p>
+      <h2><app-chill-i18n-label [labelGuid]="'5DEBC3A2-0A07-4B40-B9CF-16C4E3AFA8C1'" [primaryDefaultText]="'Insufficient permissions'" [secondaryDefaultText]="'Permessi insufficienti'" /></h2>
+      <p><app-chill-i18n-label [labelGuid]="'0C03BF4E-57B4-47DB-8E71-0B5B3D165CB5'" [primaryDefaultText]="'You have insufficient permission to handle permissions.'" [secondaryDefaultText]="'Non disponi dei permessi sufficienti per gestire i permessi.'" /></p>
     </section>
   } @else {
     <section class="tabs">
       <button type="button" [class.active]="activeTab() === 'user'" (click)="setActiveTab('user')">
-        {{ chill.T('8455C9A5-BAC8-457C-B726-F79DA6D758DF', 'Users', 'Utenti') }}
+        <app-chill-i18n-button-label [labelGuid]="'8455C9A5-BAC8-457C-B726-F79DA6D758DF'" [primaryDefaultText]="'Users'" [secondaryDefaultText]="'Utenti'" />
       </button>
       <button type="button" [class.active]="activeTab() === 'role'" (click)="setActiveTab('role')">
-        {{ chill.T('B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6', 'Roles', 'Ruoli') }}
+        <app-chill-i18n-button-label [labelGuid]="'B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6'" [primaryDefaultText]="'Roles'" [secondaryDefaultText]="'Ruoli'" />
       </button>
     </section>
 

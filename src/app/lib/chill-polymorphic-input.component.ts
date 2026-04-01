@@ -1,26 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
-import type { ChillEntity, ChillPropertySchema, ChillQuery, ChillSchema } from '../models/chill-schema.models';
+import { Subscription } from 'rxjs';
+import { CHILL_PROPERTY_TYPE, type ChillEntity, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import { ChillService } from '../services/chill.service';
-
-const CHILL_PROPERTY_TYPE = {
-  Unknown: 0,
-  Guid: 1,
-  Integer: 10,
-  Decimal: 20,
-  Date: 30,
-  Time: 40,
-  DateTime: 50,
-  Duration: 60,
-  Boolean: 70,
-  String: 80,
-  Text: 81,
-  ChillEntity: 1000,
-  ChillEntityCollection: 1010,
-  ChillQuery: 1100
-} as const;
+import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 
 type FieldValueMap = Record<string, JsonValue>;
 type ErrorMap = Record<string, string>;
@@ -30,27 +15,35 @@ interface LookupState {
   isSearching: boolean;
   error: string;
   results: JsonObject[];
+  selectedGuid: string;
 }
 
 @Component({
   selector: 'app-chill-polymorphic-input',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule],
   templateUrl: './chill-polymorphic-input.component.html',
   styleUrl: './chill-polymorphic-input.component.scss'
 })
-export class ChillPolymorphicInputComponent {
+export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly chill = inject(ChillService);
-  readonly source = input<ChillEntity | ChillQuery | null>(null);
+  readonly dialog = inject(WorkspaceDialogService);
+  readonly form = input<FormGroup<Record<string, FormControl<JsonValue>>> | null>(null);
   readonly schema = input<ChillSchema | null>(null);
   readonly propertyNames = input<string[] | null>(null);
+  readonly externalErrors = input<Record<string, string> | null>(null);
+  readonly showLabels = input(true);
 
   readonly valueChange = output<Record<string, JsonValue>>();
   readonly validityChange = output<boolean>();
+  readonly fieldBlur = output<Record<string, JsonValue>>();
 
-  readonly fields = signal<FieldValueMap>({});
+  readonly fieldValues = signal<FieldValueMap>({});
   readonly errors = signal<ErrorMap>({});
   readonly lookups = signal<Record<string, LookupState>>({});
+  private readonly lookupSearchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly lookupRequestSequence = new Map<string, number>();
+  private controlSubscriptions = new Subscription();
 
   readonly properties = computed(() => {
     const allowedPropertyNames = this.propertyNames();
@@ -64,23 +57,74 @@ export class ChillPolymorphicInputComponent {
       return allowedSet ? allowedSet.has(property.name) : true;
     });
   });
-  readonly isValid = computed(() => this.properties().every((property) => !this.errors()[property.name]));
+  readonly resolvedErrors = computed<ErrorMap>(() => {
+    const next: ErrorMap = {
+      ...this.errors()
+    };
+    for (const property of this.properties()) {
+      const controlError = this.readControlValidationMessage(property.name);
+      if (controlError) {
+        next[property.name] = controlError;
+      }
+    }
+    const externalErrors = this.externalErrors() ?? {};
+    const propertyNameMap = new Map(
+      this.properties()
+        .map((property) => property.name.trim())
+        .filter((propertyName) => propertyName.length > 0)
+        .map((propertyName) => [propertyName.toLowerCase(), propertyName] as const)
+    );
+    for (const [fieldName, message] of Object.entries(externalErrors)) {
+      const normalizedMessage = message.trim();
+      if (normalizedMessage) {
+        const resolvedFieldName = propertyNameMap.get(fieldName.trim().toLowerCase()) ?? fieldName;
+        next[resolvedFieldName] = normalizedMessage;
+      }
+    }
+    return next;
+  });
+  readonly isValid = computed(() => this.properties().every((property) => !this.resolvedErrors()[property.name]));
 
   constructor() {
     effect(() => {
-      const schema = this.schema();
-      const source = this.source();
-      const fields = this.createFieldState(schema, source);
-      const errors = this.validateAllFields(schema, fields);
-      const lookups = this.createLookupState(schema, fields);
+      const properties = this.properties();
+      const form = this.form();
+      const fields = this.readFormValues(properties);
+      const errors = this.validateAllFields(properties, fields);
+      const lookups = this.createLookupState(properties, fields);
 
-      this.fields.update((current) => this.areRecordsEqual(current, fields) ? current : fields);
+      this.controlSubscriptions.unsubscribe();
+      this.controlSubscriptions = new Subscription();
+      for (const property of properties) {
+        const control = this.control(property.name);
+        if (!control) {
+          continue;
+        }
+
+        this.controlSubscriptions.add(control.valueChanges.subscribe((value) => {
+          this.fieldValues.update((current) => ({
+            ...current,
+            [property.name]: value
+          }));
+          this.syncLookupState(property, value);
+          this.validateField(property);
+        }));
+      }
+
+      if (!form) {
+        this.fieldValues.set({});
+        this.errors.set({});
+        this.lookups.set({});
+        return;
+      }
+
+      this.fieldValues.update((current) => this.areRecordsEqual(current, fields) ? current : fields);
       this.errors.update((current) => this.areStringRecordsEqual(current, errors) ? current : errors);
       this.lookups.update((current) => this.areLookupStatesEqual(current, lookups) ? current : lookups);
     });
 
     effect(() => {
-      this.valueChange.emit(this.fields());
+      this.valueChange.emit(this.fieldValues());
       this.validityChange.emit(this.isValid());
     });
   }
@@ -98,6 +142,10 @@ export class ChillPolymorphicInputComponent {
   isLookup(property: ChillPropertySchema): boolean {
     return property.propertyType === CHILL_PROPERTY_TYPE.ChillEntity
       || property.propertyType === CHILL_PROPERTY_TYPE.ChillQuery;
+  }
+
+  isLookupCollection(property: ChillPropertySchema): boolean {
+    return property.propertyType === CHILL_PROPERTY_TYPE.ChillEntityCollection;
   }
 
   inputType(property: ChillPropertySchema): 'text' | 'number' {
@@ -125,18 +173,25 @@ export class ChillPolymorphicInputComponent {
   }
 
   placeholder(property: ChillPropertySchema): string {
-    return property.metadata?.['placeholder']?.trim() ?? '';
+    const explicitPlaceholder = property.metadata?.['placeholder']?.trim() ?? '';
+    if (explicitPlaceholder) {
+      return explicitPlaceholder;
+    }
+
+    return this.showLabels()
+      ? ''
+      : property.displayName?.trim() || property.name;
   }
 
   textValue(propertyName: string): string {
-    const value = this.fields()[propertyName];
+    const value = this.fieldValues()[propertyName];
     return typeof value === 'string' || typeof value === 'number'
       ? String(value)
       : '';
   }
 
   booleanValue(propertyName: string): boolean {
-    return this.fields()[propertyName] === true;
+    return this.fieldValues()[propertyName] === true;
   }
 
   lookupTerm(propertyName: string): string {
@@ -155,60 +210,62 @@ export class ChillPolymorphicInputComponent {
     return this.lookups()[propertyName]?.isSearching ?? false;
   }
 
-  validationMessage(propertyName: string): string {
-    return this.errors()[propertyName] ?? '';
+  canOpenLookupDialog(property: ChillPropertySchema): boolean {
+    return (
+      property.propertyType === CHILL_PROPERTY_TYPE.ChillEntity
+      || property.propertyType === CHILL_PROPERTY_TYPE.ChillEntityCollection
+    ) && !!property.chillType?.trim();
   }
 
-  updateText(property: ChillPropertySchema, value: string): void {
-    this.fields.update((current) => ({
-      ...current,
-      [property.name]: value
-    }));
-    this.validateField(property);
+  lookupCollectionSummary(propertyName: string): string {
+    return this.collectionLookupLabels(propertyName).join(', ');
+  }
+
+  collectionLookupLabels(propertyName: string): string[] {
+    const value = this.fieldValues()[propertyName];
+    return Array.isArray(value)
+      ? value.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.lookupLabel(item)).filter((item) => item.length > 0)
+      : [];
+  }
+
+  validationMessage(propertyName: string): string {
+    return this.resolvedErrors()[propertyName] ?? '';
   }
 
   normalizeTextOnBlur(property: ChillPropertySchema): void {
-    const currentValue = this.fields()[property.name];
+    const currentValue = this.fieldValues()[property.name];
     if (typeof currentValue !== 'string') {
+      this.notifyFieldBlur(property.name);
       return;
     }
 
     const normalizedValue = this.normalizeBlurValue(property, currentValue);
     if (normalizedValue === null) {
       this.validateField(property);
+      this.notifyFieldBlur(property.name);
       return;
     }
 
-    this.fields.update((current) => ({
-      ...current,
-      [property.name]: normalizedValue
-    }));
+    this.setFieldValue(property.name, normalizedValue);
     this.validateField(property);
-  }
-
-  updateBoolean(property: ChillPropertySchema, value: boolean): void {
-    this.fields.update((current) => ({
-      ...current,
-      [property.name]: value
-    }));
-    this.validateField(property);
+    this.notifyFieldBlur(property.name);
   }
 
   updateLookupTerm(property: ChillPropertySchema, value: string): void {
+    const previousLookup = this.lookups()[property.name] ?? this.createEmptyLookupState();
     this.lookups.update((current) => ({
       ...current,
       [property.name]: {
-        ...(current[property.name] ?? this.createEmptyLookupState()),
+        ...previousLookup,
         term: value,
-        error: ''
+        error: '',
+        selectedGuid: this.matchesLookupLabel(previousLookup.term, value) ? previousLookup.selectedGuid : ''
       }
     }));
 
     if (!value.trim()) {
-      this.fields.update((current) => ({
-        ...current,
-        [property.name]: null
-      }));
+      this.cancelLookupSearch(property.name);
+      this.setFieldValue(property.name, null);
       this.lookups.update((current) => ({
         ...current,
         [property.name]: {
@@ -217,13 +274,88 @@ export class ChillPolymorphicInputComponent {
         }
       }));
       this.validateField(property);
+      return;
+    }
+
+    this.scheduleLookupSearch(property, value);
+  }
+
+  handleLookupFocus(property: ChillPropertySchema): void {
+    const lookup = this.lookups()[property.name] ?? this.createEmptyLookupState();
+    if (lookup.term.trim() && lookup.results.length === 0) {
+      this.scheduleLookupSearch(property, lookup.term);
     }
   }
 
-  searchLookup(property: ChillPropertySchema): void {
+  handleLookupBlur(propertyName: string): void {
+    this.notifyFieldBlur(propertyName);
+    window.setTimeout(() => {
+      this.lookups.update((current) => {
+        const lookup = current[propertyName];
+        if (!lookup) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [propertyName]: {
+            ...lookup,
+            results: []
+          }
+        };
+      });
+    }, 120);
+  }
+
+  emitFieldBlur(propertyName: string): void {
+    this.notifyFieldBlur(propertyName);
+  }
+
+  async openLookupDialog(property: ChillPropertySchema): Promise<void> {
+    const chillType = property.chillType?.trim() ?? '';
+    if (!chillType) {
+      this.setLookupError(property.name, this.chill.T('7E0D5F0F-CDA4-4F49-8E02-A7E0E854B65A', 'Lookup schema is unavailable.', 'Lo schema di ricerca non è disponibile.'));
+      return;
+    }
+
+    const currentValue = this.fieldValues()[property.name];
+    const selectedEntity = this.isJsonObject(currentValue) ? currentValue as ChillEntity : null;
+    const selectedEntities = Array.isArray(currentValue)
+      ? currentValue.filter((item): item is ChillEntity => this.isJsonObject(item))
+      : [];
+    const { CrudTaskComponent } = await import('../tasks/crud-task/crud-task.component');
+    const result = await this.dialog.openDialog<ChillEntity | ChillEntity[] | null>({
+      title: property.displayName?.trim() || property.name,
+      component: CrudTaskComponent,
+      inputs: {
+        initialChillType: chillType,
+        initialViewCode: 'default',
+        selectionEnabled: true,
+        multipleSelection: this.isLookupCollection(property),
+        initialSelectedEntity: selectedEntity,
+        initialSelectedEntities: selectedEntities,
+        toolbarScope: 'dialog'
+      }
+    });
+
+    if (result.status !== 'confirmed' || !result.value) {
+      return;
+    }
+
+    if (Array.isArray(result.value)) {
+      this.selectLookupResults(property, result.value);
+      return;
+    }
+
+    this.selectLookupResult(property, result.value);
+  }
+
+  private searchLookup(property: ChillPropertySchema, rawSearchTerm: string): void {
     const lookup = this.lookups()[property.name] ?? this.createEmptyLookupState();
-    const searchTerm = lookup.term.trim();
+    const searchTerm = rawSearchTerm.trim();
     const targetChillType = property.chillType?.trim() ?? '';
+    const requestSequence = (this.lookupRequestSequence.get(property.name) ?? 0) + 1;
+    this.lookupRequestSequence.set(property.name, requestSequence);
 
     if (!targetChillType) {
       this.setLookupError(property.name, this.chill.T('7E0D5F0F-CDA4-4F49-8E02-A7E0E854B65A', 'Lookup schema is unavailable.', 'Lo schema di ricerca non è disponibile.'));
@@ -241,7 +373,8 @@ export class ChillPolymorphicInputComponent {
         ...lookup,
         isSearching: true,
         error: '',
-        results: []
+        results: [],
+        term: rawSearchTerm
       }
     }));
 
@@ -258,11 +391,15 @@ export class ChillPolymorphicInputComponent {
       ]
     }).subscribe({
       next: (response) => {
+        if (this.lookupRequestSequence.get(property.name) !== requestSequence) {
+          return;
+        }
+
         this.lookups.update((current) => ({
           ...current,
           [property.name]: {
             ...(current[property.name] ?? this.createEmptyLookupState()),
-            term: searchTerm,
+            term: rawSearchTerm,
             isSearching: false,
             error: '',
             results: this.extractLookupResults(response)
@@ -270,16 +407,17 @@ export class ChillPolymorphicInputComponent {
         }));
       },
       error: (error: unknown) => {
+        if (this.lookupRequestSequence.get(property.name) !== requestSequence) {
+          return;
+        }
         this.setLookupError(property.name, this.chill.formatError(error), false);
       }
     });
   }
 
   selectLookupResult(property: ChillPropertySchema, result: JsonObject): void {
-    this.fields.update((current) => ({
-      ...current,
-      [property.name]: result
-    }));
+    this.setFieldValue(property.name, result);
+    const selectedGuid = this.lookupGuid(result);
     this.lookups.update((current) => ({
       ...current,
       [property.name]: {
@@ -287,17 +425,31 @@ export class ChillPolymorphicInputComponent {
         term: this.lookupLabel(result),
         isSearching: false,
         error: '',
-        results: []
+        results: [],
+        selectedGuid
+      }
+    }));
+    this.validateField(property);
+  }
+
+  selectLookupResults(property: ChillPropertySchema, results: JsonObject[]): void {
+    this.setFieldValue(property.name, results);
+    this.lookups.update((current) => ({
+      ...current,
+      [property.name]: {
+        ...(current[property.name] ?? this.createEmptyLookupState()),
+        term: results.map((result) => this.lookupLabel(result)).filter((label) => label.length > 0).join(', '),
+        isSearching: false,
+        error: '',
+        results: [],
+        selectedGuid: ''
       }
     }));
     this.validateField(property);
   }
 
   clearLookup(property: ChillPropertySchema): void {
-    this.fields.update((current) => ({
-      ...current,
-      [property.name]: null
-    }));
+    this.setFieldValue(property.name, this.isLookupCollection(property) ? [] : null);
     this.lookups.update((current) => ({
       ...current,
       [property.name]: this.createEmptyLookupState()
@@ -322,70 +474,78 @@ export class ChillPolymorphicInputComponent {
     return '';
   }
 
-  private createFieldState(schema: ChillSchema | null, source: ChillEntity | ChillQuery | null): FieldValueMap {
+  lookupGuid(result: JsonObject): string {
+    const guid = result['Guid'] ?? result['guid'];
+    if (typeof guid === 'string' && guid.trim()) {
+      return guid.trim();
+    }
+
+    return '';
+  }
+
+  isLookupResultSelected(propertyName: string, result: JsonObject): boolean {
+    const selectedGuid = this.lookups()[propertyName]?.selectedGuid ?? '';
+    return !!selectedGuid && this.lookupGuid(result) === selectedGuid;
+  }
+
+  ngOnDestroy(): void {
+    this.controlSubscriptions.unsubscribe();
+    for (const timer of this.lookupSearchTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.lookupSearchTimers.clear();
+  }
+
+  control(propertyName: string): FormControl<JsonValue> | null {
+    return this.form()?.controls[propertyName] ?? null;
+  }
+
+  private readFormValues(properties: ChillPropertySchema[]): FieldValueMap {
     const nextState: FieldValueMap = {};
 
-    for (const property of schema?.properties ?? []) {
-      if (this.shouldSkipProperty(property)) {
-        continue;
-      }
-
-      nextState[property.name] = this.normalizeFieldValue(this.readPropertyValue(source, property.name));
+    for (const property of properties) {
+      const control = this.control(property.name);
+      nextState[property.name] = this.normalizeFieldValue(property, control?.value);
     }
 
     return nextState;
   }
 
-  private createLookupState(schema: ChillSchema | null, fields: FieldValueMap): Record<string, LookupState> {
+  private createLookupState(properties: ChillPropertySchema[], fields: FieldValueMap): Record<string, LookupState> {
     const nextState: Record<string, LookupState> = {};
 
-    for (const property of schema?.properties ?? []) {
-      if (!this.isLookup(property) || this.shouldSkipProperty(property)) {
+    for (const property of properties) {
+      if (!this.isLookup(property) && !this.isLookupCollection(property)) {
         continue;
       }
 
       const value = fields[property.name];
       nextState[property.name] = {
-        term: this.isJsonObject(value) ? this.lookupLabel(value) : '',
+        term: this.isLookupCollection(property)
+          ? this.lookupCollectionSummaryFromValue(value)
+          : this.isJsonObject(value) ? this.lookupLabel(value) : '',
         isSearching: false,
         error: '',
-        results: []
+        results: [],
+        selectedGuid: this.isJsonObject(value) ? this.lookupGuid(value) : ''
       };
     }
 
     return nextState;
   }
 
-  private normalizeFieldValue(value: JsonValue | undefined): JsonValue {
+  private normalizeFieldValue(property: ChillPropertySchema, value: JsonValue | undefined): JsonValue {
     if (value === undefined) {
-      return '';
+      return this.isLookupCollection(property) ? [] : '';
     }
 
     return value;
   }
 
-  private readPropertyValue(source: ChillEntity | ChillQuery | null, propertyName: string): JsonValue | undefined {
-    if (!source) {
-      return undefined;
-    }
-
-    const properties = source.properties
-      ?? (this.isJsonObject(source['Properties']) ? source['Properties'] : undefined);
-    if (properties && propertyName in properties) {
-      return properties[propertyName];
-    }
-
-    return source[propertyName] ?? source[this.toPascalCase(propertyName)];
-  }
-
-  private validateAllFields(schema: ChillSchema | null, fields: FieldValueMap): ErrorMap {
+  private validateAllFields(properties: ChillPropertySchema[], fields: FieldValueMap): ErrorMap {
     const nextErrors: ErrorMap = {};
 
-    for (const property of schema?.properties ?? []) {
-      if (this.shouldSkipProperty(property)) {
-        continue;
-      }
-
+    for (const property of properties) {
       const error = this.getValidationMessage(property, fields[property.name]);
       if (error) {
         nextErrors[property.name] = error;
@@ -396,7 +556,7 @@ export class ChillPolymorphicInputComponent {
   }
 
   private validateField(property: ChillPropertySchema): void {
-    const message = this.getValidationMessage(property, this.fields()[property.name]);
+    const message = this.getValidationMessage(property, this.fieldValues()[property.name]);
     this.errors.update((current) => {
       if (!message) {
         const { [property.name]: _, ...rest } = current;
@@ -408,6 +568,18 @@ export class ChillPolymorphicInputComponent {
         [property.name]: message
       };
     });
+  }
+
+  private readControlValidationMessage(propertyName: string): string {
+    const errors = this.control(propertyName)?.errors;
+    if (!errors) {
+      return '';
+    }
+
+    const serverValidation = errors['serverValidation'];
+    return typeof serverValidation === 'string'
+      ? serverValidation.trim()
+      : '';
   }
 
   private getValidationMessage(property: ChillPropertySchema, value: JsonValue | undefined): string {
@@ -441,6 +613,10 @@ export class ChillPolymorphicInputComponent {
       case CHILL_PROPERTY_TYPE.ChillEntity:
       case CHILL_PROPERTY_TYPE.ChillQuery:
         return this.isJsonObject(value)
+          ? ''
+          : this.chill.T('5302E408-0D83-4857-8C81-17DCA0DDAF44', 'Select a value from the lookup results.', 'Seleziona un valore dai risultati di ricerca.');
+      case CHILL_PROPERTY_TYPE.ChillEntityCollection:
+        return Array.isArray(value) && value.every((item) => this.isJsonObject(item))
           ? ''
           : this.chill.T('5302E408-0D83-4857-8C81-17DCA0DDAF44', 'Select a value from the lookup results.', 'Seleziona un valore dai risultati di ricerca.');
       default:
@@ -555,13 +731,25 @@ export class ChillPolymorphicInputComponent {
     return '';
   }
 
-  private normalizeBlurValue(property: ChillPropertySchema, value: string): string | null {
+  private normalizeBlurValue(property: ChillPropertySchema, value: string): JsonValue | null {
     const trimmedValue = value.trim();
     if (!trimmedValue) {
       return '';
     }
 
     switch (property.propertyType) {
+      case CHILL_PROPERTY_TYPE.Integer: {
+        const numericValue = Number(trimmedValue);
+        return Number.isInteger(numericValue)
+          ? numericValue
+          : null;
+      }
+      case CHILL_PROPERTY_TYPE.Decimal: {
+        const numericValue = Number(trimmedValue);
+        return Number.isFinite(numericValue)
+          ? numericValue
+          : null;
+      }
       case CHILL_PROPERTY_TYPE.Date:
         return this.parseDateDisplayValue(trimmedValue);
       case CHILL_PROPERTY_TYPE.Time:
@@ -742,8 +930,7 @@ export class ChillPolymorphicInputComponent {
   }
 
   private shouldSkipProperty(property: ChillPropertySchema): boolean {
-    return property.propertyType === CHILL_PROPERTY_TYPE.Unknown
-      || property.propertyType === CHILL_PROPERTY_TYPE.ChillEntityCollection;
+    return property.propertyType === CHILL_PROPERTY_TYPE.Unknown;
   }
 
   private extractLookupResults(response: JsonObject): JsonObject[] {
@@ -787,8 +974,67 @@ export class ChillPolymorphicInputComponent {
       term: '',
       isSearching: false,
       error: '',
-      results: []
+      results: [],
+      selectedGuid: ''
     };
+  }
+
+  private scheduleLookupSearch(property: ChillPropertySchema, term: string): void {
+    this.cancelLookupSearch(property.name);
+    this.lookupSearchTimers.set(property.name, setTimeout(() => {
+      this.lookupSearchTimers.delete(property.name);
+      this.searchLookup(property, term);
+    }, 220));
+  }
+
+  private cancelLookupSearch(propertyName: string): void {
+    const timer = this.lookupSearchTimers.get(propertyName);
+    if (timer) {
+      clearTimeout(timer);
+      this.lookupSearchTimers.delete(propertyName);
+    }
+  }
+
+  private matchesLookupLabel(left: string, right: string): boolean {
+    return left.trim().toLowerCase() === right.trim().toLowerCase();
+  }
+
+  private notifyFieldBlur(propertyName: string): void {
+    this.fieldBlur.emit({
+      [propertyName]: this.fieldValues()[propertyName]
+    });
+  }
+
+  private setFieldValue(propertyName: string, value: JsonValue): void {
+    const control = this.control(propertyName);
+    control?.setValue(value);
+    this.fieldValues.update((current) => ({
+      ...current,
+      [propertyName]: value
+    }));
+  }
+
+  private syncLookupState(property: ChillPropertySchema, value: JsonValue): void {
+    if (!this.isLookup(property) && !this.isLookupCollection(property)) {
+      return;
+    }
+
+    this.lookups.update((current) => ({
+      ...current,
+      [property.name]: {
+        ...(current[property.name] ?? this.createEmptyLookupState()),
+        term: this.isLookupCollection(property)
+          ? this.lookupCollectionSummaryFromValue(value)
+          : this.isJsonObject(value) ? this.lookupLabel(value) : (current[property.name]?.term ?? ''),
+        selectedGuid: this.isJsonObject(value) ? this.lookupGuid(value) : ''
+      }
+    }));
+  }
+
+  private lookupCollectionSummaryFromValue(value: JsonValue): string {
+    return Array.isArray(value)
+      ? value.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.lookupLabel(item)).filter((item) => item.length > 0).join(', ')
+      : '';
   }
 
   private toPascalCase(value: string): string {

@@ -14,7 +14,8 @@ export const appConfig: ApplicationConfig = {
       options: {
         cultureName: CHILL_CULTURE,
         accessToken: readStoredAccessToken(),
-        fetchImpl: authAwareFetch
+        fetchImpl: authAwareFetch,
+        signalRWithCredentials: false
       }
     }),
     {

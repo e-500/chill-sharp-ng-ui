@@ -2,18 +2,20 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
+import { ChillI18nButtonLabelComponent } from '../lib/chill-i18n-button-label.component';
 import { ChillService } from '../services/chill.service';
 
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
   template: `
     <section class="auth-page">
       <div class="auth-card">
-        <p class="eyebrow">{{ chill.T('A651A560-1828-4D67-8D60-8B97011231D7', 'ChillSharp Auth', 'Autenticazione ChillSharp') }}</p>
-        <h1>{{ chill.T('0C4F53D0-2087-486B-9F2A-AEBCC226AF09', 'Login', 'Accesso') }}</h1>
-        <p class="lede">{{ chill.T('D22E0294-1500-4C13-9008-6980F84F2758', 'Authenticate against the ChillSharp Identity endpoints through a single Angular service.', 'Autenticati agli endpoint Identity di ChillSharp tramite un singolo servizio Angular.') }}</p>
+        <p class="eyebrow"><app-chill-i18n-label [labelGuid]="'A651A560-1828-4D67-8D60-8B97011231D7'" [primaryDefaultText]="'ChillSharp Auth'" [secondaryDefaultText]="'Autenticazione ChillSharp'" /></p>
+        <h1><app-chill-i18n-label [labelGuid]="'0C4F53D0-2087-486B-9F2A-AEBCC226AF09'" [primaryDefaultText]="'Login'" [secondaryDefaultText]="'Accesso'" /></h1>
+        <p class="lede"><app-chill-i18n-label [labelGuid]="'D22E0294-1500-4C13-9008-6980F84F2758'" [primaryDefaultText]="'Authenticate against the ChillSharp Identity endpoints through a single Angular service.'" [secondaryDefaultText]="'Autenticati agli endpoint Identity di ChillSharp tramite un singolo servizio Angular.'" /></p>
 
         @if (chill.isAuthenticated()) {
           <div class="notice success">
@@ -31,19 +33,21 @@ import { ChillService } from '../services/chill.service';
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="auth-form">
           <label>
-            <span>{{ chill.T('EA8C79F7-B95E-40A8-B638-C09BFD355A94', 'Username or email', 'Nome utente o email') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'EA8C79F7-B95E-40A8-B638-C09BFD355A94'" [primaryDefaultText]="'Username or email'" [secondaryDefaultText]="'Nome utente o email'" /></span>
             <input type="text" formControlName="userNameOrEmail" autocomplete="username" />
           </label>
 
           <label>
-            <span>{{ chill.T('A76807CB-91F6-41A5-B565-D86EEA811241', 'Password', 'Password') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'A76807CB-91F6-41A5-B565-D86EEA811241'" [primaryDefaultText]="'Password'" [secondaryDefaultText]="'Password'" /></span>
             <input type="password" formControlName="password" autocomplete="current-password" />
           </label>
 
           <button type="submit" [disabled]="isSubmitting() || form.invalid">
-            {{ isSubmitting()
-              ? chill.T('8B825C06-0160-4B9F-B697-C624456C87CA', 'Signing in...', 'Accesso in corso...')
-              : chill.T('CA6A46A2-9E63-4AA8-849F-63EEB430A227', 'Sign in', 'Accedi') }}
+            @if (isSubmitting()) {
+              <app-chill-i18n-button-label [labelGuid]="'8B825C06-0160-4B9F-B697-C624456C87CA'" [primaryDefaultText]="'Signing in...'" [secondaryDefaultText]="'Accesso in corso...'" />
+            } @else {
+              <app-chill-i18n-button-label [labelGuid]="'CA6A46A2-9E63-4AA8-849F-63EEB430A227'" [primaryDefaultText]="'Sign in'" [secondaryDefaultText]="'Accedi'" />
+            }
           </button>
         </form>
 
@@ -105,7 +109,7 @@ export class LoginPageComponent implements OnInit {
           ));
           return;
         }
-        void this.router.navigateByUrl('/atlas/event-viewer');
+        void this.router.navigate(['/workspace', 'event-viewer']);
       },
       error: (error: unknown) => {
         this.isSubmitting.set(false);

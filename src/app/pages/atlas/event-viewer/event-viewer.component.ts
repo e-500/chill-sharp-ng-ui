@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
+import { ChillI18nLabelComponent } from '../../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../../lib/chill-form.component';
 import { ChillTableComponent } from '../../../lib/chill-table.component';
 import type { ChillEntity, ChillFormSubmitEvent, ChillQuery, ChillSchema, ChillSchemaListItem } from '../../../models/chill-schema.models';
@@ -13,7 +14,7 @@ const DEFAULT_VIEW_CODE = 'default';
 @Component({
   selector: 'app-event-viewer',
   standalone: true,
-  imports: [CommonModule, ChillFormComponent, ChillTableComponent],
+  imports: [CommonModule, ChillFormComponent, ChillTableComponent, ChillI18nLabelComponent],
   templateUrl: './event-viewer.component.html',
   styleUrl: './event-viewer.component.scss'
 })

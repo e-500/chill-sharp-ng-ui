@@ -1,95 +1,82 @@
 :host {
   display: block;
+  height: 100%;
+  min-height: 0;
 }
 
 .crud-page {
   display: grid;
+  height: 100%;
+  min-height: 0;
   gap: 1.5rem;
-  padding: 1.5rem;
+  padding: 1.5rem 0.5rem;
+  align-content: start;
+  align-items: start;
+  overflow-y: auto;
 }
 
-.hero {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.hero h1,
-.hero p {
-  margin: 0;
-}
-
-.eyebrow {
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.lede {
-  max-width: 64rem;
-  color: var(--text-muted);
-}
-
-.selector-panel,
 .panel {
   display: grid;
   gap: 1rem;
 }
 
-.selector-panel {
-  padding: 1rem 1.25rem;
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--border-color);
-}
-
-.selector-field {
+.content {
   display: grid;
-  gap: 0.55rem;
+  gap: 1rem;
 }
 
-.selector-field span {
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.5rem 0 0;
+}
+
+.pagination p {
+  margin: 0;
+  color: var(--text-muted);
   font-weight: 600;
 }
 
-.selector-field select {
-  width: min(100%, 28rem);
-  padding: 0.8rem 0.95rem;
-  border-radius: 0.8rem;
+.pagination button {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  background: var(--surface-0);
   color: var(--text-main);
-  font: inherit;
+  cursor: pointer;
 }
 
-.layout {
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
-  align-items: start;
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .notice {
+  margin-top: 0;
   padding: 1rem 1.25rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-2);
   border: 1px solid var(--border-color);
   color: var(--text-main);
+  max-width: 100%;
+  max-height: 5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .notice.error {
-  color: #8b1e3f;
-  border-color: rgba(139, 30, 63, 0.2);
-  background: rgba(255, 240, 244, 0.92);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 22%, transparent);
+  background: var(--danger-bg);
 }
 
 @media (max-width: 960px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
   .crud-page {
-    padding: 1rem;
+    padding: 1rem 0.25rem;
   }
 }

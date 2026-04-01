@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChillI18nButtonLabelComponent } from '../../lib/chill-i18n-button-label.component';
+import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import type { AuthRole, AuthUser } from '../../models/chill-auth.models';
 import { ChillService } from '../../services/chill.service';
 import { RolePermissionComponent } from './role-permission.component';
@@ -10,7 +12,7 @@ type PermissionTab = 'user' | 'role';
 @Component({
   selector: 'app-permissions-page',
   standalone: true,
-  imports: [CommonModule, UserPermissionComponent, RolePermissionComponent],
+  imports: [CommonModule, UserPermissionComponent, RolePermissionComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
   templateUrl: './permissions-page.component.html',
   styleUrl: './permissions-page.component.scss'
 })

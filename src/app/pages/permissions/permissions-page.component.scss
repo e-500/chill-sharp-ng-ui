@@ -1,11 +1,16 @@
 :host {
   display: block;
+  height: 100%;
+  min-height: 0;
 }
 
 .permissions-page {
   display: grid;
+  height: 100%;
+  min-height: 0;
   gap: 1.5rem;
-  padding: 1.5rem;
+  padding: 1.5rem 0.5rem;
+  overflow-y: auto;
 }
 
 .hero {
@@ -77,7 +82,7 @@
 
 @media (max-width: 720px) {
   .permissions-page {
-    padding: 1rem;
+    padding: 1rem 0.25rem;
   }
 
   .tabs {

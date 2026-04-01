@@ -4,8 +4,8 @@
 
 <section class="box-card">
   <header class="card-header">
-    <h3>{{ chill.T('64D855B5-1A89-4D6B-BD59-B201182BDBEF', 'Permission rules', 'Regole permesso') }}</h3>
-    <p>{{ chill.T('C04B7E13-FB43-4E9B-B9DA-DB4E6E49590A', 'Configure module, entity, and property permission rules.', 'Configura regole permesso per modulo, entità e proprietà.') }}</p>
+    <h3><app-chill-i18n-label [labelGuid]="'64D855B5-1A89-4D6B-BD59-B201182BDBEF'" [primaryDefaultText]="'Permission rules'" [secondaryDefaultText]="'Regole permesso'" /></h3>
+    <p><app-chill-i18n-label [labelGuid]="'C04B7E13-FB43-4E9B-B9DA-DB4E6E49590A'" [primaryDefaultText]="'Configure module, entity, and property permission rules.'" [secondaryDefaultText]="'Configura regole permesso per modulo, entità e proprietà.'" /></p>
   </header>
 
   <div class="permission-list">
@@ -14,7 +14,7 @@
         @if (isEditingRow(rule.localId)) {
           <div class="form-grid">
             <label class="field">
-              <span>{{ chill.T('678D4A79-804B-4D8F-B986-B08F4E3EC22F', 'Effect', 'Effetto') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'678D4A79-804B-4D8F-B986-B08F4E3EC22F'" [primaryDefaultText]="'Effect'" [secondaryDefaultText]="'Effetto'" /></span>
               <select [ngModel]="rule.effect" (ngModelChange)="updatePermissionRow(rule.localId, 'effect', +$event)">
                 @for (option of permissionEffectOptions; track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
@@ -23,7 +23,7 @@
             </label>
 
             <label class="field">
-              <span>{{ chill.T('7E4DDC4C-D4E7-4427-BC9A-08AEF926A0FE', 'Action', 'Azione') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'7E4DDC4C-D4E7-4427-BC9A-08AEF926A0FE'" [primaryDefaultText]="'Action'" [secondaryDefaultText]="'Azione'" /></span>
               <select [ngModel]="rule.action" (ngModelChange)="updatePermissionRow(rule.localId, 'action', +$event)">
                 @for (option of permissionActionOptions; track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
@@ -32,7 +32,7 @@
             </label>
 
             <label class="field">
-              <span>{{ chill.T('88724B00-D84F-44C8-AFC9-BC6C94A8D5E6', 'Scope', 'Ambito') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'88724B00-D84F-44C8-AFC9-BC6C94A8D5E6'" [primaryDefaultText]="'Scope'" [secondaryDefaultText]="'Ambito'" /></span>
               <select [ngModel]="rule.scope" (ngModelChange)="updatePermissionRow(rule.localId, 'scope', +$event)">
                 @for (option of permissionScopeOptions; track option.value) {
                   <option [value]="option.value">{{ option.label }}</option>
@@ -41,7 +41,7 @@
             </label>
 
             <label class="field">
-              <span>{{ chill.T('2E4F99D0-8747-4A72-8394-C53F144D6CB2', 'Module', 'Modulo') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'2E4F99D0-8747-4A72-8394-C53F144D6CB2'" [primaryDefaultText]="'Module'" [secondaryDefaultText]="'Modulo'" /></span>
               <select [ngModel]="rule.module" (ngModelChange)="updatePermissionRow(rule.localId, 'module', $event)">
                 <option value="">{{ chill.T('5D5D7655-697B-442C-BB16-67250D755916', 'Select module', 'Seleziona modulo') }}</option>
                 @for (module of moduleOptions(); track module) {
@@ -51,7 +51,7 @@
             </label>
 
             <label class="field">
-              <span>{{ chill.T('22268D8E-642A-45A4-A923-D5BC560C59EA', 'Entity name', 'Nome entità') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'22268D8E-642A-45A4-A923-D5BC560C59EA'" [primaryDefaultText]="'Entity name'" [secondaryDefaultText]="'Nome entità'" /></span>
               <select
                 [ngModel]="rule.entityName"
                 [disabled]="rule.scope === 1 || !rule.module"
@@ -68,7 +68,7 @@
             </label>
 
             <label class="field">
-              <span>{{ chill.T('B947A33E-97FD-49A0-B59B-D2D77838DA25', 'Property name', 'Nome proprietà') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'B947A33E-97FD-49A0-B59B-D2D77838DA25'" [primaryDefaultText]="'Property name'" [secondaryDefaultText]="'Nome proprietà'" /></span>
               <select
                 [ngModel]="propertySelectValueFor(rule)"
                 [disabled]="rule.scope !== 3 || !rule.entityName"
@@ -82,7 +82,7 @@
             </label>
 
             <label class="field full-width">
-              <span>{{ chill.T('97A7BFE7-22A7-4665-B0D8-C75506A8F794', 'Description', 'Descrizione') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'97A7BFE7-22A7-4665-B0D8-C75506A8F794'" [primaryDefaultText]="'Description'" [secondaryDefaultText]="'Descrizione'" /></span>
               <textarea rows="2" [ngModel]="rule.description" (ngModelChange)="updatePermissionRow(rule.localId, 'description', $event)"></textarea>
             </label>
           </div>
@@ -90,16 +90,16 @@
           <div class="permission-actions">
             <label class="toggle">
               <input type="checkbox" [ngModel]="rule.appliesToAllProperties" [disabled]="rule.scope !== 3" (ngModelChange)="updatePermissionRow(rule.localId, 'appliesToAllProperties', $event)" />
-              <span>{{ chill.T('2B72F81F-D445-4F56-B86D-98D7C24A3B4B', 'Apply to all properties', 'Applica a tutte le proprietà') }}</span>
+              <span><app-chill-i18n-label [labelGuid]="'2B72F81F-D445-4F56-B86D-98D7C24A3B4B'" [primaryDefaultText]="'Apply to all properties'" [secondaryDefaultText]="'Applica a tutte le proprietà'" /></span>
             </label>
 
             <div class="action-row">
               <button type="button" class="secondary" (click)="stopEditingRow(rule.localId)">
-                {{ chill.T('D860F9DB-C5B7-4C29-A60B-D0A7C8321CB4', 'Done', 'Chiudi') }}
+                <app-chill-i18n-button-label [labelGuid]="'D860F9DB-C5B7-4C29-A60B-D0A7C8321CB4'" [primaryDefaultText]="'Done'" [secondaryDefaultText]="'Chiudi'" />
               </button>
 
               <button type="button" class="secondary danger" (click)="removePermissionRow(rule.localId)">
-                {{ chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete', 'Elimina') }}
+                <app-chill-i18n-button-label [labelGuid]="'704B4EC7-C971-48C7-9439-E08C2F590992'" [primaryDefaultText]="'Delete'" [secondaryDefaultText]="'Elimina'" />
               </button>
             </div>
           </div>
@@ -124,11 +124,11 @@
 
           <div class="permission-actions compact-actions">
             <button type="button" class="secondary" (click)="startEditingRow(rule.localId)">
-              {{ chill.T('314E7191-5C3A-4A96-8D01-AC4C17FF757F', 'Edit', 'Modifica') }}
+              <app-chill-i18n-button-label [labelGuid]="'314E7191-5C3A-4A96-8D01-AC4C17FF757F'" [primaryDefaultText]="'Edit'" [secondaryDefaultText]="'Modifica'" />
             </button>
 
             <button type="button" class="secondary danger" (click)="removePermissionRow(rule.localId)">
-              {{ chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete', 'Elimina') }}
+              <app-chill-i18n-button-label [labelGuid]="'704B4EC7-C971-48C7-9439-E08C2F590992'" [primaryDefaultText]="'Delete'" [secondaryDefaultText]="'Elimina'" />
             </button>
           </div>
         }
@@ -139,6 +139,6 @@
   </div>
 
   <button type="button" class="secondary" (click)="addPermissionRule()">
-    {{ chill.T('B4F053A6-0B3E-43A3-9B7D-5124EF2A3952', 'Create permission rule', 'Crea regola permesso') }}
+    <app-chill-i18n-button-label [labelGuid]="'B4F053A6-0B3E-43A3-9B7D-5124EF2A3952'" [primaryDefaultText]="'Create permission rule'" [secondaryDefaultText]="'Crea regola permesso'" />
   </button>
 </section>

@@ -2,19 +2,21 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
+import { ChillI18nButtonLabelComponent } from '../lib/chill-i18n-button-label.component';
 import type { PasswordResetTokenResponse } from '../models/chill-auth.models';
 import { ChillService } from '../services/chill.service';
 
 @Component({
   selector: 'app-reset-password-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
   template: `
     <section class="auth-page">
       <div class="auth-card">
-        <p class="eyebrow">{{ chill.T('A651A560-1828-4D67-8D60-8B97011231D7', 'ChillSharp Auth', 'Autenticazione ChillSharp') }}</p>
-        <h1>{{ chill.T('1322FAE4-DBD5-4C8D-8988-FA6035551E02', 'Reset password', 'Reimposta password') }}</h1>
-        <p class="lede">{{ chill.T('6F70BF2E-01D1-4102-A544-2B22CF54C2EA', 'Request a password-reset token through the ChillSharp auth reset endpoint.', "Richiedi un token di reimpostazione password tramite l\'endpoint auth di reset di ChillSharp.") }}</p>
+        <p class="eyebrow"><app-chill-i18n-label [labelGuid]="'A651A560-1828-4D67-8D60-8B97011231D7'" [primaryDefaultText]="'ChillSharp Auth'" [secondaryDefaultText]="'Autenticazione ChillSharp'" /></p>
+        <h1><app-chill-i18n-label [labelGuid]="'1322FAE4-DBD5-4C8D-8988-FA6035551E02'" [primaryDefaultText]="'Reset password'" [secondaryDefaultText]="'Reimposta password'" /></h1>
+        <p class="lede"><app-chill-i18n-label [labelGuid]="'6F70BF2E-01D1-4102-A544-2B22CF54C2EA'" [primaryDefaultText]="'Request a password-reset token through the ChillSharp auth reset endpoint.'" [secondaryDefaultText]="&quot;Richiedi un token di reimpostazione password tramite l'endpoint auth di reset di ChillSharp.&quot;" /></p>
 
         @if (successMessage()) {
           <div class="notice success">{{ successMessage() }}</div>
@@ -26,33 +28,35 @@ import { ChillService } from '../services/chill.service';
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="auth-form">
           <label>
-            <span>{{ chill.T('EA8C79F7-B95E-40A8-B638-C09BFD355A94', 'Username or email', 'Nome utente o email') }}</span>
+            <span><app-chill-i18n-label [labelGuid]="'EA8C79F7-B95E-40A8-B638-C09BFD355A94'" [primaryDefaultText]="'Username or email'" [secondaryDefaultText]="'Nome utente o email'" /></span>
             <input type="text" formControlName="userNameOrEmail" autocomplete="username" />
           </label>
 
           <button type="submit" [disabled]="isSubmitting() || form.invalid">
-            {{ isSubmitting()
-              ? chill.T('33346EC7-C16F-4E58-A24E-097534F42BBE', 'Requesting...', 'Richiesta in corso...')
-              : chill.T('6E44886E-EA78-4749-AABF-53E1BE8022D8', 'Request reset token', 'Richiedi token di reset') }}
+            @if (isSubmitting()) {
+              <app-chill-i18n-button-label [labelGuid]="'33346EC7-C16F-4E58-A24E-097534F42BBE'" [primaryDefaultText]="'Requesting...'" [secondaryDefaultText]="'Richiesta in corso...'" />
+            } @else {
+              <app-chill-i18n-button-label [labelGuid]="'6E44886E-EA78-4749-AABF-53E1BE8022D8'" [primaryDefaultText]="'Request reset token'" [secondaryDefaultText]="'Richiedi token di reset'" />
+            }
           </button>
         </form>
 
         @if (response()) {
           <div class="token-panel">
-            <p class="token-title">{{ chill.T('DCCDB0A2-80BA-465D-8D96-8A5FF9A0179D', 'Reset response', 'Risposta reset') }}</p>
+            <p class="token-title"><app-chill-i18n-label [labelGuid]="'DCCDB0A2-80BA-465D-8D96-8A5FF9A0179D'" [primaryDefaultText]="'Reset response'" [secondaryDefaultText]="'Risposta reset'" /></p>
             <dl>
               <div>
-                <dt>{{ chill.T('970FE371-F8CB-4C64-9DFE-7F72241D8D9A', 'Accepted', 'Accettato') }}</dt>
+                <dt><app-chill-i18n-label [labelGuid]="'970FE371-F8CB-4C64-9DFE-7F72241D8D9A'" [primaryDefaultText]="'Accepted'" [secondaryDefaultText]="'Accettato'" /></dt>
                 <dd>{{ response()?.IsAccepted
                   ? chill.T('E7FE0A44-0957-453A-A2AA-4F08FD38D8E1', 'Yes', 'Sì')
                   : chill.T('27EC1CA2-5AAA-4A14-B89A-9E4317349917', 'No', 'No') }}</dd>
               </div>
               <div>
-                <dt>{{ chill.T('CEB1B59C-FD4E-46D4-B11C-F8B33EA4C32E', 'User ID', 'ID utente') }}</dt>
+                <dt><app-chill-i18n-label [labelGuid]="'CEB1B59C-FD4E-46D4-B11C-F8B33EA4C32E'" [primaryDefaultText]="'User ID'" [secondaryDefaultText]="'ID utente'" /></dt>
                 <dd>{{ response()?.UserId || chill.T('6D5C3326-1F96-434A-B6EC-0E72C5A79A0F', 'Not returned by the server', 'Non restituito dal server') }}</dd>
               </div>
               <div>
-                <dt>{{ chill.T('3D525E29-B464-49FF-AC72-6D7E05D0F226', 'Reset token', 'Token di reset') }}</dt>
+                <dt><app-chill-i18n-label [labelGuid]="'3D525E29-B464-49FF-AC72-6D7E05D0F226'" [primaryDefaultText]="'Reset token'" [secondaryDefaultText]="'Token di reset'" /></dt>
                 <dd class="wrap">{{ response()?.ResetToken || chill.T('6D5C3326-1F96-434A-B6EC-0E72C5A79A0F', 'Not returned by the server', 'Non restituito dal server') }}</dd>
               </div>
             </dl>
@@ -60,8 +64,8 @@ import { ChillService } from '../services/chill.service';
             @if (response()?.UserId && response()?.ResetToken) {
               <a
                 class="button-link"
-                [routerLink]="['/confirm-reset']"
-                [queryParams]="{ userId: response()?.UserId, token: response()?.ResetToken }">
+                [routerLink]="['/confirm-reset-password', response()?.ResetToken]"
+                [queryParams]="{ userId: response()?.UserId }">
                 {{ chill.T('8FA3C95A-E55C-40F4-BFF7-E712A11EEB22', 'Continue to confirmation', 'Continua alla conferma') }}
               </a>
             }

@@ -13,6 +13,7 @@ export interface RegisterRequest {
   Email?: string;
   Password: string;
   DisplayName: string;
+  DisplayCultureName: string;
   CreateChillAuthUser: boolean;
 }
 

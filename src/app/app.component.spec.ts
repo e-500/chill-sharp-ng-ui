@@ -2,21 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AppComponent } from './app.component';
 import { routes } from './app.routes';
-import { ChillService } from './services/chill.service';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [
-        provideRouter(routes),
-        {
-          provide: ChillService,
-          useValue: {
-            T: (_labelGuid: string, primaryDefaultText: string) => primaryDefaultText
-          }
-        }
-      ]
+      providers: [provideRouter(routes)]
     }).compileComponents();
   });
 
@@ -26,11 +17,10 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render primary navigation', () => {
+  it('should render a router outlet host', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Angular auth shell backed by `chill-sharp-ng-client`.');
-    expect(compiled.textContent).toContain('Login');
+    expect(compiled.querySelector('router-outlet')).not.toBeNull();
   });
 });

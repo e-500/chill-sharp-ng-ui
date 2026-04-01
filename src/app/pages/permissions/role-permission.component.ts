@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
+import { ChillI18nButtonLabelComponent } from '../../lib/chill-i18n-button-label.component';
 import type {
   AuthPermissionRule,
   AuthRole,
@@ -14,7 +16,7 @@ import { PermissionEditorComponent, type PermissionEditorRow } from './permissio
 @Component({
   selector: 'app-role-permission',
   standalone: true,
-  imports: [CommonModule, FormsModule, PermissionEditorComponent],
+  imports: [CommonModule, FormsModule, PermissionEditorComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
   templateUrl: './role-permission.component.html',
   styleUrl: './permission-editor.component.scss'
 })

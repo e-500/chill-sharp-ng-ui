@@ -115,18 +115,29 @@ export class CrudPageComponent implements OnInit {
     : null);
   //#endregion
 
+  // #region Public Methods
+
+  /**
+   * Initializes the component by setting up initial state and loading query schemas.
+   */
   ngOnInit(): void {
     this.selectedViewCode.set(this.normalizeViewCode(this.initialViewCode()));
     this.selectedEntityKeys.set(this.readInitialSelectedEntityKeys());
     this.loadQuerySchemas();
   }
 
+  /**
+   * Determines if the selection can be confirmed based on the selection mode and selected entities.
+   */
   canConfirmSelection(): boolean {
     return this.multipleSelection()
       ? this.selectedEntities().length > 0
       : !!this.selectedEntity();
   }
 
+  /**
+   * Returns the dialog result based on the selection mode.
+   */
   dialogResult(): ChillEntity | ChillEntity[] | null {
     if (this.multipleSelection()) {
       return this.selectedEntities().map((entity) => this.cloneEntity(entity));
@@ -136,6 +147,9 @@ export class CrudPageComponent implements OnInit {
     return entity ? this.cloneEntity(entity) : null;
   }
 
+  /**
+   * Selects a query schema and loads the corresponding result schema.
+   */
   selectQuerySchema(chillType: string): void {
     const normalizedType = chillType.trim();
     this.selectedQueryType.set(normalizedType);
@@ -153,6 +167,9 @@ export class CrudPageComponent implements OnInit {
     this.loadSelectedSchema(normalizedType);
   }
 
+  /**
+   * Performs a search using the provided query form event.
+   */
   search(event: ChillFormSubmitEvent): void {
     if (event.kind !== 'query') {
       return;
@@ -178,6 +195,9 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
+  /**
+   * Opens a search dialog for the current query schema.
+   */
   openSearchDialog(): void {
     const schema = this.querySchema();
     if (!schema) {
@@ -202,18 +222,30 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
+  /**
+   * Checks if the search dialog can be opened.
+   */
   canOpenSearchDialog(): boolean {
     return !!this.querySchema() && !this.isLoadingSchema();
   }
 
+  /**
+   * Checks if a new entity can be added.
+   */
   canAddEntity(): boolean {
     return !!this.resultSchema() && !this.isSaving() && !this.isLoadingSchema();
   }
 
+  /**
+   * Checks if there are any pending entities that need to be saved.
+   */
   hasPendingEntities(): boolean {
     return this.results().some((entity) => this.isPendingEntity(entity));
   }
 
+  /**
+   * Saves all pending entities by validating and committing them.
+   */
   async savePendingEntities(): Promise<void> {
     const schema = this.resultSchema();
     const pendingEntities = this.pendingEntities();
@@ -275,14 +307,23 @@ export class CrudPageComponent implements OnInit {
     }
   }
 
+  /**
+   * Checks if navigation to the previous page is possible.
+   */
   canGoToPreviousPage(): boolean {
     return this.currentPage() > 1;
   }
 
+  /**
+   * Checks if navigation to the next page is possible.
+   */
   canGoToNextPage(): boolean {
     return this.currentPage() < this.totalPages();
   }
 
+  /**
+   * Navigates to the previous page.
+   */
   goToPreviousPage(): void {
     if (!this.canGoToPreviousPage()) {
       return;
@@ -291,6 +332,9 @@ export class CrudPageComponent implements OnInit {
     this.currentPage.update((page) => Math.max(1, page - 1));
   }
 
+  /**
+   * Navigates to the next page.
+   */
   goToNextPage(): void {
     if (!this.canGoToNextPage()) {
       return;
@@ -299,18 +343,30 @@ export class CrudPageComponent implements OnInit {
     this.currentPage.update((page) => Math.min(this.totalPages(), page + 1));
   }
 
+  /**
+   * Returns the label for the current page.
+   */
   pageLabel(): string {
     return this.chill.T('A28A7E16-5B47-4B5D-A5CF-54BDEFF43073', `Page ${this.currentPage()} of ${this.totalPages()}`, `Pagina ${this.currentPage()} di ${this.totalPages()}`);
   }
 
+  /**
+   * Clears the error message.
+   */
   clearErrorMessage(): void {
     this.errorMessage.set('');
   }
 
+  /**
+   * Clears the dialog error message.
+   */
   clearDialogErrorMessage(): void {
     this.dialogErrorMessage.set('');
   }
 
+  /**
+   * Opens a dialog for editing or adding an entity.
+   */
   openEntityDialog(entity: ChillEntity): void {
     const schema = this.resultSchema();
     if (!schema) {
@@ -409,6 +465,9 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
+  /**
+   * Adds a new draft entity to the results.
+   */
   add(): void {
     const schema = this.resultSchema();
     if (!schema) {
@@ -434,6 +493,9 @@ export class CrudPageComponent implements OnInit {
     }
   }
 
+  /**
+   * Handles inline cell edit commits from the table.
+   */
   async handleInlineCellEdit(event: ChillTableCellEditCommitEvent): Promise<void> {
     const schema = this.resultSchema();
     if (!schema) {
@@ -464,6 +526,10 @@ export class CrudPageComponent implements OnInit {
     this.replaceEntity(nextEntity, event.entity);
     await this.autocompleteAndValidateEntity(nextEntity);
   }
+
+  // #endregion
+
+  // #region Helper Methods
 
   private async loadResultSchema(relatedChillType: string, chillViewCode: string): Promise<void> {
     if (!relatedChillType) {
@@ -1121,4 +1187,6 @@ export class CrudPageComponent implements OnInit {
     const initialSelectedEntity = this.initialSelectedEntity();
     return initialSelectedEntity ? [initialSelectedEntity] : [];
   }
+
+  // #endregion
 }

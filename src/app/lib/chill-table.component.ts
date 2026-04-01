@@ -190,6 +190,8 @@ export class ChillTableComponent {
 
   // #endregion
 
+  // #region Computed Properties
+
   /**
    * Computed property that returns the table columns based on the schema and layout state.
    */
@@ -252,6 +254,10 @@ export class ChillTableComponent {
    * Computed property that checks if there are row actions and not in edit layout mode.
    */
   readonly hasActionColumn = computed(() => this.resolvedRowActions().length > 0 && !this.isEditLayoutMode());
+
+  // #endregion
+
+  // #region Public Methods
 
   /**
    * Generates a unique key for tracking entities based on guid, Guid, label, or index.
@@ -629,6 +635,8 @@ export class ChillTableComponent {
     return Array.isArray(genericErrors)
       && genericErrors.some((message) => typeof message === 'string' && message.trim().length > 0);
   }
+
+  // #endregion
 
   // #region Helper Methods
 

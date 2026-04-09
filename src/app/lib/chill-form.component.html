@@ -1,5 +1,5 @@
 <section class="chill-form-shell">
-  @if (schema()?.displayName) {
+  @if (showSchemaHeader() && schema()?.displayName) {
     <header class="form-header">
       <p class="form-kicker"><app-chill-i18n-label [labelGuid]="'2DDE962B-086C-47B1-8A48-B16F0E34C0A3'" [primaryDefaultText]="'Chill schema'" [secondaryDefaultText]="'Schema Chill'" /></p>
       <h2>{{ schema()?.displayName }}</h2>
@@ -109,7 +109,7 @@
         }
       </div>
 
-      @if (!isEditMode() && renderSubmitInsideForm()) {
+      @if (!isEditMode() && renderSubmitInsideForm() && !hasCustomSubmitHandler()) {
         <button type="submit" [disabled]="!canSubmit()">
           @if (submitLabelGuid() && submitPrimaryDefaultText() && submitSecondaryDefaultText()) {
             <app-chill-i18n-button-label

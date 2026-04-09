@@ -39,6 +39,12 @@ export interface OpenCrudTaskRequest {
   displayName?: string | null;
 }
 
+export interface OpenWorkspaceTaskRequest {
+  taskId: string;
+  title?: string | null;
+  description?: string | null;
+}
+
 const WORKSPACE_TASKS: WorkspaceTaskDefinition[] = [
   {
     id: 'event-viewer',
@@ -113,6 +119,15 @@ export class WorkspaceService {
     }
 
     this.openTaskInstance(this.createStaticTaskInstance(taskDefinition), navigate);
+  }
+
+  openWorkspaceTask(request: OpenWorkspaceTaskRequest): void {
+    const taskDefinition = this.getTaskDefinition(request.taskId);
+    if (!taskDefinition) {
+      return;
+    }
+
+    this.openTaskInstance(this.createStaticTaskInstance(taskDefinition, request.title, request.description));
   }
 
   openCrudTask(request: OpenCrudTaskRequest): void {
@@ -209,12 +224,16 @@ export class WorkspaceService {
     return taskDefinition ? this.createStaticTaskInstance(taskDefinition) : null;
   }
 
-  private createStaticTaskInstance(taskDefinition: WorkspaceTaskDefinition): WorkspaceTaskInstance {
+  private createStaticTaskInstance(
+    taskDefinition: WorkspaceTaskDefinition,
+    titleOverride?: string | null,
+    descriptionOverride?: string | null
+  ): WorkspaceTaskInstance {
     return {
       id: taskDefinition.id,
       definitionId: taskDefinition.id,
-      title: taskDefinition.title,
-      description: taskDefinition.description,
+      title: titleOverride?.trim() || taskDefinition.title,
+      description: descriptionOverride?.trim() || taskDefinition.description,
       component: taskDefinition.component,
       route: {
         taskId: taskDefinition.id

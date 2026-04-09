@@ -5,6 +5,7 @@ import {
   ChillSharpNgClient,
   type AuthPermissionRuleItem as ChillSharpAuthPermissionRuleItem,
   type AuthRoleDetailsResponse,
+  type ChillDtoMenuItem,
   type RegisterAuthIdentityRequest,
   type AuthUserDetailsResponse,
   type GetTextRequest,
@@ -44,6 +45,7 @@ import type {
   ChillSchema,
   ChillSchemaListItem
 } from '../models/chill-schema.models';
+import type { ChillMenuItem as AppChillMenuItem } from '../models/chill-menu.models';
 import { CHILL_BASE_URL, CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE, CHILL_SECONDARY_TEXT_CULTURE } from '../chill.config';
 
 const SESSION_STORAGE_KEY = 'cini-home.chill-auth-session';
@@ -60,6 +62,7 @@ const CHILL_PROPERTY_TYPE = {
   Boolean: 70,
   String: 80,
   Text: 81,
+  Json: 99,
   ChillEntity: 1000,
   ChillEntityCollection: 1010,
   ChillQuery: 1100
@@ -114,6 +117,13 @@ interface ChillSharpNgClientValidationSupport {
   validate?: (dto: JsonObject) => Observable<unknown>;
   getRawClient?: () => {
     validate?: (dto: JsonObject) => Promise<unknown>;
+  };
+}
+
+interface ChillSharpNgClientLookupSupport {
+  lookup?: (dtoQuery: JsonObject) => Observable<unknown>;
+  getRawClient?: () => {
+    lookup?: (dtoQuery: JsonObject) => Promise<unknown>;
   };
 }
 
@@ -227,8 +237,10 @@ export class ChillService {
         ...property,
         name: property.name,
         displayName: property.displayName ?? property.name,
-        propertyType: property.propertyType ?? 0,
+        propertyType: (property.propertyType ?? 0) as never,
         chillType: property.chillType ?? null,
+        referenceChillType: property.referenceChillType ?? null,
+        referenceChillTypeQuery: property.referenceChillTypeQuery ?? null,
         metadata: property.metadata ?? {}
       }))
     }).pipe(
@@ -658,6 +670,33 @@ export class ChillService {
     );
   }
 
+  lookup(request: JsonObject) {
+    const client = this.chill as unknown as ChillSharpNgClientLookupSupport;
+
+    if (typeof client.lookup === 'function') {
+      return client.lookup(request).pipe(
+        map((response) => response as JsonObject),
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    const rawClient = client.getRawClient?.();
+    if (typeof rawClient?.lookup === 'function') {
+      return from(rawClient.lookup(request)).pipe(
+        map((response) => response as JsonObject),
+        catchError((error) => this.rethrowFriendlyError(error))
+      );
+    }
+
+    return throwError(() => new Error(
+      this.T(
+        '2D0D795E-ABEA-4507-AB12-F2BE1E2FA8E8',
+        'The current ChillSharp client does not expose lookup().',
+        'Il client ChillSharp corrente non espone lookup().'
+      )
+    ));
+  }
+
   autocomplete(request: JsonObject) {
     return this.chill.autocomplete(request).pipe(
       map((response) => response as JsonObject),
@@ -703,6 +742,27 @@ export class ChillService {
   chunk(operations: JsonObject[]) {
     return this.chill.chunk(operations).pipe(
       map((response) => response as JsonObject[]),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getMenu(parentGuid?: string | null) {
+    return this.chill.getMenu(parentGuid).pipe(
+      map((response) => (response ?? []).map((item) => this.normalizeMenuItem(item))),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  setMenu(menuItem: AppChillMenuItem) {
+    return this.chill.setMenu(this.toMenuDto(menuItem)).pipe(
+      map((response) => this.normalizeMenuItem(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  deleteMenu(menuItemGuid: string) {
+    return this.chill.deleteMenu(menuItemGuid).pipe(
+      map(() => void 0),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -1020,6 +1080,7 @@ export class ChillService {
         return this.parseBooleanValue(normalized);
       case CHILL_PROPERTY_TYPE.String:
       case CHILL_PROPERTY_TYPE.Text:
+      case CHILL_PROPERTY_TYPE.Json:
         return normalized;
       case CHILL_PROPERTY_TYPE.ChillEntity:
       case CHILL_PROPERTY_TYPE.ChillQuery:
@@ -1036,6 +1097,7 @@ export class ChillService {
     switch (propertyType) {
       case CHILL_PROPERTY_TYPE.String:
       case CHILL_PROPERTY_TYPE.Text:
+      case CHILL_PROPERTY_TYPE.Json:
       case CHILL_PROPERTY_TYPE.Time:
       case CHILL_PROPERTY_TYPE.Duration:
       case CHILL_PROPERTY_TYPE.Unknown:
@@ -1133,6 +1195,7 @@ export class ChillService {
         isActive: overrides?.isActive ?? response.isActive,
         canManagePermissions: overrides?.canManagePermissions ?? response.canManagePermissions,
         canManageSchema: response.canManageSchema,
+        menuHierarchy: response.menuHierarchy ?? '',
         roleGuids: mutateRoleGuids ? mutateRoleGuids(roleGuids) : roleGuids,
         permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
       };
@@ -1165,8 +1228,49 @@ export class ChillService {
       name: overrides?.name ?? response?.name ?? '',
       description: overrides?.description ?? response?.description ?? '',
       isActive: overrides?.isActive ?? response?.isActive ?? true,
+      menuHierarchy: response?.menuHierarchy ?? '',
       userGuids: mutateUserGuids ? mutateUserGuids(userGuids) : userGuids,
       permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
+    };
+  }
+
+  private normalizeMenuItem(response: ChillDtoMenuItem): AppChillMenuItem {
+    return {
+      guid: response.guid?.trim() ?? '',
+      title: response.title?.trim() ?? '',
+      description: response.description?.trim() || null,
+      parent: response.parent ? {
+        guid: response.parent.guid?.trim() ?? '',
+        title: response.parent.title?.trim() ?? '',
+        description: response.parent.description?.trim() || null,
+        parent: null,
+        componentName: response.parent.componentName?.trim() ?? '',
+        componentConfigurationJson: response.parent.componentConfigurationJson?.trim() || null,
+        menuHierarchy: response.parent.menuHierarchy?.trim() ?? ''
+      } : null,
+      componentName: response.componentName?.trim() ?? '',
+      componentConfigurationJson: response.componentConfigurationJson?.trim() || null,
+      menuHierarchy: response.menuHierarchy?.trim() ?? ''
+    };
+  }
+
+  private toMenuDto(menuItem: AppChillMenuItem): ChillDtoMenuItem {
+    return {
+      guid: menuItem.guid?.trim() ?? '',
+      title: menuItem.title?.trim() ?? '',
+      description: menuItem.description?.trim() || null,
+      parent: menuItem.parent ? {
+        guid: menuItem.parent.guid?.trim() ?? '',
+        title: menuItem.parent.title?.trim() ?? '',
+        description: menuItem.parent.description?.trim() || null,
+        parent: null,
+        componentName: menuItem.parent.componentName?.trim() ?? '',
+        componentConfigurationJson: menuItem.parent.componentConfigurationJson?.trim() || null,
+        menuHierarchy: menuItem.parent.menuHierarchy?.trim() ?? ''
+      } : null,
+      componentName: menuItem.componentName?.trim() ?? '',
+      componentConfigurationJson: menuItem.componentConfigurationJson?.trim() || null,
+      menuHierarchy: menuItem.menuHierarchy?.trim() ?? ''
     };
   }
 

@@ -59,6 +59,16 @@ Validation is performed automatically based on the property type and metadata:
 
 External errors can be passed via the `externalErrors` input and are displayed alongside internal errors.
 
+### Error Resolution Order
+
+The component builds the final visible field error from multiple sources:
+
+1. Local type/metadata validation stored in the component state
+2. Angular control async errors under the `serverValidation` key
+3. External errors passed through `externalErrors`
+
+External errors are normalized against schema property names before display, so case differences in server responses do not prevent the message from appearing on the correct field.
+
 ## Lookup Functionality
 
 For `ChillEntity`, `ChillQuery`, and `ChillEntityCollection` types:
@@ -67,6 +77,24 @@ For `ChillEntity`, `ChillQuery`, and `ChillEntityCollection` types:
 - Supports single or multiple selection based on the type.
 - Displays results in a dropdown and allows opening a dialog for advanced selection.
 - Automatically populates labels and GUIDs from the selected entities.
+
+## Blur And Value Normalization
+
+- Text-like inputs call `normalizeTextOnBlur(...)` before emitting `fieldBlur`.
+- Numeric, date, time, datetime, and duration values are normalized into the storage format expected by the form.
+- Lookup blur emits the current value and clears the visible result list after a short delay so click selection still works.
+- The parent form can use `fieldBlur` to trigger autocomplete or clear stored server-side validation errors for the blurred field.
+
+## Integration With ChillFormComponent
+
+When hosted by `ChillFormComponent`, this component participates in the server-validation loop:
+
+- `externalErrors` receives the form-level `serverFieldErrors`.
+- `validationMessage(...)` returns the merged field message shown in the UI.
+- `validityChange` contributes to the form-level `propertyValidity` map.
+- `fieldBlur` lets the parent reapply normalized values and trigger autocomplete.
+
+This integration is important for dialog editing, because submit remains blocked in the parent form until field-level server errors are cleared.
 
 ## Usage Examples
 
@@ -158,3 +186,4 @@ externalErrors = { name: 'Name is required' };
 - For collections, values are arrays of `JsonObject`.
 - Ensure the `form` input is properly initialized with controls matching the schema properties.
 - The component handles normalization on blur for certain types (e.g., parsing dates).
+- `resolvedErrors` merges local validation, async control validation, and externally supplied server field errors.

@@ -13,6 +13,7 @@ import { WorkspaceDialogService } from '../../services/workspace-dialog.service'
 
 const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
+const ENTITY_NOTIFICATION_IGNORE_WINDOW_MS = 1000;
 
 @Component({
   selector: 'app-crud-page',
@@ -35,6 +36,7 @@ export class CrudPageComponent implements OnInit {
   readonly multipleSelection = input(false);
   readonly initialSelectedEntity = input<ChillEntity | null>(null);
   readonly initialSelectedEntities = input<ChillEntity[]>([]);
+  readonly showTableHeader = input(true);
   //#endregion
 
   //#region Component state
@@ -43,7 +45,6 @@ export class CrudPageComponent implements OnInit {
   readonly isSearching = signal(false);
   readonly isSaving = signal(false);
   readonly errorMessage = signal('');
-  readonly dialogErrorMessage = signal('');
   readonly querySchemas = signal<ChillSchemaListItem[]>([]);
   readonly selectedQueryType = signal('');
   readonly querySchema = signal<ChillSchema | null>(null);
@@ -215,6 +216,7 @@ export class CrudPageComponent implements OnInit {
         submitPrimaryDefaultText: 'Search',
         submitSecondaryDefaultText: 'Cerca',
         submitLabel: this.chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca'),
+        showSchemaHeader: false,
         renderSubmitInsideForm: false,
         onSubmit: (event: ChillFormSubmitEvent) => this.search(event),
         closeDialogOnSubmit: true
@@ -358,13 +360,6 @@ export class CrudPageComponent implements OnInit {
   }
 
   /**
-   * Clears the dialog error message.
-   */
-  clearDialogErrorMessage(): void {
-    this.dialogErrorMessage.set('');
-  }
-
-  /**
    * Opens a dialog for editing or adding an entity.
    */
   openEntityDialog(entity: ChillEntity): void {
@@ -372,33 +367,48 @@ export class CrudPageComponent implements OnInit {
     if (!schema) {
       return;
     }
-
-    this.dialogErrorMessage.set('');
     const isDraft = this.isNewEntity(entity);
-    void this.dialog.openDialog<void>({
-      title: isDraft
-        ? this.chill.T('23A5536E-8A94-4469-977C-D3BB57E5E621', 'Add', 'Aggiungi')
-        : this.chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit', 'Modifica'),
-      component: ChillFormComponent,
-      okLabel: isDraft
-        ? this.chill.T('D7EA89E2-4AF2-455A-8FA9-33540E61D7C5', 'Done', 'Fine')
-        : this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Update', 'Aggiorna'),
-      inputs: {
-        schema,
-        entity: this.prepareEntityForSchema(entity, schema),
-        submitLabelGuid: isDraft ? 'D7EA89E2-4AF2-455A-8FA9-33540E61D7C5' : '62953302-B951-4FD1-BD08-4B7649A91BAF',
-        submitPrimaryDefaultText: isDraft ? 'Done' : 'Update',
-        submitSecondaryDefaultText: isDraft ? 'Fine' : 'Aggiorna',
-        submitLabel: isDraft
+    void (async () => {
+      const result = await this.dialog.openDialog<ChillEntity>({
+        title: isDraft
+          ? this.chill.T('23A5536E-8A94-4469-977C-D3BB57E5E621', 'Add', 'Aggiungi')
+          : this.chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit', 'Modifica'),
+        component: ChillFormComponent,
+        okLabel: isDraft
           ? this.chill.T('D7EA89E2-4AF2-455A-8FA9-33540E61D7C5', 'Done', 'Fine')
           : this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Update', 'Aggiorna'),
-        renderSubmitInsideForm: false,
-        submitError: () => this.dialogErrorMessage(),
-        dismissSubmitError: () => this.clearDialogErrorMessage(),
-        onSubmit: (event: ChillFormSubmitEvent) => this.saveEntity(event, entity),
-        closeDialogOnSubmit: false
+        inputs: {
+          schema,
+          entity: this.prepareDialogEntity(entity, schema),
+          submitLabelGuid: isDraft ? 'D7EA89E2-4AF2-455A-8FA9-33540E61D7C5' : '62953302-B951-4FD1-BD08-4B7649A91BAF',
+          submitPrimaryDefaultText: isDraft ? 'Done' : 'Update',
+          submitSecondaryDefaultText: isDraft ? 'Fine' : 'Aggiorna',
+          submitLabel: isDraft
+            ? this.chill.T('D7EA89E2-4AF2-455A-8FA9-33540E61D7C5', 'Done', 'Fine')
+            : this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Update', 'Aggiorna'),
+          showSchemaHeader: false,
+          renderSubmitInsideForm: false,
+          closeDialogOnSubmit: false
+        }
+      });
+
+      if (result.status !== 'confirmed') {
+        return;
       }
-    });
+
+      const savedEntity = result.value;
+      if (!savedEntity) {
+        if (isDraft) {
+          this.removeIsNewEntity(entity);
+        } else {
+          this.refreshResults();
+        }
+        return;
+      }
+
+      const nextEntity = this.prepareSavedDialogEntity(savedEntity, schema);
+      this.replaceEntity(nextEntity, this.findEntityByKey(entity) ?? entity);
+    })();
   }
 
   private loadQuerySchemas(): void {
@@ -420,7 +430,12 @@ export class CrudPageComponent implements OnInit {
         }
 
         const preferredChillType = this.initialChillType()?.trim() ?? '';
-        const initialSchema = querySchemas.find((schema) => schema.chillType?.trim() === preferredChillType) ?? querySchemas[0];
+        const initialSchema = querySchemas.find((schema) => schema.chillType?.trim() === preferredChillType) ?? null;
+        
+        if (!initialSchema) {
+          this.errorMessage.set(this.chill.T('5C237896-63A2-4E59-809A-12598DC24882', 'No query schemas are available.', 'Nessuno schema di query disponibile.'));
+          return;
+        }
         this.selectQuerySchema(initialSchema.chillType?.trim() ?? '');
       },
       error: (error: unknown) => {
@@ -561,7 +576,6 @@ export class CrudPageComponent implements OnInit {
   }
 
   markEntityDeleted(entity: ChillEntity): void {
-    this.dialogErrorMessage.set('');
     this.errorMessage.set('');
     this.results.update((current) => current.map((candidate) => this.readEntityKey(candidate) === this.readEntityKey(entity)
       ? this.withCrudState(candidate, {
@@ -650,40 +664,6 @@ export class CrudPageComponent implements OnInit {
         this.errorMessage.set(this.chill.formatError(error));
         this.currentPage.set(1);
         this.isSearching.set(false);
-      }
-    });
-  }
-
-  private saveEntity(event: ChillFormSubmitEvent, sourceEntity: ChillEntity): void {
-    if (event.kind !== 'entity') {
-      return;
-    }
-
-    const schema = this.resultSchema();
-    if (!schema) {
-      return;
-    }
-
-    this.isSaving.set(true);
-    this.dialogErrorMessage.set('');
-    const entity = this.normalizeCreateEntity(event.value as ChillEntity, schema);
-
-    const request = this.isNewEntity(sourceEntity)
-      ? this.chill.create(entity as JsonObject)
-      : this.chill.update(entity as JsonObject);
-
-    request.subscribe({
-      next: () => {
-        this.isSaving.set(false);
-        this.dialogErrorMessage.set('');
-        if (this.isNewEntity(sourceEntity)) {
-          this.removeIsNewEntity(sourceEntity);
-        }
-        this.dialog.confirm();
-      },
-      error: (error: unknown) => {
-        this.dialogErrorMessage.set(this.chill.formatError(error));
-        this.isSaving.set(false);
       }
     });
   }
@@ -987,8 +967,43 @@ export class CrudPageComponent implements OnInit {
       dirtyProperties: null,
       validationErrors: null,
       genericErrors: null,
-      errorMessage: null
+      errorMessage: null,
+      ignoreNotificationsUntil: null
     });
+  }
+
+  private prepareDialogEntity(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    const preparedEntity = this.prepareEntityForSchema(entity, schema);
+    if (this.isNewEntity(entity)) {
+      return this.withCrudState(preparedEntity, {
+        ...this.readChillStateObject(preparedEntity),
+        status: 'draft',
+        dirtyProperties: this.normalizeDirtyProperties(this.readChillStateObject(preparedEntity).dirtyProperties),
+        validationErrors: null,
+        genericErrors: null,
+        errorMessage: null,
+        ignoreNotificationsUntil: null
+      });
+    }
+
+    return this.withCrudState(preparedEntity, {
+      ...this.readChillStateObject(preparedEntity),
+      status: 'pristine',
+      dirtyProperties: null,
+      validationErrors: null,
+      genericErrors: null,
+      errorMessage: null,
+      ignoreNotificationsUntil: null
+    });
+  }
+
+  private prepareSavedDialogEntity(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    return this.withCrudState(
+      this.normalizeServerEntity(this.prepareEntityForSchema(entity, schema)),
+      {
+        ignoreNotificationsUntil: Date.now() + ENTITY_NOTIFICATION_IGNORE_WINDOW_MS
+      }
+    );
   }
 
   private readChillStateObject(entity: ChillEntity): ChillState {

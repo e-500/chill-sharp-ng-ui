@@ -2,6 +2,11 @@
   "name": "cini-home",
   "version": "0.0.0",
   "scripts": {
+    "sync:local-clients": "node scripts/sync-local-clients.mjs",
+    "prestart": "npm run sync:local-clients",
+    "prebuild": "npm run sync:local-clients",
+    "prewatch": "npm run sync:local-clients",
+    "pretest": "npm run sync:local-clients",
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
@@ -10,6 +15,7 @@
   },
   "private": true,
   "dependencies": {
+    "@angular/cdk": "^19.2.19",
     "@angular/common": "^19.2.0",
     "@angular/compiler": "^19.2.0",
     "@angular/core": "^19.2.0",
@@ -19,6 +25,7 @@
     "@angular/router": "^19.2.0",
     "chill-sharp-ng-client": "file:../chill-sharp/chill-sharp/ext/chill-sharp-ng-client",
     "chill-sharp-ts-client": "file:../chill-sharp/chill-sharp/ext/chill-sharp-ts-client",
+    "monaco-editor": "^0.52.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"

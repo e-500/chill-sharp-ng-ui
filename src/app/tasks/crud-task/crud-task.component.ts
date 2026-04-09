@@ -17,7 +17,8 @@ import { WorkspaceToolbarService } from '../../services/workspace-toolbar.servic
         [selectionEnabled]="selectionEnabled()"
         [multipleSelection]="multipleSelection()"
         [initialSelectedEntity]="initialSelectedEntity()"
-        [initialSelectedEntities]="initialSelectedEntities()" />
+        [initialSelectedEntities]="initialSelectedEntities()"
+        [showTableHeader]="toolbarScope() !== 'dialog'" />
     </section>
   `,
   styles: `

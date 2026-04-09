@@ -50,48 +50,76 @@
         </div>
       } @else if (isLookup(property)) {
         <div class="lookup">
-          <div class="lookup-bar">
-            <input
-              type="text"
-              [ngModel]="lookupTerm(property.name)"
-              (ngModelChange)="updateLookupTerm(property, $event)"
-              (focus)="handleLookupFocus(property)"
-              (blur)="handleLookupBlur(property.name)"
-              [name]="property.name"
-              [placeholder]="placeholder(property) || 'Search by FullTextSearch'" />
-            @if (canOpenLookupDialog(property)) {
+          @if (property.propertyType === 1000 && hasSelectedLookupEntity(property.name)) {
+            <div class="lookup-selected" [title]="selectedLookupLabel(property.name)">
+              <span class="lookup-selected__label lookup-selected__label--full">
+                {{ selectedLookupLabel(property.name) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+              </span>
+              <span class="lookup-selected__label lookup-selected__label--short">
+                {{ selectedLookupShortLabel(property.name) || selectedLookupLabel(property.name) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+              </span>
               <button
                 type="button"
-                class="lookup-dialog"
-                (click)="openLookupDialog(property)"
-                [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">
-                ...
+                class="lookup-selected__clear"
+                (click)="clearLookup(property)"
+                [attr.aria-label]="chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci')">
+                X
               </button>
-            }
-            <button type="button" class="lookup-clear" (click)="clearLookup(property)">
-              {{ chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci') }}
-            </button>
-          </div>
+            </div>
+          } @else {
+            <div class="lookup-bar">
+              <div class="lookup-input-slot" cdkOverlayOrigin #lookupOrigin="cdkOverlayOrigin" #lookupOriginElement>
+                <input
+                  type="text"
+                  [ngModel]="lookupTerm(property.name)"
+                  (ngModelChange)="updateLookupTerm(property, $event)"
+                  (focus)="handleLookupFocus(property)"
+                  (blur)="handleLookupBlur(property.name)"
+                  [name]="property.name"
+                  [placeholder]="placeholder(property) || chill.T('FA7B8E01-658C-4D63-B53F-D476CD697892', 'Search entity', 'Cerca entita')" />
+              </div>
+              @if (canOpenLookupDialog(property)) {
+                <button
+                  type="button"
+                  class="lookup-dialog"
+                  (click)="openLookupDialog(property)"
+                  [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">
+                  ...
+                </button>
+              }
+            </div>
+
+            <ng-template
+              cdkConnectedOverlay
+              [cdkConnectedOverlayOrigin]="lookupOrigin"
+              [cdkConnectedOverlayOpen]="lookupResults(property.name).length > 0"
+              [cdkConnectedOverlayPositions]="lookupOverlayPositions"
+              [cdkConnectedOverlayPush]="true"
+              [cdkConnectedOverlayFlexibleDimensions]="true"
+              [cdkConnectedOverlayViewportMargin]="8"
+              [cdkConnectedOverlayOffsetY]="6">
+              <div
+                class="lookup-results"
+                role="listbox"
+                [style.--lookup-overlay-width.px]="lookupOverlayWidth(lookupOriginElement)">
+                @for (result of lookupResults(property.name); track $index) {
+                  <button
+                    type="button"
+                    class="lookup-result"
+                    [class.is-selected]="isLookupResultSelected(property.name, result)"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="selectLookupResult(property, result)">
+                    {{ lookupLabel(result) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+                  </button>
+                }
+              </div>
+            </ng-template>
+          }
 
           @if (lookupIsSearching(property.name)) {
             <small class="lookup-status">
               {{ chill.T('ABAF5996-C2BB-4F85-BE0F-CC75883A648B', 'Searching...', 'Ricerca in corso...') }}
             </small>
-          }
-
-          @if (lookupResults(property.name).length > 0) {
-            <div class="lookup-results" role="listbox">
-              @for (result of lookupResults(property.name); track $index) {
-                <button
-                  type="button"
-                  class="lookup-result"
-                  [class.is-selected]="isLookupResultSelected(property.name, result)"
-                  (mousedown)="$event.preventDefault()"
-                  (click)="selectLookupResult(property, result)">
-                  {{ lookupLabel(result) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
-                </button>
-              }
-            </div>
           }
 
           @if (lookupError(property.name)) {
@@ -107,15 +135,33 @@
             [name]="property.name"
             [placeholder]="placeholder(property)"></textarea>
         }
+      } @else if (isJsonEditor(property)) {
+        <app-chill-json-input
+          [value]="textValue(property.name)"
+          [placeholder]="placeholder(property)"
+          [invalid]="!!validationMessage(property.name)"
+          [disabled]="control(property.name)?.disabled ?? false"
+          (valueChange)="updateJsonInput(property.name, $event)"
+          (blur)="emitFieldBlur(property.name)"></app-chill-json-input>
       } @else {
         @if (control(property.name); as fieldControl) {
-          <input
-            [type]="inputType(property)"
-            [step]="inputStep(property)"
-            [formControl]="fieldControl"
-            (blur)="normalizeTextOnBlur(property)"
-            [name]="property.name"
-            [placeholder]="placeholder(property)" />
+          @if (isCultureDateInput(property)) {
+            <input
+              type="text"
+              [ngModel]="textValue(property.name)"
+              (ngModelChange)="updateTextInput(property.name, $event)"
+              (blur)="normalizeTextOnBlur(property)"
+              [name]="property.name"
+              [placeholder]="placeholder(property)" />
+          } @else {
+            <input
+              [type]="inputType(property)"
+              [step]="inputStep(property)"
+              [formControl]="fieldControl"
+              (blur)="normalizeTextOnBlur(property)"
+              [name]="property.name"
+              [placeholder]="placeholder(property)" />
+          }
         }
       }
 

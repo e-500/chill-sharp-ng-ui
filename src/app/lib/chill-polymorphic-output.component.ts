@@ -44,22 +44,36 @@ const CHILL_PROPERTY_TYPE = {
   `
 })
 export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
+  // #region Service Injections
   readonly chill = inject(ChillService);
   readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  // #endregion
+
+  // #region Inputs
   readonly source = input<ChillEntity | null>(null);
   readonly schema = input<ChillSchema | null>(null);
   readonly propertyName = input.required<string>();
-  readonly hostWidth = signal<number | null>(null);
+  // #endregion
 
+  // #region State
+  readonly hostWidth = signal<number | null>(null);
+  private resizeObserver: ResizeObserver | null = null;
+  // #endregion
+
+  // #region Computed Properties
   readonly property = computed<ChillPropertySchema | null>(() =>
     this.schema()?.properties.find((candidate) => candidate.name === this.propertyName()) ?? null
   );
   readonly value = computed(() => this.readPropertyValue(this.source(), this.propertyName()));
   readonly displayText = computed(() => this.formatValue(this.value(), this.property(), false));
   readonly titleText = computed(() => this.formatValue(this.value(), this.property(), true));
+  // #endregion
 
-  private resizeObserver: ResizeObserver | null = null;
+  // #region Component Lifecycle
 
+  /**
+   * Tracks the rendered width so object labels can switch to their short form in tight cells.
+   */
   ngOnInit(): void {
     if (typeof ResizeObserver === 'undefined') {
       return;
@@ -72,10 +86,20 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     this.resizeObserver.observe(this.host.nativeElement);
   }
 
+  /**
+   * Disconnects the resize observer when the component is destroyed.
+   */
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
   }
 
+  // #endregion
+
+  // #region Helper Methods
+
+  /**
+   * Reads a property from the entity bag first, then falls back to top-level camelCase/PascalCase fields.
+   */
   private readPropertyValue(source: ChillEntity | null, propertyName: string): JsonValue | undefined {
     if (!source) {
       return undefined;
@@ -90,6 +114,9 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     return source[propertyName] ?? source[this.toPascalCase(propertyName)];
   }
 
+  /**
+   * Formats scalars, dates, arrays, and entity-like objects using the schema type and display context.
+   */
   private formatValue(value: JsonValue | undefined, property: ChillPropertySchema | null, preferFullLabel: boolean): string {
     if (value === undefined || value === null) {
       return '';
@@ -124,6 +151,9 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Formats valid date strings with the local date formatter and otherwise preserves the raw value.
+   */
   private formatDate(value: JsonValue): string {
     if (typeof value !== 'string' || !value.trim()) {
       return '';
@@ -135,6 +165,9 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
       : parsed.toLocaleDateString();
   }
 
+  /**
+   * Formats valid date-time strings with the local formatter and otherwise preserves the raw value.
+   */
   private formatDateTime(value: JsonValue): string {
     if (typeof value !== 'string' || !value.trim()) {
       return '';
@@ -146,6 +179,9 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
       : parsed.toLocaleString();
   }
 
+  /**
+   * Chooses the most useful label from an object payload and optionally prefers `ShortLabel` in narrow cells.
+   */
   private formatObjectValue(value: JsonValue, preferFullLabel: boolean): string {
     if (!this.isJsonObject(value)) {
       return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
@@ -168,16 +204,25 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     return resolvedLabel ?? '';
   }
 
+  /**
+   * Converts a property name to PascalCase to match server payloads that expose both casing styles.
+   */
   private toPascalCase(value: string): string {
     return value.length > 0
       ? `${value[0].toUpperCase()}${value.slice(1)}`
       : value;
   }
 
+  /**
+   * Checks whether a JSON value is a non-array object.
+   */
   private isJsonObject(value: JsonValue | null | undefined): value is JsonObject {
     return !!value && typeof value === 'object' && !Array.isArray(value);
   }
 
+  /**
+   * Returns the first non-empty string, number, or boolean found among the candidate keys.
+   */
   private readObjectText(value: JsonObject, keys: string[]): string | null {
     for (const key of keys) {
       const candidate = value[key];
@@ -193,8 +238,13 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     return null;
   }
 
+  /**
+   * Treats cells narrower than 140px as compact enough to prefer short labels.
+   */
   private shouldPreferShortLabel(): boolean {
     const hostWidth = this.hostWidth();
     return hostWidth !== null && hostWidth < 140;
   }
+
+  // #endregion
 }

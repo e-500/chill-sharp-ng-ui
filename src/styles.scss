@@ -1,3 +1,5 @@
+@import 'monaco-editor/min/vs/editor/editor.main.css';
+
 :root {
   --workspace-topbar-height: 4.75rem;
   --font-sans: "Segoe UI Variable", "Segoe UI", sans-serif;
@@ -719,6 +721,118 @@ a {
   background: var(--accent-soft);
 }
 
+.workspace-menu__managed-menu {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border-color);
+  background: var(--surface-2);
+}
+
+.workspace-menu__section-heading--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.workspace-menu__item--compact {
+  min-height: 2.4rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.workspace-menu__tree {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.workspace-menu__tree-node {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.workspace-menu__tree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding-left: calc(var(--menu-depth, 0) * 0.9rem);
+}
+
+.workspace-menu__tree-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.workspace-menu__tree-expander,
+.workspace-menu__tree-action,
+.workspace-menu__tree-trigger {
+  border: 1px solid var(--border-color);
+  border-radius: 0.85rem;
+  background: var(--surface-0);
+  color: var(--text-main);
+  font: inherit;
+}
+
+.workspace-menu__tree-expander {
+  width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.workspace-menu__tree-expander.is-placeholder {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.workspace-menu__tree-trigger {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-menu__tree-trigger span {
+  color: var(--text-muted);
+}
+
+.workspace-menu__tree-trigger.active {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
+}
+
+.workspace-menu__tree-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+}
+
+.workspace-menu__tree-action {
+  min-height: 2.5rem;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+}
+
+.workspace-menu__tree-children {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.workspace-menu__status--nested {
+  margin-left: calc((var(--menu-depth, 0) + 1) * 0.9rem);
+}
+
 .workspace-content {
   height: 100%;
   min-width: 0;
@@ -896,6 +1010,22 @@ a {
 
   .workspace-drawer:not(.open) {
     display: none;
+  }
+
+  .workspace-menu__section-heading--row {
+    flex-direction: column;
+  }
+
+  .workspace-menu__tree-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-menu__tree-actions {
+    justify-content: stretch;
+  }
+
+  .workspace-menu__tree-action {
+    flex: 1 1 auto;
   }
 
   .workspace-content {

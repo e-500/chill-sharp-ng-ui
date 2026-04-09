@@ -11,6 +11,8 @@ export interface ChillPropertySchema {
   propertyType?: number;
   isNullable: boolean;
   chillType?: string | null;
+  referenceChillType?: string | null;
+  referenceChillTypeQuery?: string | null;
   dateFormat?: string;
   customFormat?: string;
   metadata?: Record<string, string>;
@@ -74,6 +76,7 @@ export const CHILL_PROPERTY_TYPE = {
   Boolean: 70,
   String: 80,
   Text: 81,
+  Json: 99,
   ChillEntity: 1000,
   ChillEntityCollection: 1010,
   ChillQuery: 1100
@@ -88,4 +91,5 @@ export type ChillState = JsonObject & {
   validationErrors?: Record<string, string> | null;
   genericErrors?: string[] | null;
   dirtyProperties?: string[] | null;
+  ignoreNotificationsUntil?: number | null;
 };

@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { AbstractControl, AsyncValidatorFn, FormControl, FormGroup, FormsModule, ReactiveFormsModule, ValidationErrors } from '@angular/forms';
+import { Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import type { ChillValidationError } from 'chill-sharp-ts-client';
-import { catchError, firstValueFrom, map, of, switchMap, timer } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import type {
   ChillEntity,
   ChillFormSubmitEvent,
@@ -45,8 +45,9 @@ type ResolvedFormLayoutItem =
   templateUrl: './chill-form.component.html',
   styleUrl: './chill-form.component.scss'   
 })
-export class ChillFormComponent {
+export class ChillFormComponent implements OnDestroy {
   readonly columnOptions = [1, 2, 3, 4, 5, 6];
+  readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly chill = inject(ChillService);
   readonly layout = inject(WorkspaceLayoutService);
   readonly dialog = inject(WorkspaceDialogService, { optional: true });
@@ -57,8 +58,9 @@ export class ChillFormComponent {
   readonly submitLabelGuid = input<string | null>(null);
   readonly submitPrimaryDefaultText = input<string | null>(null);
   readonly submitSecondaryDefaultText = input<string | null>(null);
+  readonly showSchemaHeader = input(true);
   readonly renderSubmitInsideForm = input(true);
-  readonly onSubmit = input<((event: ChillFormSubmitEvent) => void) | null>(null);
+  readonly onSubmit = input<((event: ChillFormSubmitEvent) => void | Promise<void>) | null>(null);
   readonly closeDialogOnSubmit = input(false);
   readonly submitError = input<string | (() => string) | null>(null);
   readonly dismissSubmitError = input<(() => void) | null>(null);
@@ -69,6 +71,9 @@ export class ChillFormComponent {
   readonly propertyValidity = signal<Record<string, boolean>>({});
   readonly serverFieldErrors = signal<Record<string, string>>({});
   readonly genericValidationErrors = signal<string[]>([]);
+  readonly isAutocompleting = signal(false);
+  readonly isSubmitting = signal(false);
+  readonly internalSubmitError = signal('');
   readonly isEditMode = signal(false);
   readonly isSavingLayout = signal(false);
   readonly layoutError = signal('');
@@ -77,9 +82,13 @@ export class ChillFormComponent {
     columnCount: DEFAULT_FORM_COLUMN_COUNT,
     items: []
   });
+  private formValueSubscription = new Subscription();
+  private lastFormValue: Record<string, JsonValue> = {};
   private autocompleteRequestSequence = 0;
+  private pendingAutocompletePromise: Promise<void> | null = null;
   readonly mode = computed<'entity' | 'query'>(() => this.query() ? 'query' : 'entity');
   readonly source = computed<ChillEntity | ChillQuery | null>(() => this.query() ?? this.entity());
+  readonly hasCustomSubmitHandler = computed(() => !!this.onSubmit());
   readonly properties = computed(() => this.schema()?.properties ?? []);
   readonly layoutItems = computed<ResolvedFormLayoutItem[]>(() => {
     const propertyMap = new Map(this.properties().map((property) => [property.name, property]));
@@ -133,7 +142,7 @@ export class ChillFormComponent {
       return false;
     }
 
-    if (Object.keys(this.serverFieldErrors()).length > 0) {
+    if (this.isAutocompleting() || this.isSubmitting()) {
       return false;
     }
 
@@ -141,11 +150,14 @@ export class ChillFormComponent {
       return false;
     }
 
-    return this.layoutItems()
-      .filter((item): item is Extract<ResolvedFormLayoutItem, { kind: 'property' }> => item.kind === 'property')
-      .every((item) => this.propertyValidity()[item.property.name] !== false);
+    return !this.hasInvalidPropertyState();
   });
   readonly resolvedSubmitError = computed(() => {
+    const internalSubmitError = this.internalSubmitError().trim();
+    if (internalSubmitError) {
+      return internalSubmitError;
+    }
+
     const submitError = this.submitError();
     if (typeof submitError === 'function') {
       return submitError().trim();
@@ -161,25 +173,21 @@ export class ChillFormComponent {
     effect(() => {
       const schema = this.schema();
       const source = this.source();
-      this.form.set(schema
-        ? this.chill.prepareForm(schema, source, {
-            createControlAsyncValidators: ({ property, getForm }) => this.shouldUseAsyncServerValidation()
-              ? this.createServerFieldAsyncValidator(property.name, getForm)
-              : null
-          })
-        : null);
+      const nextForm = schema
+        ? this.chill.prepareForm(schema, source)
+        : null;
+      this.form.set(nextForm);
       this.propertyValidity.set(this.createInitialPropertyValidity(schema));
       this.serverFieldErrors.set({});
       this.genericValidationErrors.set([]);
+      this.internalSubmitError.set('');
+      this.isAutocompleting.set(false);
+      this.isSubmitting.set(false);
       this.layoutState.set(this.readLayoutState(schema));
       this.layoutError.set('');
       this.isEditMode.set(false);
+      this.syncFormValueSubscription(nextForm);
 
-      if (schema?.properties?.length) {
-        untracked(() => {
-          void this.runAutocomplete();
-        });
-      }
     });
 
     effect(() => {
@@ -190,7 +198,15 @@ export class ChillFormComponent {
   }
 
   async submit(): Promise<void> {
-    if (!this.canSubmit()) {
+    const form = this.form();
+    if (!form || this.isEditMode()) {
+      return;
+    }
+
+    this.internalSubmitError.set('');
+    await this.flushPendingAutocomplete();
+
+    if (form.pending || form.invalid || this.hasInvalidPropertyState()) {
       return;
     }
 
@@ -209,11 +225,23 @@ export class ChillFormComponent {
       value: payload
     };
 
-    this.formSubmit.emit(event);
-    this.onSubmit()?.(event);
+    this.isSubmitting.set(true);
+    try {
+      this.formSubmit.emit(event);
 
-    if (this.closeDialogOnSubmit()) {
-      this.dialog?.confirm();
+      const customSubmit = this.onSubmit();
+      if (customSubmit) {
+        await customSubmit(event);
+        if (this.closeDialogOnSubmit()) {
+          this.dialog?.confirm();
+        }
+      } else {
+        await this.submitDefault(event);
+      }
+    } catch (error: unknown) {
+      this.internalSubmitError.set(this.chill.formatError(error));
+    } finally {
+      this.isSubmitting.set(false);
     }
   }
 
@@ -389,6 +417,7 @@ export class ChillFormComponent {
   }
 
   clearSubmitError(): void {
+    this.internalSubmitError.set('');
     this.dismissSubmitError()?.();
   }
 
@@ -397,6 +426,10 @@ export class ChillFormComponent {
     queueMicrotask(() => {
       void this.runAutocomplete();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.formValueSubscription.unsubscribe();
   }
 
   private buildEntityPayload(): ChillEntity {
@@ -428,6 +461,24 @@ export class ChillFormComponent {
     return properties;
   }
 
+  private syncFormValueSubscription(form: FormGroup<Record<string, FormControl<JsonValue>>> | null): void {
+    this.formValueSubscription.unsubscribe();
+    this.formValueSubscription = new Subscription();
+    this.lastFormValue = form?.getRawValue() ?? {};
+    if (!form) {
+      return;
+    }
+
+    this.formValueSubscription = form.valueChanges.subscribe((value) => {
+      const nextValue = value as Record<string, JsonValue>;
+      const changedFieldNames = this.readChangedFieldNames(this.lastFormValue, nextValue);
+      this.lastFormValue = { ...nextValue };
+      if (changedFieldNames.length > 0) {
+        this.clearServerValidationForFields(changedFieldNames);
+      }
+    });
+  }
+
   private async runAutocomplete(): Promise<void> {
     const schema = this.schema();
     if (!schema || this.isEditMode()) {
@@ -436,8 +487,9 @@ export class ChillFormComponent {
 
     const requestSequence = ++this.autocompleteRequestSequence;
     const request = this.buildCurrentPayload();
+    this.isAutocompleting.set(true);
 
-    try {
+    const pendingRequest = (async () => {
       const response = await firstValueFrom(this.chill.autocomplete(request as JsonObject));
       if (requestSequence !== this.autocompleteRequestSequence) {
         return;
@@ -445,14 +497,226 @@ export class ChillFormComponent {
 
       const autocompletedFields = this.extractAutocompleteFields(schema, response);
       if (Object.keys(autocompletedFields).length > 0) {
-        this.updateFields(autocompletedFields);
+        this.applyAutocompleteFields(autocompletedFields);
+      }
+    })()
+      .catch(() => undefined)
+      .finally(() => {
+        if (requestSequence === this.autocompleteRequestSequence) {
+          this.isAutocompleting.set(false);
+        }
+        if (this.pendingAutocompletePromise === pendingRequest) {
+          this.pendingAutocompletePromise = null;
+        }
+      });
+
+    this.pendingAutocompletePromise = pendingRequest;
+    await pendingRequest;
+  }
+
+  private applyAutocompleteFields(value: Record<string, JsonValue>): void {
+    const form = this.form();
+    if (!form) {
+      return;
+    }
+
+    const focusedPropertyName = this.readFocusedPropertyName();
+    const nextValues: Record<string, JsonValue> = {};
+
+    for (const [fieldName, fieldValue] of Object.entries(value)) {
+      const control = form.controls[fieldName];
+      if (!control) {
+        continue;
       }
 
-    } catch {
-      if (requestSequence === this.autocompleteRequestSequence) {
-        return;
+      const shouldProtectFocusedField = fieldName === focusedPropertyName
+        && control.dirty
+        && control.value !== null;
+      if (shouldProtectFocusedField) {
+        continue;
       }
+
+      nextValues[fieldName] = fieldValue;
     }
+
+    if (Object.keys(nextValues).length > 0) {
+      this.updateFields(nextValues);
+    }
+  }
+
+  private readFocusedPropertyName(): string {
+    const activeElement = globalThis.document?.activeElement;
+    if (!(activeElement instanceof HTMLElement)) {
+      return '';
+    }
+
+    if (!this.host.nativeElement.contains(activeElement)) {
+      return '';
+    }
+
+    return activeElement.getAttribute('name')?.trim() ?? '';
+  }
+
+  private async flushPendingAutocomplete(): Promise<void> {
+    this.blurFocusedControl();
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    while (this.pendingAutocompletePromise) {
+      await this.pendingAutocompletePromise;
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+    }
+  }
+
+  private blurFocusedControl(): void {
+    const activeElement = globalThis.document?.activeElement;
+    if (!(activeElement instanceof HTMLElement)) {
+      return;
+    }
+
+    if (!this.host.nativeElement.contains(activeElement)) {
+      return;
+    }
+
+    activeElement.blur();
+  }
+
+  private async submitDefault(event: ChillFormSubmitEvent): Promise<void> {
+    if (event.kind !== 'entity') {
+      return;
+    }
+
+    const schema = this.schema();
+    if (!schema) {
+      return;
+    }
+
+    const entity = this.normalizeEntityForSubmit(event.value as ChillEntity, schema);
+    const isNewEntity = this.readEntityIsNew(entity);
+    const request = isNewEntity
+      ? this.chill.create(entity as JsonObject)
+      : this.chill.update(entity as JsonObject);
+
+    const savedEntity = await firstValueFrom(request);
+    this.dialog?.confirm(savedEntity as ChillEntity);
+  }
+
+  private normalizeEntityForSubmit(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    return {
+      ...(this.entity() ?? {}),
+      ...entity,
+      chillType: this.readEntityChillType(entity, schema),
+      properties: this.buildPropertiesObject(this.form())
+    };
+  }
+
+  private readEntityChillType(entity: ChillEntity, schema: ChillSchema): string {
+    const directChillType = typeof entity['chillType'] === 'string'
+      ? entity['chillType'].trim()
+      : '';
+    if (directChillType) {
+      return directChillType;
+    }
+
+    const sourceEntity = this.entity();
+    const sourceChillType = sourceEntity && typeof sourceEntity['chillType'] === 'string'
+      ? sourceEntity['chillType'].trim()
+      : '';
+    if (sourceChillType) {
+      return sourceChillType;
+    }
+
+    return schema.chillType?.trim() ?? '';
+  }
+
+  private readEntityIsNew(entity: ChillEntity): boolean {
+    const chillState = entity['chillState'];
+    return !!chillState
+      && typeof chillState === 'object'
+      && !Array.isArray(chillState)
+      && (chillState as JsonObject)['isNew'] === true;
+  }
+
+  private shouldValidateOnSubmit(): boolean {
+    return this.mode() === 'entity';
+  }
+
+  private readResponsePropertyValue(source: JsonObject, propertyName: string): JsonValue | undefined {
+    const directProperties = source['properties'];
+    if (directProperties && typeof directProperties === 'object' && !Array.isArray(directProperties) && propertyName in directProperties) {
+      return (directProperties as Record<string, JsonValue>)[propertyName];
+    }
+
+    const pascalProperties = source['Properties'];
+    if (pascalProperties && typeof pascalProperties === 'object' && !Array.isArray(pascalProperties) && propertyName in pascalProperties) {
+      return (pascalProperties as Record<string, JsonValue>)[propertyName];
+    }
+
+    if (propertyName in source) {
+      return source[propertyName];
+    }
+
+    const pascalPropertyName = propertyName.length > 0
+      ? `${propertyName[0].toUpperCase()}${propertyName.slice(1)}`
+      : propertyName;
+    return pascalPropertyName in source
+      ? source[pascalPropertyName]
+      : undefined;
+  }
+
+  private validateCurrentPayload(): Promise<boolean> {
+    return this.validateEntityPayload();
+  }
+
+  private async validateEntityPayload(): Promise<boolean> {
+    const schema = this.schema();
+    if (!schema) {
+      return true;
+    }
+
+    try {
+      const errors = await firstValueFrom(this.chill.validate(this.buildCurrentPayload() as JsonObject));
+      const { fieldErrors, genericErrors } = this.partitionValidationErrors(errors, schema);
+      this.serverFieldErrors.set(fieldErrors);
+      this.genericValidationErrors.set(genericErrors);
+      return Object.keys(fieldErrors).length === 0 && genericErrors.length === 0;
+    } catch (error: unknown) {
+      this.genericValidationErrors.set([this.chill.formatError(error)]);
+      return false;
+    }
+  }
+
+  private partitionValidationErrors(
+    errors: ChillValidationError[],
+    schema: ChillSchema
+  ): { fieldErrors: Record<string, string>; genericErrors: string[] } {
+    const fieldNameMap = new Map(
+      (schema.properties ?? [])
+        .map((property) => property.name.trim())
+        .filter((propertyName) => propertyName.length > 0)
+        .map((propertyName) => [propertyName.toLowerCase(), propertyName] as const)
+    );
+    const fieldErrors: Record<string, string> = {};
+    const genericErrors: string[] = [];
+
+    for (const error of errors) {
+      const fieldName = typeof error.fieldName === 'string' ? error.fieldName.trim() : '';
+      const message = typeof error.message === 'string' ? error.message.trim() : '';
+      if (!message) {
+        continue;
+      }
+
+      const resolvedFieldName = fieldName ? fieldNameMap.get(fieldName.toLowerCase()) : undefined;
+      if (resolvedFieldName) {
+        fieldErrors[resolvedFieldName] = fieldErrors[resolvedFieldName]
+          ? `${fieldErrors[resolvedFieldName]} ${message}`
+          : message;
+        continue;
+      }
+
+      genericErrors.push(message);
+    }
+
+    return { fieldErrors, genericErrors };
   }
 
   private buildCurrentPayload(): ChillEntity | ChillQuery {
@@ -461,27 +725,10 @@ export class ChillFormComponent {
       : this.buildEntityPayload();
   }
 
-  private buildPayloadFromForm(form: FormGroup<Record<string, FormControl<JsonValue>>>): ChillEntity | ChillQuery {
-    const properties = this.buildPropertiesObject(form);
-    if (this.mode() === 'query') {
-      return {
-        ...(this.query() ?? {}),
-        properties
-      };
-    }
-
-    return {
-      ...(this.entity() ?? {}),
-      properties
-    };
-  }
-
-  private shouldValidateOnSubmit(): boolean {
-    return !!this.dialog && this.mode() === 'entity';
-  }
-
-  private shouldUseAsyncServerValidation(): boolean {
-    return !!this.dialog && this.mode() === 'entity';
+  private hasInvalidPropertyState(): boolean {
+    return this.layoutItems()
+      .filter((item): item is Extract<ResolvedFormLayoutItem, { kind: 'property' }> => item.kind === 'property')
+      .some((item) => this.propertyValidity()[item.property.name] === false);
   }
 
   private extractAutocompleteFields(schema: ChillSchema, response: JsonObject): Record<string, JsonValue> {
@@ -550,43 +797,6 @@ export class ChillFormComponent {
     return Object.fromEntries(
       (schema?.properties ?? []).map((property) => [property.name, true] as const)
     );
-  }
-
-  private createServerFieldAsyncValidator(
-    propertyName: string,
-    getForm: () => FormGroup<Record<string, FormControl<JsonValue>>>
-  ): AsyncValidatorFn {
-    return (control: AbstractControl) => {
-      if (!control.dirty && !control.touched) {
-        return of(null);
-      }
-
-      return timer(250).pipe(
-        switchMap(() => this.chill.validate(this.buildPayloadFromForm(getForm()) as JsonObject)),
-        map((errors) => {
-          const validationErrors = this.toAsyncValidationErrors(errors, propertyName);
-          this.syncServerFieldError(propertyName, validationErrors?.['serverValidation']);
-          return validationErrors;
-        }),
-        catchError(() => of(null))
-      );
-    };
-  }
-
-  private toAsyncValidationErrors(
-    errors: ChillValidationError[],
-    propertyName: string
-  ): ValidationErrors | null {
-    const schema = this.schema();
-    if (!schema) {
-      return null;
-    }
-
-    const { fieldErrors } = this.partitionValidationErrors(errors, schema);
-    const message = fieldErrors[propertyName]?.trim();
-    return message
-      ? { serverValidation: message }
-      : null;
   }
 
   private readLayoutState(schema: ChillSchema | null): FormLayoutState {
@@ -715,29 +925,6 @@ export class ChillFormComponent {
     return {};
   }
 
-  private readResponsePropertyValue(source: JsonObject, propertyName: string): JsonValue | undefined {
-    const directProperties = source['properties'];
-    if (directProperties && typeof directProperties === 'object' && !Array.isArray(directProperties) && propertyName in directProperties) {
-      return (directProperties as Record<string, JsonValue>)[propertyName];
-    }
-
-    const pascalProperties = source['Properties'];
-    if (pascalProperties && typeof pascalProperties === 'object' && !Array.isArray(pascalProperties) && propertyName in pascalProperties) {
-      return (pascalProperties as Record<string, JsonValue>)[propertyName];
-    }
-
-    if (propertyName in source) {
-      return source[propertyName];
-    }
-
-    const pascalPropertyName = propertyName.length > 0
-      ? `${propertyName[0].toUpperCase()}${propertyName.slice(1)}`
-      : propertyName;
-    return pascalPropertyName in source
-      ? source[pascalPropertyName]
-      : undefined;
-  }
-
   private clearServerValidationForFields(fieldNames: string[]): void {
     if (fieldNames.length === 0) {
       return;
@@ -758,89 +945,6 @@ export class ChillFormComponent {
     this.genericValidationErrors.set([]);
   }
 
-  private syncServerFieldError(propertyName: string, message: unknown): void {
-    const normalizedPropertyName = propertyName.trim();
-    if (!normalizedPropertyName) {
-      return;
-    }
-
-    const normalizedMessage = typeof message === 'string'
-      ? message.trim()
-      : '';
-
-    this.serverFieldErrors.update((current) => {
-      if (!normalizedMessage) {
-        if (!(normalizedPropertyName in current)) {
-          return current;
-        }
-
-        const { [normalizedPropertyName]: _, ...rest } = current;
-        return rest;
-      }
-
-      if (current[normalizedPropertyName] === normalizedMessage) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [normalizedPropertyName]: normalizedMessage
-      };
-    });
-  }
-
-  private async validateCurrentPayload(): Promise<boolean> {
-    const schema = this.schema();
-    if (!schema) {
-      return true;
-    }
-
-    try {
-      const errors = await firstValueFrom(this.chill.validate(this.buildCurrentPayload() as JsonObject));
-      const { fieldErrors, genericErrors } = this.partitionValidationErrors(errors, schema);
-      this.serverFieldErrors.set(fieldErrors);
-      this.genericValidationErrors.set(genericErrors);
-      return Object.keys(fieldErrors).length === 0 && genericErrors.length === 0;
-    } catch (error: unknown) {
-      this.genericValidationErrors.set([this.chill.formatError(error)]);
-      return false;
-    }
-  }
-
-  private partitionValidationErrors(
-    errors: ChillValidationError[],
-    schema: ChillSchema
-  ): { fieldErrors: Record<string, string>; genericErrors: string[] } {
-    const fieldNameMap = new Map(
-      (schema.properties ?? [])
-        .map((property) => property.name.trim())
-        .filter((propertyName) => propertyName.length > 0)
-        .map((propertyName) => [propertyName.toLowerCase(), propertyName] as const)
-    );
-    const fieldErrors: Record<string, string> = {};
-    const genericErrors: string[] = [];
-
-    for (const error of errors) {
-      const fieldName = typeof error.fieldName === 'string' ? error.fieldName.trim() : '';
-      const message = typeof error.message === 'string' ? error.message.trim() : '';
-      if (!message) {
-        continue;
-      }
-
-      const resolvedFieldName = fieldName ? fieldNameMap.get(fieldName.toLowerCase()) : undefined;
-      if (resolvedFieldName) {
-        fieldErrors[resolvedFieldName] = fieldErrors[resolvedFieldName]
-          ? `${fieldErrors[resolvedFieldName]} ${message}`
-          : message;
-        continue;
-      }
-
-      genericErrors.push(message);
-    }
-
-    return { fieldErrors, genericErrors };
-  }
-
   private areRecordsEqual(
     left: Record<string, JsonValue>,
     right: Record<string, JsonValue>
@@ -852,5 +956,17 @@ export class ChillFormComponent {
     }
 
     return leftKeys.every((key) => Object.is(left[key], right[key]));
+  }
+
+  private readChangedFieldNames(
+    previousValue: Record<string, JsonValue>,
+    nextValue: Record<string, JsonValue>
+  ): string[] {
+    const fieldNames = new Set([
+      ...Object.keys(previousValue),
+      ...Object.keys(nextValue)
+    ]);
+
+    return [...fieldNames].filter((fieldName) => !Object.is(previousValue[fieldName], nextValue[fieldName]));
   }
 }

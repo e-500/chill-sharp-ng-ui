@@ -87,6 +87,7 @@ export class ChillTableComponent {
   readonly rowActions = input<ChillTableRowAction[] | null>(null);
   readonly enableInlineEditing = input(false);
   readonly validationFocus = input<ChillTableValidationFocus | null>(null);
+  readonly showSchemaHeader = input(true);
   // #endregion
 
   // #region Outputs
@@ -108,7 +109,7 @@ export class ChillTableComponent {
   // #region Component Lifecycle
 
   /**
-   * Constructor that sets up effects for layout state, displayed entities, layout editing, validation focus, and active cell edit.
+   * Wires reactive state for layout persistence, live entity updates, validation-driven focus, and inline edit completion.
    */
   constructor() {
     effect(() => {
@@ -182,7 +183,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Lifecycle hook that clears entity notification subscriptions on destroy.
+   * Releases per-entity live update subscriptions when the table is destroyed.
    */
   ngOnDestroy(): void {
     this.clearEntityNotificationSubscriptions();
@@ -193,7 +194,7 @@ export class ChillTableComponent {
   // #region Computed Properties
 
   /**
-   * Computed property that returns the table columns based on the schema and layout state.
+   * Merges schema properties with persisted layout preferences and preserves the saved column order.
    */
   readonly columns = computed<TableColumn[]>(() => {
     const schema = this.schema();
@@ -223,22 +224,22 @@ export class ChillTableComponent {
   });
 
   /**
-   * Computed property that returns only the visible columns.
+   * Filters the resolved column list down to visible columns.
    */
   readonly visibleColumns = computed(() => this.columns().filter((column) => !column.hidden));
 
   /**
-   * Computed property that returns the hidden columns.
+   * Filters the resolved column list down to hidden columns.
    */
   readonly hiddenColumns = computed(() => this.columns().filter((column) => column.hidden));
 
   /**
-   * Computed property that checks if there is a selection column and not in edit layout mode.
+   * Hides row selection while the user is editing layout metadata.
    */
   readonly hasSelectionColumn = computed(() => !!this.selectionColumn() && !this.isEditLayoutMode());
 
   /**
-   * Computed property that resolves the row actions from inputs.
+   * Normalizes the single-action and multi-action inputs into one action list.
    */
   readonly resolvedRowActions = computed(() => {
     const rowActions = this.rowActions();
@@ -251,7 +252,7 @@ export class ChillTableComponent {
   });
 
   /**
-   * Computed property that checks if there are row actions and not in edit layout mode.
+   * Hides row actions while the user is editing layout metadata.
    */
   readonly hasActionColumn = computed(() => this.resolvedRowActions().length > 0 && !this.isEditLayoutMode());
 
@@ -260,7 +261,7 @@ export class ChillTableComponent {
   // #region Public Methods
 
   /**
-   * Generates a unique key for tracking entities based on guid, Guid, label, or index.
+   * Builds a stable row key, preferring Guid-like identifiers before falling back to labels or index.
    */
   trackByEntity(index: number, entity: ChillEntity): string {
     return this.readEntityText(entity, 'guid')
@@ -271,7 +272,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Toggles the edit layout mode, saving the layout if exiting edit mode.
+   * Enters layout-edit mode immediately, or persists the current layout when toggled off.
    */
   toggleEditLayoutMode(): void {
     if (!this.layout.isLayoutEditingEnabled()) {
@@ -288,7 +289,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Updates the display name of a column in the layout state.
+   * Applies an in-memory display-name override for the selected column.
    */
   updateColumnDisplayName(columnName: string, value: string): void {
     this.layoutState.update((current) => current.map((item) => item.name === columnName
@@ -297,7 +298,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Updates the hidden state of a column in the layout state.
+   * Marks a column as visible or hidden inside the pending layout state.
    */
   updateColumnHidden(columnName: string, hidden: boolean): void {
     this.layoutState.update((current) => current.map((item) => item.name === columnName
@@ -306,7 +307,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reveals a hidden column by moving it to the visible section.
+   * Moves a hidden column back into the visible portion of the saved layout ordering.
    */
   revealColumn(columnName: string): void {
     const normalizedColumnName = columnName.trim();
@@ -329,7 +330,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Begins dragging a column if in edit layout mode.
+   * Records which column is being dragged during layout editing.
    */
   beginDrag(columnName: string): void {
     if (!this.isEditLayoutMode()) {
@@ -340,7 +341,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Allows dropping during drag if in edit layout mode.
+   * Enables the column drop target only while layout editing is active.
    */
   allowDrop(event: DragEvent): void {
     if (!this.isEditLayoutMode()) {
@@ -351,7 +352,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Drops a column at the target position during drag.
+   * Reorders the pending layout by moving the dragged column onto the target position.
    */
   dropColumn(targetColumnName: string): void {
     const sourceColumnName = this.dragColumnName();
@@ -377,21 +378,21 @@ export class ChillTableComponent {
   }
 
   /**
-   * Ends the drag operation.
+   * Clears the active drag marker after drag completes or is cancelled.
    */
   endDrag(): void {
     this.dragColumnName.set('');
   }
 
   /**
-   * Runs a row action handler for the given entity.
+   * Invokes the configured row action with the current entity.
    */
   runRowAction(action: ChillTableRowAction, entity: ChillEntity): void {
     action.handler(entity);
   }
 
   /**
-   * Returns the icon for a row action, defaulting to a pencil if not specified.
+   * Maps a few common semantic action names to icons and otherwise returns the provided icon verbatim.
    */
   rowActionIcon(action: ChillTableRowAction): string {
     const icon = action.icon?.trim();
@@ -413,35 +414,35 @@ export class ChillTableComponent {
   }
 
   /**
-   * Toggles the selection state of a row.
+   * Forwards row selection changes to the hosting selection controller.
    */
   toggleRowSelection(entity: ChillEntity, selected: boolean): void {
     this.selectionColumn()?.toggle(entity, selected);
   }
 
   /**
-   * Checks if a row is selected.
+   * Reads the current selection state from the hosting selection controller.
    */
   isRowSelected(entity: ChillEntity): boolean {
     return this.selectionColumn()?.isSelected(entity) ?? false;
   }
 
   /**
-   * Checks if row selection is disabled for an entity.
+   * Delegates row-selection disabled state to the host when provided.
    */
   isRowSelectionDisabled(entity: ChillEntity): boolean {
     return this.selectionColumn()?.disabled?.(entity) ?? false;
   }
 
   /**
-   * Checks if a row action is disabled for an entity.
+   * Evaluates whether a row action should be disabled for the current entity.
    */
   isRowActionDisabled(action: ChillTableRowAction, entity: ChillEntity): boolean {
     return action.disabled?.(entity) ?? false;
   }
 
   /**
-   * Checks if a row is in a pending state (draft, dirty, saving, error, deleted).
+   * Treats non-pristine CRUD states as pending so the row can render transient styling.
    */
   isPendingRow(entity: ChillEntity): boolean {
     const state = this.readCrudState(entity);
@@ -449,14 +450,14 @@ export class ChillTableComponent {
   }
 
   /**
-   * Checks if a row is deleted.
+   * Uses the normalized CRUD status to identify deleted rows.
    */
   isDeletedRow(entity: ChillEntity): boolean {
     return this.readCrudState(entity) === 'deleted';
   }
 
   /**
-   * Activates inline editing for a cell.
+   * Creates a single-property edit session for the chosen cell using a fresh schema-driven form.
    */
   activateCellEdit(entity: ChillEntity, column: TableColumn): void {
     if (!this.enableInlineEditing() || this.isEditLayoutMode() || this.isDeletedRow(entity)) {
@@ -481,7 +482,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Checks if a cell is currently being edited.
+   * Matches the requested cell against the current inline edit session.
    */
   isCellEditing(entity: ChillEntity, column: TableColumn): boolean {
     const activeCellEdit = this.activeCellEdit();
@@ -491,7 +492,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Handles changes to cell values during editing.
+   * Clears the committing flag when the active editor changes its tracked property value.
    */
   handleCellValueChange(value: Record<string, JsonValue>): void {
     const activeCellEdit = this.activeCellEdit();
@@ -510,7 +511,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Handles changes to cell validity during editing.
+   * Keeps the active edit session aligned with the child editor validity state.
    */
   handleCellValidityChange(isValid: boolean): void {
     const activeCellEdit = this.activeCellEdit();
@@ -526,7 +527,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Handles focus out event for cell editing, committing the edit.
+   * Commits the edit only when focus leaves the entire editor, not when it moves within the editor.
    */
   handleCellFocusOut(event: FocusEvent): void {
     const currentTarget = event.currentTarget;
@@ -543,7 +544,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Handles keydown events in cell editor, committing or canceling on Enter/Escape.
+   * Supports Enter-to-commit and Escape-to-cancel without letting the event leak to the row.
    */
   handleCellEditorKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter') {
@@ -561,14 +562,14 @@ export class ChillTableComponent {
   }
 
   /**
-   * Cancels the current cell edit.
+   * Drops the current inline edit session without emitting a commit.
    */
   cancelCellEdit(): void {
     this.activeCellEdit.set(null);
   }
 
   /**
-   * Commits the current cell edit if valid and changed.
+   * Emits a cell commit only for valid edits whose value actually changed from the original snapshot.
    */
   commitCellEdit(): void {
     const activeCellEdit = this.activeCellEdit();
@@ -595,7 +596,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Returns field-specific validation errors for a row.
+   * Extracts per-field validation errors from the row chill state in a template-friendly shape.
    */
   rowFieldErrors(entity: ChillEntity): Record<string, string> {
     const crudState = this.readChillState(entity);
@@ -619,7 +620,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Checks if a row has any validation errors.
+   * Detects either field-level or generic validation errors stored in the row chill state.
    */
   rowHasValidationErrors(entity: ChillEntity): boolean {
     if (Object.keys(this.rowFieldErrors(entity)).length > 0) {
@@ -641,7 +642,7 @@ export class ChillTableComponent {
   // #region Helper Methods
 
   /**
-   * Syncs entity notification subscriptions based on schema and entities.
+   * Keeps live entity subscriptions aligned with the current schema type and visible entity set.
    */
   private syncEntityNotificationSubscriptions(schema: ChillSchema | null, entities: ChillEntity[]): void {
     const chillType = schema?.chillType?.trim() ?? '';
@@ -690,7 +691,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Clears all entity notification subscriptions.
+   * Unsubscribes from all live entity notifications and clears the associated bookkeeping.
    */
   private clearEntityNotificationSubscriptions(): void {
     for (const subscription of this.entityNotificationSubscriptions.values()) {
@@ -702,7 +703,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Handles entity change notifications by refreshing displayed entities.
+   * Refreshes locally displayed rows only for remote update notifications that contain a Guid.
    */
   private async handleEntityNotifications(chillType: string, changes: ChillEntityChangeNotification[]): Promise<void> {
     for (const change of changes) {
@@ -720,7 +721,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Refreshes a displayed entity with the latest data from the server.
+   * Reloads a row from the server, merges remote changes into non-dirty fields, and warns on conflicts.
    */
   private async refreshDisplayedEntity(chillType: string, guid: string): Promise<void> {
     const schema = this.schema();
@@ -730,6 +731,10 @@ export class ChillTableComponent {
 
     const currentEntity = this.displayedEntities().find((entity) => this.sameEntityGuid(entity, guid));
     if (!currentEntity || this.isNewEntity(currentEntity) || this.isDeletedRow(currentEntity)) {
+      return;
+    }
+
+    if (this.shouldIgnoreEntityNotification(currentEntity)) {
       return;
     }
 
@@ -794,7 +799,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Saves the current layout to the schema metadata.
+   * Persists the current column layout into schema metadata and updates local state with the saved result.
    */
   private saveLayout(): void {
     const schema = this.schema();
@@ -838,7 +843,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads the layout state from schema metadata or returns default.
+   * Reads persisted column layout from schema metadata and falls back to schema order when unavailable.
    */
   private readLayoutState(schema: ChillSchema | null): ColumnLayoutState[] {
     const properties = schema?.properties ?? [];
@@ -881,7 +886,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Normalizes the layout state for saving, ordering visible before hidden.
+   * Stores visible columns before hidden ones so the persisted layout can be rendered directly.
    */
   private normalizeLayoutForSave(layoutState: ColumnLayoutState[]): ColumnLayoutState[] {
     const visibleColumns = layoutState.filter((column) => !column.hidden);
@@ -890,7 +895,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads schema metadata as a record of strings.
+   * Normalizes schema metadata from camelCase or legacy payload shapes into a mutable string map.
    */
   private readSchemaMetadata(schema: ChillSchema | null): Record<string, string> {
     if (!schema) {
@@ -913,7 +918,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads a property value from an entity.
+   * Reads a property from the entity bag first, then from direct camelCase or PascalCase fields.
    */
   private readPropertyValue(entity: ChillEntity, propertyName: string): JsonValue | undefined {
     const properties = entity.properties
@@ -926,7 +931,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads a text value from an entity for a given key.
+   * Converts primitive entity properties into trimmed text for keys such as Guid or Label.
    */
   private readEntityText(entity: ChillEntity, key: string): string | null {
     const value = entity[key];
@@ -942,7 +947,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads the CRUD state of an entity as a string.
+   * Returns the normalized lowercase CRUD status used by row rendering logic.
    */
   private readCrudState(entity: ChillEntity): string {
     const status = this.readCrudStateObject(entity).status;
@@ -959,14 +964,14 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads the chill state from an entity.
+   * Returns the raw chill state payload attached to the entity.
    */
   private readChillState(entity: ChillEntity): JsonValue | undefined {
     return entity['chillState'];
   }
 
   /**
-   * Reads the CRUD state object from an entity.
+   * Normalizes chill state into a predictable CRUD model with defaults for new and deleting rows.
    */
   private readCrudStateObject(entity: ChillEntity): JsonObject & {
     status?: string;
@@ -1003,7 +1008,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Updates an entity with a new CRUD state.
+   * Merges a CRUD-state patch onto the entity while keeping derived `isNew` and `isDeleting` flags consistent.
    */
   private withCrudState(
     entity: ChillEntity,
@@ -1028,7 +1033,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Sanitizes CRUD state by removing undefined values.
+   * Removes undefined entries before persisting CRUD state back onto the entity payload.
    */
   private sanitizeCrudState(state: Record<string, JsonValue | undefined>): JsonObject {
     return Object.fromEntries(
@@ -1037,7 +1042,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Normalizes a server entity by resetting its CRUD state.
+   * Resets a freshly loaded server entity back to a pristine local CRUD state.
    */
   private normalizeServerEntity(entity: ChillEntity): ChillEntity {
     return this.withCrudState(entity, {
@@ -1046,12 +1051,21 @@ export class ChillTableComponent {
       dirtyProperties: null,
       validationErrors: null,
       genericErrors: null,
-      errorMessage: null
+      errorMessage: null,
+      ignoreNotificationsUntil: null
     });
   }
 
   /**
-   * Prepares an entity to match the schema properties.
+   * Skips live refreshes for a short window after a local save so the row keeps the just-returned server copy.
+   */
+  private shouldIgnoreEntityNotification(entity: ChillEntity): boolean {
+    const ignoreUntil = this.readCrudStateObject(entity)['ignoreNotificationsUntil'];
+    return typeof ignoreUntil === 'number' && Number.isFinite(ignoreUntil) && ignoreUntil > Date.now();
+  }
+
+  /**
+   * Ensures a server entity exposes every schema property through the `properties` bag expected by the table.
    */
   private prepareEntityForSchema(entity: ChillEntity, schema: ChillSchema): ChillEntity {
     const nextProperties: Record<string, JsonValue> = {
@@ -1074,7 +1088,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Replaces a displayed entity with an updated one.
+   * Replaces a row in the displayed collection and pushes fresh values into any active editor for that row.
    */
   private replaceDisplayedEntity(nextEntity: ChillEntity, previousEntity: ChillEntity): void {
     const previousEntityKey = this.trackByEntity(0, previousEntity);
@@ -1101,14 +1115,14 @@ export class ChillTableComponent {
   }
 
   /**
-   * Checks if an entity is new.
+   * Uses normalized CRUD state to detect client-side draft rows.
    */
   private isNewEntity(entity: ChillEntity): boolean {
     return this.readCrudStateObject(entity).isNew === true;
   }
 
   /**
-   * Reads the names of dirty controls from a form.
+   * Collects the property names whose form controls are currently dirty.
    */
   private readDirtyControlNames(form: FormGroup<Record<string, FormControl<JsonValue>>>): string[] {
     return Object.entries(form.controls)
@@ -1118,7 +1132,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads the GUID from an entity.
+   * Reads the row Guid using either camelCase or PascalCase server field names.
    */
   private readEntityGuid(entity: ChillEntity): string {
     return this.readEntityText(entity, 'guid')
@@ -1127,7 +1141,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads a string value from JSON.
+   * Normalizes a JSON value into trimmed text when it is already a string.
    */
   private readStringValue(value: JsonValue | undefined): string {
     return typeof value === 'string'
@@ -1136,7 +1150,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Reads a boolean from the chill state.
+   * Reads a boolean flag from the raw chill state object.
    */
   private readChillStateBoolean(entity: ChillEntity, propertyName: string): boolean {
     const chillState = this.readChillState(entity);
@@ -1148,14 +1162,14 @@ export class ChillTableComponent {
   }
 
   /**
-   * Checks if an entity's GUID matches the given GUID.
+   * Compares an entity Guid with an incoming Guid after trimming the incoming value.
    */
   private sameEntityGuid(entity: ChillEntity, guid: string): boolean {
     return this.readEntityGuid(entity) === guid.trim();
   }
 
   /**
-   * Converts a string to PascalCase.
+   * Converts a property name to PascalCase for payloads that expose both casing styles.
    */
   private toPascalCase(value: string): string {
     return value.length > 0
@@ -1164,7 +1178,7 @@ export class ChillTableComponent {
   }
 
   /**
-   * Compares two JSON values for equality.
+   * Uses JSON serialization as a pragmatic deep-equality check for editor values and server payloads.
    */
   private areJsonValuesEqual(left: JsonValue | undefined, right: JsonValue | undefined): boolean {
     return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);

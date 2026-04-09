@@ -147,6 +147,7 @@ Layout changes are persisted to the schema metadata.
 - Multiple actions per row supported
 - Icons default to pencil (✎) for edit, trash (🗑) for delete
 - Actions can be disabled per entity
+- A common edit flow is `chill-table` row action -> dialog host -> `ChillFormComponent`
 
 ### Real-time Updates
 
@@ -161,6 +162,20 @@ Layout changes are persisted to the schema metadata.
 - Generic validation errors displayed at the table level
 - Visual indicators for pending/dirty/deleted rows
 - Automatic focus on first validation error
+
+## Dialog Editing Integration
+
+The table component is often used as the entry point for dialog-based editing rather than as the component that owns the full submit lifecycle.
+
+Typical flow:
+
+1. A row action opens a dialog for the selected entity.
+2. The dialog hosts `ChillFormComponent`.
+3. `ChillFormComponent` renders fields through `ChillPolymorphicInputComponent`.
+4. Server validation errors are surfaced back onto the relevant form fields.
+5. The dialog closes only after the form successfully emits its submit event.
+
+Because of this split responsibility, dialog submit and validation behavior is documented primarily in `chill-form.component.md` and `chill-polymorphic-input.component.md`.
 
 ## Examples
 

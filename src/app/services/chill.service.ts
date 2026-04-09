@@ -14,7 +14,12 @@ import {
   type SetAuthRoleRequest,
   type SetAuthUserRequest
 } from 'chill-sharp-ng-client';
-import type { ChillValidationError } from 'chill-sharp-ts-client';
+import type {
+  ChillValidationError,
+  LoginAuthIdentityRequest,
+  RequestPasswordResetRequest as ChillSharpRequestPasswordResetRequest,
+  ResetPasswordRequest as ChillSharpResetPasswordRequest
+} from 'chill-sharp-ts-client';
 import { Observable, catchError, firstValueFrom, from, map, switchMap, tap, throwError } from 'rxjs';
 import type {
   AuthRoleAccessDetails,
@@ -34,7 +39,8 @@ import type {
   ResetPasswordRequest,
   ResetPasswordResponse,
   UpdateAuthRoleRequest,
-  UpdateAuthUserRequest
+  UpdateAuthUserRequest,
+  UpdateUserProfileRequest
 } from '../models/chill-auth.models';
 import { PermissionAction, PermissionEffect, PermissionScope } from '../models/chill-auth.models';
 import type {
@@ -390,11 +396,39 @@ export class ChillService {
     );
   }
 
+  getAuthUserDetails(userGuid: string) {
+    return this.chill.getAuthUser(userGuid).pipe(
+      map((response) => response as AuthUserDetailsResponse),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
   updateAuthUser(userGuid: string, request: UpdateAuthUserRequest) {
     return this.chill.getAuthUser(userGuid).pipe(
       map((response) => this.buildSetAuthUserRequest(response, request)),
       switchMap((payload) => this.chill.setAuthUser(payload)),
       map((response) => this.normalizeAuthUser(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  updateUserProfile(userGuid: string, request: UpdateUserProfileRequest) {
+    return this.chill.getAuthUser(userGuid).pipe(
+      map((response) => this.buildSetAuthUserRequest(response, {
+        externalId: response.externalId,
+        userName: response.userName,
+        displayName: request.displayName,
+        displayCultureName: request.displayCultureName,
+        displayTimeZone: request.displayTimeZone,
+        displayDateFormat: request.displayDateFormat,
+        displayNumberFormat: request.displayNumberFormat,
+        isActive: response.isActive,
+        canManagePermissions: response.canManagePermissions,
+        canManageSchema: response.canManageSchema,
+        menuHierarchy: response.menuHierarchy ?? ''
+      })),
+      switchMap((payload) => this.chill.setAuthUser(payload)),
+      map((response) => response as AuthUserDetailsResponse),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -812,7 +846,7 @@ export class ChillService {
   }
 
   login(request: LoginRequest) {
-    return this.chill.loginAuthAccount(request as unknown as JsonObject).pipe(
+    return this.chill.loginAuthAccount(this.toLoginAuthIdentityRequest(request)).pipe(
       map((response) => this.toTokenResponse(response as JsonObject)),
       tap((response) => this.persistSession(response)),
       catchError((error) => this.rethrowFriendlyError(error))
@@ -828,14 +862,14 @@ export class ChillService {
   }
 
   requestPasswordReset(request: RequestPasswordResetRequest) {
-    return this.chill.requestAuthPasswordReset(request as unknown as JsonObject).pipe(
+    return this.chill.requestAuthPasswordReset(this.toRequestPasswordResetRequest(request)).pipe(
       map((response) => response as unknown as PasswordResetTokenResponse),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
 
   confirmPasswordReset(request: ResetPasswordRequest) {
-    return this.chill.resetAuthPassword(request as unknown as JsonObject).pipe(
+    return this.chill.resetAuthPassword(this.toResetPasswordRequest(request)).pipe(
       map((response) => response as unknown as ResetPasswordResponse),
       catchError((error) => this.rethrowFriendlyError(error))
     );
@@ -1179,38 +1213,59 @@ export class ChillService {
     mutatePermissions?: (permissions: ChillSharpAuthPermissionRuleItem[]) => ChillSharpAuthPermissionRuleItem[]
   ): SetAuthUserRequest {
     const roleGuids = response.roles
-      .map((role) => role.guid?.trim() ?? '')
-      .filter((guid) => guid.length > 0);
-    const permissions = response.permissions.map((permission) => this.toAuthPermissionRuleItem(permission));
+      .map((role: { guid?: string | null }) => role.guid?.trim() ?? '')
+      .filter((guid: string) => guid.length > 0);
+    const permissions = response.permissions.map((permission: ChillSharpAuthPermissionRuleItem) => this.toAuthPermissionRuleItem(permission));
 
-      return {
-        guid: response.guid,
-        externalId: overrides?.externalId ?? response.externalId,
-        userName: overrides?.userName ?? response.userName,
-        displayName: overrides?.displayName ?? response.displayName,
-        displayCultureName: response.displayCultureName,
-        displayTimeZone: response.displayTimeZone,
-        displayDateFormat: response.displayDateFormat,
-        displayNumberFormat: response.displayNumberFormat,
-        isActive: overrides?.isActive ?? response.isActive,
-        canManagePermissions: overrides?.canManagePermissions ?? response.canManagePermissions,
-        canManageSchema: response.canManageSchema,
-        menuHierarchy: response.menuHierarchy ?? '',
-        roleGuids: mutateRoleGuids ? mutateRoleGuids(roleGuids) : roleGuids,
-        permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
-      };
-    }
+    return {
+      guid: response.guid,
+      externalId: overrides?.externalId ?? response.externalId,
+      userName: overrides?.userName ?? response.userName,
+      displayName: overrides?.displayName ?? response.displayName,
+      displayCultureName: overrides?.displayCultureName ?? response.displayCultureName,
+      displayTimeZone: overrides?.displayTimeZone ?? response.displayTimeZone,
+      displayDateFormat: overrides?.displayDateFormat ?? response.displayDateFormat,
+      displayNumberFormat: overrides?.displayNumberFormat ?? response.displayNumberFormat,
+      isActive: overrides?.isActive ?? response.isActive,
+      canManagePermissions: overrides?.canManagePermissions ?? response.canManagePermissions,
+      canManageSchema: overrides?.canManageSchema ?? response.canManageSchema,
+      menuHierarchy: overrides?.menuHierarchy ?? response.menuHierarchy ?? '',
+      roleGuids: mutateRoleGuids ? mutateRoleGuids(roleGuids) : roleGuids,
+      permissions: mutatePermissions ? mutatePermissions(permissions) : permissions
+    };
+  }
 
-    private toRegisterAuthIdentityRequest(request: RegisterRequest): RegisterAuthIdentityRequest {
-      return {
-        userName: request.UserName,
-        email: request.Email?.trim() || null,
-        password: request.Password,
-        displayName: request.DisplayName,
-        displayCultureName: request.DisplayCultureName,
-        createChillAuthUser: request.CreateChillAuthUser
-      };
-    }
+  private toRegisterAuthIdentityRequest(request: RegisterRequest): RegisterAuthIdentityRequest {
+    return {
+      userName: request.UserName,
+      email: request.Email?.trim() || null,
+      password: request.Password,
+      displayName: request.DisplayName,
+      displayCultureName: request.DisplayCultureName,
+      createChillAuthUser: request.CreateChillAuthUser
+    };
+  }
+
+  private toLoginAuthIdentityRequest(request: LoginRequest): LoginAuthIdentityRequest {
+    return {
+      userNameOrEmail: request.UserNameOrEmail,
+      password: request.Password
+    };
+  }
+
+  private toRequestPasswordResetRequest(request: RequestPasswordResetRequest): ChillSharpRequestPasswordResetRequest {
+    return {
+      userNameOrEmail: request.UserNameOrEmail
+    };
+  }
+
+  private toResetPasswordRequest(request: ResetPasswordRequest): ChillSharpResetPasswordRequest {
+    return {
+      userId: request.UserId,
+      resetToken: request.ResetToken,
+      newPassword: request.NewPassword
+    };
+  }
 
   private buildSetAuthRoleRequest(
     response: AuthRoleDetailsResponse | null,
@@ -1219,9 +1274,9 @@ export class ChillService {
     mutatePermissions?: (permissions: ChillSharpAuthPermissionRuleItem[]) => ChillSharpAuthPermissionRuleItem[]
   ): SetAuthRoleRequest {
     const userGuids = response?.users
-      .map((user) => user.guid?.trim() ?? '')
-      .filter((guid) => guid.length > 0) ?? [];
-    const permissions = response?.permissions.map((permission) => this.toAuthPermissionRuleItem(permission)) ?? [];
+      .map((user: { guid?: string | null }) => user.guid?.trim() ?? '')
+      .filter((guid: string) => guid.length > 0) ?? [];
+    const permissions = response?.permissions.map((permission: ChillSharpAuthPermissionRuleItem) => this.toAuthPermissionRuleItem(permission)) ?? [];
 
     return {
       guid: response?.guid ?? null,
@@ -1325,8 +1380,14 @@ export class ChillService {
       externalId: this.readJsonString(response, 'ExternalId') ?? '',
       userName: this.readJsonString(response, 'UserName') ?? '',
       displayName: this.readJsonString(response, 'DisplayName') ?? '',
+      displayCultureName: this.readJsonString(response, 'DisplayCultureName') ?? '',
+      displayTimeZone: this.readJsonString(response, 'DisplayTimeZone') ?? '',
+      displayDateFormat: this.readJsonString(response, 'DisplayDateFormat') ?? '',
+      displayNumberFormat: this.readJsonString(response, 'DisplayNumberFormat') ?? '',
       isActive: this.readJsonBoolean(response, 'IsActive'),
-      canManagePermissions: this.readJsonBoolean(response, 'CanManagePermissions')
+      canManagePermissions: this.readJsonBoolean(response, 'CanManagePermissions'),
+      canManageSchema: this.readJsonBoolean(response, 'CanManageSchema'),
+      menuHierarchy: this.readJsonString(response, 'MenuHierarchy') ?? ''
     };
   }
 
@@ -1557,13 +1618,14 @@ export class ChillService {
 
   private logDetailedError(context: string, error: unknown): void {
     if (error instanceof ChillSharpClientError) {
+      const clientError = error as ChillSharpClientError & Error & { cause?: unknown };
       console.error(`[ChillService] ${context} failed`, {
-        name: error.name,
-        message: error.message,
-        statusCode: error.statusCode,
-        responseText: error.responseText,
-        cause: (error as Error & { cause?: unknown }).cause,
-        stack: error.stack
+        name: clientError.name,
+        message: clientError.message,
+        statusCode: clientError.statusCode,
+        responseText: clientError.responseText,
+        cause: clientError.cause,
+        stack: clientError.stack
       });
       return;
     }

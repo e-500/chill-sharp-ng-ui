@@ -81,13 +81,16 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
             </div>
           </details>
 
-          <details class="user-menu">
+          <details class="user-menu" #userMenu>
             <summary>
               <span class="user-avatar">{{ userInitial() }}</span>
             </summary>
 
             <div class="user-menu__panel">
               <p class="user-menu__name">{{ chill.userName() || chill.T('B0311DA4-F864-4E15-93A4-894D177F7017', 'current user', 'utente corrente') }}</p>
+              <button type="button" (click)="openUserProfileDialog()">
+                <app-chill-i18n-button-label [labelGuid]="'EF63959A-FF5D-4AC5-8AE5-BEB27B2FAE90'" [primaryDefaultText]="'User profile'" [secondaryDefaultText]="'Profilo utente'" />
+              </button>
               <button type="button" (click)="workspace.toggleLayoutEditingEnabled()">
                 @if (workspace.isLayoutEditingEnabled()) {
                   <app-chill-i18n-button-label [labelGuid]="'84A896C2-2A1F-4DCE-8B33-A0F586F1DBE8'" [primaryDefaultText]="'Disable layout editing'" [secondaryDefaultText]="'Disabilita modifica layout'" />
@@ -155,6 +158,7 @@ export class WorkspacePageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly themeMenu = viewChild<ElementRef<HTMLDetailsElement>>('themeMenu');
+  private readonly userMenu = viewChild<ElementRef<HTMLDetailsElement>>('userMenu');
 
   readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft'];
 
@@ -176,13 +180,20 @@ export class WorkspacePageComponent implements OnInit {
 
   @HostListener('document:click', ['$event'])
   handleDocumentClick(event: MouseEvent): void {
-    const themeMenu = this.themeMenu()?.nativeElement;
     const target = event.target;
-    if (!themeMenu?.open || !(target instanceof Node) || themeMenu.contains(target)) {
+    if (!(target instanceof Node)) {
       return;
     }
 
-    themeMenu.open = false;
+    const themeMenu = this.themeMenu()?.nativeElement;
+    if (themeMenu?.open && !themeMenu.contains(target)) {
+      themeMenu.open = false;
+    }
+
+    const userMenu = this.userMenu()?.nativeElement;
+    if (userMenu?.open && !userMenu.contains(target)) {
+      userMenu.open = false;
+    }
   }
 
   userInitial(): string {
@@ -198,14 +209,38 @@ export class WorkspacePageComponent implements OnInit {
     }
   }
 
+  async openUserProfileDialog(): Promise<void> {
+    this.closeUserMenu();
+
+    const userGuid = this.chill.session()?.userId?.trim() ?? '';
+    const { UserProfileDialogComponent } = await import('../workspace/user-profile-dialog.component');
+    await this.dialog.openDialog({
+      title: this.chill.T('EF63959A-FF5D-4AC5-8AE5-BEB27B2FAE90', 'User profile', 'Profilo utente'),
+      component: UserProfileDialogComponent,
+      okLabel: await this.chill.TAsync('F4905C90-AC2F-4A26-95FE-63312CA133AF', 'Save', 'Salva'),
+      inputs: {
+        userGuid
+      }
+    });
+  }
+
   goToChangePassword(): void {
+    this.closeUserMenu();
     this.workspace.closeDrawer();
     void this.router.navigateByUrl('/reset-password');
   }
 
   logout(): void {
+    this.closeUserMenu();
     this.chill.logout();
     this.workspace.reset();
     void this.router.navigateByUrl('/login');
+  }
+
+  private closeUserMenu(): void {
+    const userMenu = this.userMenu()?.nativeElement;
+    if (userMenu) {
+      userMenu.open = false;
+    }
   }
 }

@@ -995,7 +995,7 @@ export class ChillTableComponent {
         isNew: resolvedIsNew,
         status,
         dirtyProperties: Array.isArray(typedState['dirtyProperties'])
-          ? typedState['dirtyProperties'].filter((propertyName): propertyName is string => typeof propertyName === 'string' && propertyName.trim().length > 0)
+          ? typedState['dirtyProperties'].filter((propertyName: unknown): propertyName is string => typeof propertyName === 'string' && propertyName.trim().length > 0)
           : null
       };
     }

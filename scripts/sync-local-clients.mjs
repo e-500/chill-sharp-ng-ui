@@ -10,12 +10,12 @@ const projectRoot = resolve(__dirname, '..');
 const packages = [
   {
     name: 'chill-sharp-ts-client',
-    sourcePath: resolve(projectRoot, '..', 'chill-sharp', 'chill-sharp', 'ext', 'chill-sharp-ts-client'),
+    sourcePath: resolve(projectRoot, '..', 'chill-sharp', 'chill-sharp', 'extra-libs', 'chill-sharp-ts-client'),
     installedPath: resolve(projectRoot, 'node_modules', 'chill-sharp-ts-client')
   },
   {
     name: 'chill-sharp-ng-client',
-    sourcePath: resolve(projectRoot, '..', 'chill-sharp', 'chill-sharp', 'ext', 'chill-sharp-ng-client'),
+    sourcePath: resolve(projectRoot, '..', 'chill-sharp', 'chill-sharp', 'extra-libs', 'chill-sharp-ng-client'),
     installedPath: resolve(projectRoot, 'node_modules', 'chill-sharp-ng-client')
   }
 ];

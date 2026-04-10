@@ -107,7 +107,9 @@
                           (click)="runRowAction(action, entity)"
                           [disabled]="isRowActionDisabled(action, entity)"
                           [attr.aria-label]="action.ariaLabel || chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga')">
-                          {{ rowActionIcon(action) }}
+                          <span
+                            class="row-action-button__icon"
+                            [class.material-symbol-icon]="action.iconClass === 'material-symbol-icon'">{{ rowActionIcon(action) }}</span>
                         </button>
                       }
                     </div>

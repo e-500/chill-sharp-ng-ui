@@ -8,6 +8,7 @@ export interface WorkspaceToolbarButton {
   secondaryDefaultText?: string | null;
   ariaLabel?: string;
   icon?: string | null;
+  iconClass?: string | null;
   action: () => void;
   disabled?: boolean;
 }

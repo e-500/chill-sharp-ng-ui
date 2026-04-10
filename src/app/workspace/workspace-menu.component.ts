@@ -57,7 +57,7 @@ interface WorkspaceMenuNode {
         } @else if (isLoadingMenu()) {
           <p class="workspace-menu__status">{{ chill.T('E5B9FD29-47DA-40A6-810C-85BC6241D07A', 'Loading menu...', 'Caricamento menu...') }}</p>
         } @else if (menuRoots().length === 0) {
-          <p class="workspace-menu__status">{{ chill.T('96C1B2E5-D6CA-4C53-8353-D97D4F8E0B09', 'No menu items are available for the current user.', 'Nessuna voce menu disponibile per l&apos;utente corrente.') }}</p>
+          <p class="workspace-menu__status">{{ chill.T('96C1B2E5-D6CA-4C53-8353-D97D4F8E0B09', 'No menu items are available for the current user.', "Nessuna voce menu disponibile per l'utente corrente.") }}</p>
         } @else {
           <nav class="workspace-menu__tree" aria-label="Application menu">
             @for (node of menuRoots(); track node.item.guid) {

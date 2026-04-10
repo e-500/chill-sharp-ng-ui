@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, Type, computed, effect, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Type, computed, effect, inject, signal } from '@angular/core';
 import { ParamMap, Router } from '@angular/router';
 import { EventViewerComponent } from '../pages/atlas/event-viewer/event-viewer.component';
 import { PermissionsPageComponent } from '../pages/permissions/permissions-page.component';
@@ -73,11 +73,14 @@ export class WorkspaceService {
   private readonly document = inject(DOCUMENT);
   private readonly router = inject(Router);
   private readonly layout = inject(WorkspaceLayoutService);
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly drawerOpenState = signal(false);
   private readonly activeTaskIdState = signal<string | null>(null);
   private readonly openTaskInstancesState = signal<WorkspaceTaskInstance[]>([]);
-  private readonly themeState = signal<WorkspaceTheme>(this.readStoredTheme());
+  private readonly storedThemePreference = this.readStoredThemePreference();
+  private readonly hasExplicitThemePreferenceState = signal(this.storedThemePreference !== null);
+  private readonly themeState = signal<WorkspaceTheme>(this.storedThemePreference ?? this.readSystemThemePreference());
 
   readonly availableTasks = WORKSPACE_TASKS;
   readonly isDrawerOpen = this.drawerOpenState.asReadonly();
@@ -92,9 +95,9 @@ export class WorkspaceService {
       const theme = this.themeState();
       this.document.documentElement.setAttribute('data-theme', theme);
       this.document.documentElement.style.setProperty('color-scheme', theme === 'dark' ? 'dark' : 'light');
-      globalThis.localStorage?.setItem(WORKSPACE_THEME_STORAGE_KEY, theme);
     });
 
+    this.bindSystemThemePreference();
   }
 
   activateTaskFromRoute(taskId: string | null, queryParams: ParamMap): void {
@@ -181,6 +184,8 @@ export class WorkspaceService {
 
   setTheme(theme: WorkspaceTheme): void {
     this.themeState.set(theme);
+    this.hasExplicitThemePreferenceState.set(true);
+    globalThis.localStorage?.setItem(WORKSPACE_THEME_STORAGE_KEY, theme);
   }
 
   toggleLayoutEditingEnabled(): void {
@@ -275,7 +280,28 @@ export class WorkspaceService {
     return this.availableTasks.find((task) => task.id === taskId) ?? null;
   }
 
-  private readStoredTheme(): WorkspaceTheme {
+  private bindSystemThemePreference(): void {
+    if (typeof globalThis.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQuery = globalThis.matchMedia('(prefers-color-scheme: dark)');
+    const applySystemTheme = () => {
+      if (this.hasExplicitThemePreferenceState()) {
+        return;
+      }
+
+      this.themeState.set(mediaQuery.matches ? 'dark' : 'bright');
+    };
+
+    applySystemTheme();
+
+    const handleChange = () => applySystemTheme();
+    mediaQuery.addEventListener('change', handleChange);
+    this.destroyRef.onDestroy(() => mediaQuery.removeEventListener('change', handleChange));
+  }
+
+  private readStoredThemePreference(): WorkspaceTheme | null {
     const storedTheme = globalThis.localStorage?.getItem(WORKSPACE_THEME_STORAGE_KEY)?.trim().toLowerCase();
     switch (storedTheme) {
       case 'dark':
@@ -283,7 +309,13 @@ export class WorkspaceService {
       case 'bright':
         return storedTheme;
       default:
-        return 'bright';
+        return null;
     }
+  }
+
+  private readSystemThemePreference(): WorkspaceTheme {
+    return typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'bright';
   }
 }

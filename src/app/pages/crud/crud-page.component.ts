@@ -93,13 +93,15 @@ export class CrudPageComponent implements OnInit {
   });
   readonly rowActions = computed<ChillTableRowAction[]>(() => [
     {
-      icon: 'Pencil',
+      icon: 'edit',
+      iconClass: 'material-symbol-icon',
       ariaLabel: this.chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga'),
       disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
       handler: (entity) => this.openEntityDialog(entity)
     },
     {
-      icon: 'Bin',
+      icon: 'delete',
+      iconClass: 'material-symbol-icon',
       ariaLabel: this.chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete row', 'Elimina riga'),
       disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
       handler: (entity) => this.markEntityDeleted(entity)

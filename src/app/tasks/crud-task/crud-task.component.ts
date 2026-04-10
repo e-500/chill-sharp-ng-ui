@@ -59,7 +59,8 @@ export class CrudTaskComponent implements OnDestroy {
           primaryDefaultText: 'Search',
           secondaryDefaultText: 'Cerca',
           ariaLabel: this.chill.T('44972777-6760-4F48-BE39-B504E4467150', 'Search', 'Cerca'),
-          icon: 'Search',
+          icon: 'search',
+          iconClass: 'material-symbol-icon',
           action: () => page.openSearchDialog(),
           disabled: !page.canOpenSearchDialog()
         },
@@ -69,7 +70,8 @@ export class CrudTaskComponent implements OnDestroy {
           primaryDefaultText: 'Add',
           secondaryDefaultText: 'Aggiungi',
           ariaLabel: this.chill.T('23A5536E-8A94-4469-977C-D3BB57E5E621', 'Add', 'Aggiungi'),
-          icon: 'Add',
+          icon: 'add',
+          iconClass: 'material-symbol-icon',
           action: () => page.add(),
           disabled: !page.canAddEntity() || page.isSaving()
         },
@@ -79,7 +81,6 @@ export class CrudTaskComponent implements OnDestroy {
           primaryDefaultText: 'Save',
           secondaryDefaultText: 'Salva',
           ariaLabel: this.chill.T('B8076F7C-34A3-4C28-B4FC-F7D673C0D088', 'Save', 'Salva'),
-          icon: 'Save',
           action: () => void page.savePendingEntities(),
           disabled: !page.hasPendingEntities() || page.isSaving()
         }

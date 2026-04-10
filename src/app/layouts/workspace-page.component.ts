@@ -45,7 +45,10 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
                   [disabled]="button.disabled"
                   [attr.aria-label]="button.ariaLabel || button.label || button.primaryDefaultText">
                   @if (button.icon) {
-                    <span class="workspace-toolbar-button__icon" aria-hidden="true">{{ button.icon }}</span>
+                    <span
+                      class="workspace-toolbar-button__icon"
+                      [class.material-symbol-icon]="button.iconClass === 'material-symbol-icon'"
+                      aria-hidden="true">{{ button.icon }}</span>
                   }
                   @if (button.labelGuid && button.primaryDefaultText && button.secondaryDefaultText) {
                     <app-chill-i18n-button-label

@@ -31,6 +31,7 @@ type TableColumn = ChillPropertySchema & {
 
 export interface ChillTableRowAction {
   icon?: string;
+  iconClass?: string;
   ariaLabel?: string;
   disabled?: (entity: ChillEntity) => boolean;
   handler: (entity: ChillEntity) => void;
@@ -398,6 +399,10 @@ export class ChillTableComponent {
     const icon = action.icon?.trim();
     if (!icon) {
       return '✎';
+    }
+
+    if (action.iconClass === 'material-symbol-icon') {
+      return icon;
     }
 
     switch (icon.toLowerCase()) {

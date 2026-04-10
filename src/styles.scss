@@ -1,5 +1,15 @@
 @import 'monaco-editor/min/vs/editor/editor.main.css';
 
+@font-face {
+  font-family: 'Material Symbols';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src:
+    url('/fonts/material-symbols.woff2') format('woff2'),
+    url('/fonts/material-symbols.woff') format('woff');
+}
+
 :root {
   --workspace-topbar-height: 4.75rem;
   --font-sans: "Segoe UI Variable", "Segoe UI", sans-serif;
@@ -95,6 +105,24 @@ body {
   color: var(--text-main);
   background: var(--workspace-backdrop);
   font-family: var(--font-sans);
+}
+
+.material-symbol-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Material Symbols', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: 1.25rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Make scrollbar thin */
@@ -462,6 +490,11 @@ a {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.workspace-toolbar-button__icon.material-symbol-icon {
+  font-size: 1.2rem;
+  font-weight: 400;
 }
 
 .icon-button {

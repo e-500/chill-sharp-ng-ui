@@ -47,6 +47,7 @@ import { PermissionAction, PermissionEffect, PermissionScope } from '../models/c
 import type {
   ChillEntityChangeNotification,
   ChillEntity,
+  ChillMetadataRecord,
   ChillPropertySchema,
   ChillQuery,
   ChillSchema,
@@ -239,7 +240,7 @@ export class ChillService {
       chillViewCode: schema.chillViewCode ?? '',
       displayName: schema.displayName ?? '',
       queryRelatedChillType: schema.queryRelatedChillType ?? null,
-      metadata: schema.metadata ?? {},
+      metadata: this.serializeMetadataRecord(schema.metadata),
       properties: (schema.properties ?? []).map((property) => ({
         ...property,
         name: property.name,
@@ -248,7 +249,7 @@ export class ChillService {
         chillType: property.chillType ?? null,
         referenceChillType: property.referenceChillType ?? null,
         referenceChillTypeQuery: property.referenceChillTypeQuery ?? null,
-        metadata: property.metadata ?? {}
+        metadata: this.serializeMetadataRecord(property.metadata)
       }))
     }).pipe(
       map((response) => response as ChillSchema | null),
@@ -1315,10 +1316,12 @@ export class ChillService {
   private normalizeMenuItem(response: ChillDtoMenuItem): AppChillMenuItem {
     return {
       guid: response.guid?.trim() ?? '',
+      positionNo: Number.isFinite(response.positionNo) ? response.positionNo : 0,
       title: response.title?.trim() ?? '',
       description: response.description?.trim() || null,
       parent: response.parent ? {
         guid: response.parent.guid?.trim() ?? '',
+        positionNo: Number.isFinite(response.parent.positionNo) ? response.parent.positionNo : 0,
         title: response.parent.title?.trim() ?? '',
         description: response.parent.description?.trim() || null,
         parent: null,
@@ -1335,10 +1338,12 @@ export class ChillService {
   private toMenuDto(menuItem: AppChillMenuItem): ChillDtoMenuItem {
     return {
       guid: menuItem.guid?.trim() ?? '',
+      positionNo: Number.isFinite(menuItem.positionNo) ? menuItem.positionNo : 0,
       title: menuItem.title?.trim() ?? '',
       description: menuItem.description?.trim() || null,
       parent: menuItem.parent ? {
         guid: menuItem.parent.guid?.trim() ?? '',
+        positionNo: Number.isFinite(menuItem.parent.positionNo) ? menuItem.parent.positionNo : 0,
         title: menuItem.parent.title?.trim() ?? '',
         description: menuItem.parent.description?.trim() || null,
         parent: null,
@@ -1598,6 +1603,38 @@ export class ChillService {
         this.logDetailedError('test()', error);
       }
     });
+  }
+
+  private serializeMetadataRecord(metadata: ChillMetadataRecord | undefined): Record<string, string> {
+    if (!metadata) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(metadata).flatMap(([key, value]) => {
+        if (value === undefined) {
+          return [];
+        }
+
+        if (typeof value === 'string') {
+          return [[key, value]];
+        }
+
+        if (typeof value === 'number' || typeof value === 'boolean') {
+          return [[key, String(value)]];
+        }
+
+        if (value === null) {
+          return [[key, '']];
+        }
+
+        try {
+          return [[key, JSON.stringify(value)]];
+        } catch {
+          return [[key, '']];
+        }
+      })
+    );
   }
 
   private rethrowFriendlyError(error: unknown) {

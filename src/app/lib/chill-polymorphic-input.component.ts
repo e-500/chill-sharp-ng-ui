@@ -4,7 +4,13 @@ import { ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { FormControl, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import { Subscription } from 'rxjs';
-import { CHILL_PROPERTY_TYPE, type ChillEntity, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import {
+  CHILL_PROPERTY_TYPE,
+  type ChillEntity,
+  type ChillPropertySchema,
+  type ChillPropertySelectOptionTuple,
+  type ChillSchema
+} from '../models/chill-schema.models';
 import { CHILL_CULTURE } from '../chill.config';
 import { ChillService } from '../services/chill.service';
 import { ChillJsonInputComponent } from './chill-json-input.component';
@@ -40,6 +46,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly form = input<FormGroup<Record<string, FormControl<JsonValue>>> | null>(null);
   readonly schema = input<ChillSchema | null>(null);
   readonly propertyNames = input<string[] | null>(null);
+  readonly readonlyPropertyNames = input<string[] | null>(null);
   readonly externalErrors = input<Record<string, string> | null>(null);
   readonly showLabels = input(true);
   // #endregion
@@ -125,6 +132,11 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
     return next;
   });
   readonly isValid = computed(() => this.properties().every((property) => !this.resolvedErrors()[property.name]));
+  readonly readonlyPropertyNameSet = computed(() => new Set(
+    (this.readonlyPropertyNames() ?? [])
+      .map((propertyName) => propertyName.trim().toLowerCase())
+      .filter((propertyName) => propertyName.length > 0)
+  ));
   // #endregion
 
   // #region Component Lifecycle
@@ -204,7 +216,14 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   isTextarea(property: ChillPropertySchema): boolean {
     return property.propertyType === CHILL_PROPERTY_TYPE.Text
       || property.customFormat?.toLowerCase() === 'textarea'
-      || property.metadata?.['multiline']?.toLowerCase() === 'true';
+      || this.metadataString(property, 'multiline').toLowerCase() === 'true';
+  }
+
+  /**
+   * Identifies static select fields backed by metadata option tuples.
+   */
+  isSelect(property: ChillPropertySchema): boolean {
+    return property.propertyType === CHILL_PROPERTY_TYPE.Select;
   }
 
   /**
@@ -212,6 +231,13 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   isJsonEditor(property: ChillPropertySchema): boolean {
     return property.propertyType === CHILL_PROPERTY_TYPE.Json;
+  }
+
+  /**
+   * Returns true when the caller marked the property as read only.
+   */
+  isPropertyReadOnly(propertyName: string): boolean {
+    return this.readonlyPropertyNameSet().has(propertyName.trim().toLowerCase());
   }
 
   /**
@@ -251,7 +277,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Resolves the numeric step value from metadata or property type defaults.
    */
   inputStep(property: ChillPropertySchema): string | null {
-    const metadataStep = property.metadata?.['step']?.trim();
+    const metadataStep = this.metadataString(property, 'step');
     if (metadataStep) {
       return metadataStep;
     }
@@ -271,7 +297,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Uses metadata placeholder first, otherwise mirrors the field label when labels are visually hidden.
    */
   placeholder(property: ChillPropertySchema): string {
-    const explicitPlaceholder = property.metadata?.['placeholder']?.trim() ?? '';
+    const explicitPlaceholder = this.metadataString(property, 'placeholder');
     if (explicitPlaceholder) {
       return explicitPlaceholder;
     }
@@ -450,6 +476,49 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   }
 
   /**
+   * Reads the current scalar value for a metadata-backed select field.
+   */
+  selectValue(propertyName: string): string {
+    const value = this.fieldValues()[propertyName];
+    return typeof value === 'string' || typeof value === 'number'
+      ? String(value)
+      : '';
+  }
+
+  /**
+   * Stores the selected option value as the field value and forwards blur semantics to the parent.
+   */
+  updateSelectValue(property: ChillPropertySchema, value: string): void {
+    this.setFieldValue(property.name, value);
+    this.validateField(property);
+    this.notifyFieldBlur(property.name);
+  }
+
+  /**
+   * Returns normalized `[value, text]` tuples from property metadata for native select rendering.
+   */
+  selectOptions(property: ChillPropertySchema): ChillPropertySelectOptionTuple[] {
+    const rawOptions = property.metadata?.['options'];
+    if (!Array.isArray(rawOptions)) {
+      return [];
+    }
+
+    return rawOptions.flatMap((option): ChillPropertySelectOptionTuple[] => {
+      if (!Array.isArray(option) || option.length < 2) {
+        return [];
+      }
+
+      const value = option[0];
+      const text = option[1];
+      if ((typeof value !== 'string' && typeof value !== 'number') || (typeof text !== 'string' && typeof text !== 'number')) {
+        return [];
+      }
+
+      return [[String(value), String(text)]];
+    });
+  }
+
+  /**
    * Updates the typed lookup text, clears stale selection metadata, and starts debounced search when applicable.
    */
   updateLookupTerm(property: ChillPropertySchema, value: string): void {
@@ -542,8 +611,12 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       title: property.displayName?.trim() || property.name,
       component: CrudTaskComponent,
       inputs: {
-        initialChillType: queryChillType || entityChillType,
-        initialViewCode: this.resolveLookupDialogViewCode(),
+        componentConfiguration: {
+          ChillType: entityChillType,
+          ChillQuery: queryChillType || null,
+          ViewCode: this.resolveLookupDialogViewCode()
+        },
+        taskTitle: property.displayName?.trim() || property.name,
         selectionEnabled: true,
         multipleSelection: this.isLookupCollection(property),
         initialSelectedEntity: selectedEntity,
@@ -905,6 +978,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
         return typeof value === 'boolean' ? '' : this.chill.T('4EB9E8DC-FA6A-45A0-9C95-5814C44144F0', 'Invalid boolean value.', 'Valore booleano non valido.');
       case CHILL_PROPERTY_TYPE.String:
       case CHILL_PROPERTY_TYPE.Text:
+      case CHILL_PROPERTY_TYPE.Select:
         return this.validateString(value, property);
       case CHILL_PROPERTY_TYPE.Json:
         return this.validateJson(value);
@@ -1038,6 +1112,13 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
     }
 
     const trimmedValue = value.trim();
+    if (this.isSelect(property)) {
+      const availableValues = this.selectOptions(property).map(([optionValue]) => optionValue);
+      if (availableValues.length > 0 && !availableValues.includes(trimmedValue)) {
+        return this.chill.T('79AC66D6-7C13-4F0E-8F13-E5236FD09D6C', 'Select a valid option.', 'Seleziona un valore valido.');
+      }
+    }
+
     const minLength = this.readMetadataNumber(property, 'minLength');
     if (minLength !== null && trimmedValue.length < minLength) {
       return this.chill.T('CEC26B81-3B54-4B8A-A2C0-8136A7AA61A4', `Value must contain at least ${minLength} characters.`, `Il valore deve contenere almeno ${minLength} caratteri.`);
@@ -1048,7 +1129,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       return this.chill.T('A0382F9C-5F39-42BF-9B33-1B92ACDA25A1', `Value must contain at most ${maxLength} characters.`, `Il valore deve contenere al massimo ${maxLength} caratteri.`);
     }
 
-    const pattern = property.metadata?.['pattern']?.trim();
+    const pattern = this.metadataString(property, 'pattern');
     if (pattern && !(new RegExp(pattern).test(trimmedValue))) {
       return this.chill.T('D05267DD-7A9E-4099-B69B-D44B0EB23189', 'Value does not match the required format.', 'Il valore non rispetta il formato richiesto.');
     }
@@ -1304,8 +1385,8 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   private resolveLookupEntityChillType(property: ChillPropertySchema): string {
     return property.referenceChillType?.trim()
-      || property.metadata?.['ChillEntityTypeName']?.trim()
-      || property.metadata?.['chillEntityTypeName']?.trim()
+      || this.metadataString(property, 'ChillEntityTypeName')
+      || this.metadataString(property, 'chillEntityTypeName')
       || '';
   }
 
@@ -1314,8 +1395,8 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   private resolveLookupQueryChillType(property: ChillPropertySchema, entityChillType: string): string {
     const explicitQueryType = property.referenceChillTypeQuery?.trim()
-      || property.metadata?.['referenceChillTypeQuery']?.trim()
-      || property.metadata?.['ReferenceChillTypeQuery']?.trim()
+      || this.metadataString(property, 'referenceChillTypeQuery')
+      || this.metadataString(property, 'ReferenceChillTypeQuery')
       || '';
     if (explicitQueryType) {
       return explicitQueryType;
@@ -1411,7 +1492,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Reads numeric validation metadata such as min, max, or length constraints.
    */
   private readMetadataNumber(property: ChillPropertySchema, key: string): number | null {
-    const rawValue = property.metadata?.[key]?.trim();
+    const rawValue = this.metadataString(property, key);
     if (!rawValue) {
       return null;
     }
@@ -1426,10 +1507,22 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Checks whether a property is marked as required in metadata.
    */
   private isRequired(property: ChillPropertySchema): boolean {
-    const rawRequired = property.metadata?.['required']?.trim().toLowerCase();
+    const rawRequired = this.metadataString(property, 'required').toLowerCase();
     return rawRequired === 'true'
       || rawRequired === '1'
       || rawRequired === 'required';
+  }
+
+  /**
+   * Reads string metadata defensively so structured metadata values do not break string-only callers.
+   */
+  private metadataString(property: ChillPropertySchema, key: string): string {
+    const value = property.metadata?.[key];
+    return typeof value === 'string'
+      ? value.trim()
+      : typeof value === 'number'
+        ? String(value)
+        : '';
   }
 
   /**

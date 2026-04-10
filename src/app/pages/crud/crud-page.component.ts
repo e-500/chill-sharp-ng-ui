@@ -15,6 +15,15 @@ const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
 const ENTITY_NOTIFICATION_IGNORE_WINDOW_MS = 1000;
 
+export class CrudPageComponentConfiguration {
+  ChillType = '';
+  ChillQuery?: string | null;
+  ViewCode?: string | null;
+  DefaultValues?: Record<string, JsonValue> | null;
+  FixedQueryValues?: Record<string, JsonValue> | null;
+  DefaultQueryValues?: Record<string, JsonValue> | null;
+}
+
 @Component({
   selector: 'app-crud-page',
   standalone: true,
@@ -30,13 +39,12 @@ export class CrudPageComponent implements OnInit {
   //#endregion
 
   //#region Component inputs
-  readonly initialChillType = input<string | null>(null);
-  readonly initialViewCode = input(DEFAULT_VIEW_CODE);
   readonly selectionEnabled = input(false);
   readonly multipleSelection = input(false);
   readonly initialSelectedEntity = input<ChillEntity | null>(null);
   readonly initialSelectedEntities = input<ChillEntity[]>([]);
   readonly showTableHeader = input(true);
+  readonly componentConfiguration = input<CrudPageComponentConfiguration | null>(null);
   //#endregion
 
   //#region Component state
@@ -53,6 +61,11 @@ export class CrudPageComponent implements OnInit {
   readonly results = signal<ChillEntity[]>([]);
   readonly selectedEntityKeys = signal<string[]>([]);
   readonly selectedViewCode = signal(DEFAULT_VIEW_CODE);
+  readonly normalizedConfiguration = computed(() => this.normalizeComponentConfiguration(this.componentConfiguration()));
+  readonly readonlyQueryPropertyNames = computed(() => [
+    ...Object.keys(this.defaultQueryValues()),
+    ...Object.keys(this.fixedQueryValues())
+  ].filter((propertyName, index, values) => values.findIndex((value) => value === propertyName) === index));
   readonly currentPage = signal(1);
   readonly pageSize = DEFAULT_PAGE_SIZE;
   readonly validationErrorMessage = computed(() => {
@@ -124,7 +137,7 @@ export class CrudPageComponent implements OnInit {
    * Initializes the component by setting up initial state and loading query schemas.
    */
   ngOnInit(): void {
-    this.selectedViewCode.set(this.normalizeViewCode(this.initialViewCode()));
+    this.selectedViewCode.set(this.normalizeViewCode(this.normalizedConfiguration().ViewCode));
     this.selectedEntityKeys.set(this.readInitialSelectedEntityKeys());
     this.loadQuerySchemas();
   }
@@ -211,10 +224,11 @@ export class CrudPageComponent implements OnInit {
       title: this.chill.T('44972777-6760-4F48-BE39-B504E4467150', 'Search', 'Cerca'),
       component: ChillFormComponent,
       okLabel: this.chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca'),
-      inputs: {
-        schema,
-        query: this.queryModel(),
-        submitLabelGuid: 'D513421E-1C00-425E-A89B-E736A440474F',
+        inputs: {
+          schema,
+          query: this.queryModel(),
+          readonlyPropertyNames: this.readonlyQueryPropertyNames(),
+          submitLabelGuid: 'D513421E-1C00-425E-A89B-E736A440474F',
         submitPrimaryDefaultText: 'Search',
         submitSecondaryDefaultText: 'Cerca',
         submitLabel: this.chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca'),
@@ -431,8 +445,11 @@ export class CrudPageComponent implements OnInit {
           return;
         }
 
-        const preferredChillType = this.initialChillType()?.trim() ?? '';
-        const initialSchema = querySchemas.find((schema) => schema.chillType?.trim() === preferredChillType) ?? null;
+        const configuredQueryType = this.configuredQueryChillType();
+        const configuredResultType = this.configuredResultChillType();
+        const initialSchema = querySchemas.find((schema) => schema.chillType?.trim() === configuredQueryType)
+          ?? querySchemas.find((schema) => schema.relatedChillType?.trim() === configuredResultType)
+          ?? null;
         
         if (!initialSchema) {
           this.errorMessage.set(this.chill.T('5C237896-63A2-4E59-809A-12598DC24882', 'No query schemas are available.', 'Nessuno schema di query disponibile.'));
@@ -467,7 +484,7 @@ export class CrudPageComponent implements OnInit {
         this.querySchema.set(schema);
         this.queryModel.set(this.createQueryModel(schema));
         void this.loadResultSchema(
-          schema.queryRelatedChillType?.trim() ?? '',
+          this.configuredResultChillType() || schema.queryRelatedChillType?.trim() || '',
           schema.chillViewCode?.trim() || viewCode
         );
       },
@@ -502,7 +519,9 @@ export class CrudPageComponent implements OnInit {
         dirtyProperties: []
       } satisfies ChillState,
       chillType: schema.chillType?.trim() ?? '',
-      properties: {}
+      properties: {
+        ...this.defaultEntityValues()
+      }
     };
     this.results.update((current) => [...current, this.prepareEntityForSchema(draftEntity, schema, isNew)]);
     if (this.selectionEnabled()) {
@@ -588,8 +607,11 @@ export class CrudPageComponent implements OnInit {
 
   private createQueryModel(schema: ChillSchema): ChillQuery {
     return this.normalizeQuery({
-      chillType: schema.chillType?.trim() || this.selectedQueryType(),
-      properties: {}
+      chillType: this.configuredQueryChillType() || schema.chillType?.trim() || this.selectedQueryType(),
+      properties: {
+        ...this.defaultQueryValues(),
+        ...this.fixedQueryValues()
+      }
     });
   }
 
@@ -597,7 +619,12 @@ export class CrudPageComponent implements OnInit {
     const resultSchema = this.resultSchema();
     return {
       ...query,
-      chillType: query.chillType?.trim() || this.querySchema()?.chillType?.trim() || this.selectedQueryType(),
+      chillType: query.chillType?.trim() || this.configuredQueryChillType() || this.querySchema()?.chillType?.trim() || this.selectedQueryType(),
+      properties: {
+        ...(query.properties ?? {}),
+        ...this.defaultQueryValues(),
+        ...this.fixedQueryValues()
+      },
       resultProperties: resultSchema?.properties?.map((property) => ({ PropertyName: property.name })) ?? []
     };
   }
@@ -909,6 +936,7 @@ export class CrudPageComponent implements OnInit {
   private prepareEntityForSchema(entity: ChillEntity, schema: ChillSchema, isNew: boolean = false): ChillEntity {
     const clonedEntity = this.cloneEntity(entity);
     const nextProperties: Record<string, JsonValue> = {
+      ...(isNew ? this.defaultEntityValues() : {}),
       ...(clonedEntity.properties ?? {})
     };
 
@@ -1113,6 +1141,59 @@ export class CrudPageComponent implements OnInit {
     return typeof value === 'string'
       ? value.trim()
       : '';
+  }
+
+  private configuredResultChillType(): string {
+    return this.normalizedConfiguration().ChillType?.trim() || '';
+  }
+
+  private configuredQueryChillType(): string {
+    return this.normalizedConfiguration().ChillQuery?.trim() || '';
+  }
+
+  private defaultEntityValues(): Record<string, JsonValue> {
+    return this.normalizedConfiguration().DefaultValues ?? {};
+  }
+
+  private defaultQueryValues(): Record<string, JsonValue> {
+    return this.normalizedConfiguration().DefaultQueryValues ?? {};
+  }
+
+  private fixedQueryValues(): Record<string, JsonValue> {
+    return this.normalizedConfiguration().FixedQueryValues ?? {};
+  }
+
+  private normalizeComponentConfiguration(configuration: CrudPageComponentConfiguration | null): CrudPageComponentConfiguration {
+    const normalizedConfiguration = new CrudPageComponentConfiguration();
+    if (!configuration) {
+      return normalizedConfiguration;
+    }
+
+    normalizedConfiguration.ChillType = this.readConfigString(configuration['ChillType']);
+    normalizedConfiguration.ChillQuery = this.readConfigString(configuration['ChillQuery']) || null;
+    normalizedConfiguration.ViewCode = this.readConfigString(configuration['ViewCode']) || null;
+    normalizedConfiguration.DefaultValues = this.readConfigRecord(configuration['DefaultValues']);
+    normalizedConfiguration.FixedQueryValues = this.readConfigRecord(configuration['FixedQueryValues']);
+    normalizedConfiguration.DefaultQueryValues = this.readConfigRecord(configuration['DefaultQueryValues']);
+    return normalizedConfiguration;
+  }
+
+  private readConfigString(value: unknown): string {
+    return typeof value === 'string'
+      ? value.trim()
+      : '';
+  }
+
+  private readConfigRecord(value: unknown): Record<string, JsonValue> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, JsonValue>)
+        .map(([key, entryValue]) => [key.trim(), entryValue] as const)
+        .filter(([key]) => key.length > 0)
+    );
   }
 
   private isQuerySchema(item: ChillSchemaListItem): boolean {

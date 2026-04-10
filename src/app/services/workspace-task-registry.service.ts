@@ -16,6 +16,7 @@ export interface WorkspaceTaskDefinition {
   title: string;
   description: string;
   kind: 'builtin' | 'remote';
+  usesTaskConfigurationInputs?: boolean;
   showInQuickLaunch: boolean;
   loadComponent: () => Promise<WorkspaceTaskComponentType>;
 }
@@ -98,6 +99,7 @@ export class WorkspaceTaskRegistryService {
       title: 'CRUD',
       description: 'Inspect schemas and work with entities.',
       kind: 'builtin',
+      usesTaskConfigurationInputs: true,
       showInQuickLaunch: false,
       loadComponent: async () => CrudTaskComponent,
       aliases: ['crud']

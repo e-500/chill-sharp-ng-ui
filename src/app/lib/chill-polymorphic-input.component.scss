@@ -18,6 +18,7 @@
 }
 
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   padding: 0.75rem 0.85rem;
@@ -130,6 +131,7 @@
 }
 
 :root[data-theme='dark'] .field input,
+:root[data-theme='dark'] .field select,
 :root[data-theme='dark'] .field textarea,
 :root[data-theme='dark'] .lookup-dialog,
 :root[data-theme='dark'] .lookup-clear,

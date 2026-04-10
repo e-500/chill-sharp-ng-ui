@@ -98,6 +98,7 @@
                   [form]="form()"
                   [schema]="schema()"
                   [propertyNames]="[item.property.name]"
+                  [readonlyPropertyNames]="readonlyPropertyNames()"
                   [externalErrors]="serverFieldErrors()"
                   (validityChange)="updatePropertyValidity(item.property.name, $event)"
                   (fieldBlur)="handlePropertyBlur($event)" />

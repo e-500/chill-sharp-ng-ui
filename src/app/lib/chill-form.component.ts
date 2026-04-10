@@ -7,6 +7,7 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import type {
   ChillEntity,
   ChillFormSubmitEvent,
+  ChillMetadataRecord,
   ChillPropertySchema,
   ChillQuery,
   ChillSchema
@@ -64,6 +65,7 @@ export class ChillFormComponent implements OnDestroy {
   readonly closeDialogOnSubmit = input(false);
   readonly submitError = input<string | (() => string) | null>(null);
   readonly dismissSubmitError = input<(() => void) | null>(null);
+  readonly readonlyPropertyNames = input<string[] | null>(null);
 
   readonly formSubmit = output<ChillFormSubmitEvent>();
 
@@ -168,6 +170,11 @@ export class ChillFormComponent implements OnDestroy {
       : '';
   });
   readonly genericValidationMessage = computed(() => this.genericValidationErrors().join(' ').trim());
+  readonly readonlyPropertyNameSet = computed(() => new Set(
+    (this.readonlyPropertyNames() ?? [])
+      .map((propertyName) => propertyName.trim().toLowerCase())
+      .filter((propertyName) => propertyName.length > 0)
+  ));
 
   constructor() {
     effect(() => {
@@ -193,6 +200,28 @@ export class ChillFormComponent implements OnDestroy {
     effect(() => {
       if (!this.layout.isLayoutEditingEnabled()) {
         this.isEditMode.set(false);
+      }
+    });
+
+    effect(() => {
+      const form = this.form();
+      const readonlyPropertyNameSet = this.readonlyPropertyNameSet();
+      if (!form) {
+        return;
+      }
+
+      for (const property of this.properties()) {
+        const control = form.controls[property.name];
+        if (!control) {
+          continue;
+        }
+
+        const isReadonly = readonlyPropertyNameSet.has(property.name.trim().toLowerCase());
+        if (isReadonly && control.enabled) {
+          control.disable({ emitEvent: false });
+        } else if (!isReadonly && control.disabled) {
+          control.enable({ emitEvent: false });
+        }
       }
     });
   }
@@ -802,7 +831,8 @@ export class ChillFormComponent implements OnDestroy {
   private readLayoutState(schema: ChillSchema | null): FormLayoutState {
     const defaultLayout = this.createDefaultLayout(schema);
     const metadata = this.readSchemaMetadata(schema);
-    const rawLayout = metadata[FORM_LAYOUT_METADATA_KEY]?.trim();
+    const rawLayoutValue = metadata[FORM_LAYOUT_METADATA_KEY];
+    const rawLayout = typeof rawLayoutValue === 'string' ? rawLayoutValue.trim() : '';
     if (!rawLayout) {
       return defaultLayout;
     }
@@ -905,7 +935,7 @@ export class ChillFormComponent implements OnDestroy {
     return `${EMPTY_LAYOUT_ITEM_PREFIX}${index}`;
   }
 
-  private readSchemaMetadata(schema: ChillSchema | null): Record<string, string> {
+  private readSchemaMetadata(schema: ChillSchema | null): ChillMetadataRecord {
     if (!schema) {
       return {};
     }

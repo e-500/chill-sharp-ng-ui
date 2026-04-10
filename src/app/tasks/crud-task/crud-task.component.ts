@@ -1,6 +1,7 @@
 import { Component, OnDestroy, effect, inject, input, viewChild } from '@angular/core';
-import { CrudPageComponent } from '../../pages/crud/crud-page.component';
+import { CrudPageComponent, type CrudPageComponentConfiguration } from '../../pages/crud/crud-page.component';
 import type { ChillEntity } from '../../models/chill-schema.models';
+import type { WorkspaceTaskConfiguration } from '../../models/workspace-task.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
 import { WorkspaceToolbarService } from '../../services/workspace-toolbar.service';
@@ -12,12 +13,11 @@ import { WorkspaceToolbarService } from '../../services/workspace-toolbar.servic
   template: `
     <section class="crud-task">
       <app-crud-page
-        [initialChillType]="initialChillType()"
-        [initialViewCode]="initialViewCode()"
         [selectionEnabled]="selectionEnabled()"
         [multipleSelection]="multipleSelection()"
         [initialSelectedEntity]="initialSelectedEntity()"
         [initialSelectedEntities]="initialSelectedEntities()"
+        [componentConfiguration]="resolvedComponentConfiguration()"
         [showTableHeader]="toolbarScope() !== 'dialog'" />
     </section>
   `,
@@ -34,14 +34,24 @@ export class CrudTaskComponent implements OnDestroy {
   readonly chill = inject(ChillService);
   readonly dialog = inject(WorkspaceDialogService, { optional: true });
   readonly toolbar = inject(WorkspaceToolbarService);
-  readonly initialChillType = input<string | null>(null);
-  readonly initialViewCode = input('default');
   readonly selectionEnabled = input(false);
   readonly multipleSelection = input(false);
   readonly initialSelectedEntity = input<ChillEntity | null>(null);
   readonly initialSelectedEntities = input<ChillEntity[]>([]);
+  readonly componentConfiguration = input<WorkspaceTaskConfiguration | null>(null);
+  readonly taskTitle = input('');
+  readonly taskDescription = input('');
   readonly toolbarScope = input('workspace');
   private readonly page = viewChild(CrudPageComponent);
+
+  resolvedComponentConfiguration(): CrudPageComponentConfiguration | null {
+    const configuration = this.componentConfiguration();
+    if (!configuration) {
+      return null;
+    }
+
+    return configuration as unknown as CrudPageComponentConfiguration;
+  }
 
   constructor() {
     effect(() => {

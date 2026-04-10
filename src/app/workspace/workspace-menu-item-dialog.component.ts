@@ -3,9 +3,10 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import type { JsonValue } from 'chill-sharp-ng-client';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
-import { CHILL_PROPERTY_TYPE, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import type { ChillMenuItem } from '../models/chill-menu.models';
 import { ChillService } from '../services/chill.service';
+import { WorkspaceService } from '../services/workspace.service';
 import type { WorkspaceTaskComponent } from '../models/workspace-task.models';
 
 type MenuFormGroup = FormGroup<Record<string, FormControl<JsonValue>>>;
@@ -62,71 +63,84 @@ interface MenuItemDialogResult {
 })
 export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<MenuItemDialogResult> {
   readonly chill = inject(ChillService);
+  readonly workspace = inject(WorkspaceService);
 
   readonly item = input<ChillMenuItem | null>(null);
   readonly parent = input<ChillMenuItem | null>(null);
 
   readonly isValid = signal(true);
-  readonly schema = computed<ChillSchema>(() => ({
-    chillType: 'Workspace.MenuItem',
-    chillViewCode: 'dialog',
-    displayName: this.chill.T('A92F5438-A4FB-4FC4-BA51-308D38208E77', 'Menu item', 'Voce di menu'),
-    metadata: {},
-    properties: this.properties
-  }));
+  readonly componentOptions = computed<[string, string][]>(() => {
+    const registryOptions = this.workspace.availableTasks()
+      .map((task) => [task.componentName, `${task.title} (${task.componentName})`] as [string, string])
+      .sort((left, right) => left[1].localeCompare(right[1]));
 
-  readonly form: MenuFormGroup = new FormGroup<Record<string, FormControl<JsonValue>>>({
-    title: new FormControl<JsonValue>('', { nonNullable: true }),
-    description: new FormControl<JsonValue>('', { nonNullable: true }),
-    componentName: new FormControl<JsonValue>('CRUD', { nonNullable: true }),
-    componentConfigurationJson: new FormControl<JsonValue>('', { nonNullable: true }),
-    menuHierarchy: new FormControl<JsonValue>('', { nonNullable: true })
+    return [
+      ['', 'Menu empty node'],
+      ...registryOptions
+    ];
   });
-
-  private readonly properties: ChillPropertySchema[] = [
+  readonly properties = computed<ChillPropertySchema[]>(() => [
     {
       name: 'title',
       displayName: 'Title',
       propertyType: CHILL_PROPERTY_TYPE.String,
       isNullable: false,
-      metadata: { required: 'true', maxLength: '255' }
+      metadata: { required: 'true', maxLength: '255' } as ChillMetadataRecord
     },
     {
       name: 'description',
       displayName: 'Description',
       propertyType: CHILL_PROPERTY_TYPE.Text,
       isNullable: true,
-      metadata: {}
+      metadata: {} as ChillMetadataRecord
     },
     {
       name: 'componentName',
       displayName: 'ComponentName',
-      propertyType: CHILL_PROPERTY_TYPE.String,
-      isNullable: false,
-      metadata: { required: 'true', maxLength: '255' }
+      propertyType: CHILL_PROPERTY_TYPE.Select,
+      isNullable: true,
+      metadata: {
+        required: 'false',
+        options: this.componentOptions()
+      } as ChillMetadataRecord
     },
     {
       name: 'componentConfigurationJson',
       displayName: 'ComponentConfigurationJson',
       propertyType: CHILL_PROPERTY_TYPE.Json,
       isNullable: true,
-      metadata: {}
+      metadata: {} as ChillMetadataRecord
     },
     {
       name: 'menuHierarchy',
       displayName: 'MenuHierarchy',
       propertyType: CHILL_PROPERTY_TYPE.String,
       isNullable: true,
-      metadata: { required: 'false', maxLength: '255' }
+      metadata: { required: 'false', maxLength: '255' } as ChillMetadataRecord
     }
-  ];
+  ]);
+  readonly schema = computed<ChillSchema>(() => ({
+    chillType: 'Workspace.MenuItem',
+    chillViewCode: 'dialog',
+    displayName: this.chill.T('A92F5438-A4FB-4FC4-BA51-308D38208E77', 'Menu item', 'Voce di menu'),
+    metadata: {},
+    properties: this.properties()
+  }));
+
+  readonly form: MenuFormGroup = new FormGroup<Record<string, FormControl<JsonValue>>>({
+    title: new FormControl<JsonValue>('', { nonNullable: true }),
+    description: new FormControl<JsonValue>('', { nonNullable: true }),
+    componentName: new FormControl<JsonValue>('', { nonNullable: true }),
+    componentConfigurationJson: new FormControl<JsonValue>('', { nonNullable: true }),
+    menuHierarchy: new FormControl<JsonValue>('', { nonNullable: true })
+  });
 
   constructor() {
     effect(() => {
       const source = this.item();
       this.form.controls['title'].setValue(source?.title ?? '');
       this.form.controls['description'].setValue(source?.description ?? '');
-      this.form.controls['componentName'].setValue(source?.componentName ?? 'CRUD');
+      this.form.controls['componentName'].setValue(source?.componentName ?? '');
       this.form.controls['componentConfigurationJson'].setValue(source?.componentConfigurationJson ?? '');
       this.form.controls['menuHierarchy'].setValue(source?.menuHierarchy ?? '');
     });
@@ -142,6 +156,7 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
     return {
       value: {
         guid: source?.guid ?? '',
+        positionNo: source?.positionNo ?? 0,
         title: this.readString('title'),
         description: this.readOptionalString('description'),
         parent,

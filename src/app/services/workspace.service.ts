@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ParamMap, Router } from '@angular/router';
-import { CrudTaskComponent } from '../tasks/crud-task/crud-task.component';
+import type { CrudPageComponentConfiguration } from '../pages/crud/crud-page.component';
 import type { ChillMenuItem } from '../models/chill-menu.models';
 import type { WorkspaceTaskComponentType, WorkspaceTaskConfiguration } from '../models/workspace-task.models';
 import { WorkspaceLayoutService } from './workspace-layout.service';
@@ -30,6 +30,8 @@ export interface OpenCrudTaskRequest {
   chillType: string;
   viewCode?: string | null;
   displayName?: string | null;
+  queryChillType?: string | null;
+  componentConfiguration?: CrudPageComponentConfiguration | null;
 }
 
 export interface OpenWorkspaceTaskRequest {
@@ -142,31 +144,23 @@ export class WorkspaceService {
   }
 
   openCrudTask(request: OpenCrudTaskRequest): void {
-    const task = this.createCrudTaskInstance(request);
-    if (!task) {
+    const chillType = request.chillType.trim();
+    if (!chillType) {
       return;
     }
 
-    this.openTaskInstance(task);
+    const configuration = this.buildCrudTaskConfiguration(request);
+    void this.openWorkspaceTask({
+      componentName: 'crud',
+      title: request.displayName?.trim() || chillType,
+      description: `CRUD task for ${chillType}`,
+      configuration
+    });
   }
 
   async openMenuItem(item: ChillMenuItem): Promise<void> {
-    const componentName = item.componentName.trim();
+    const componentName = this.normalizeComponentName(item.componentName);
     const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
-
-    if (this.normalizeComponentName(componentName) === 'crud') {
-      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
-      if (!chillType) {
-        return;
-      }
-
-      this.openCrudTask({
-        chillType,
-        viewCode: this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default',
-        displayName: item.title
-      });
-      return;
-    }
 
     await this.openWorkspaceTask({
       componentName,
@@ -185,16 +179,8 @@ export class WorkspaceService {
     const componentName = this.normalizeComponentName(item.componentName);
     const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
 
-    if (componentName === 'crud') {
-      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
-      const viewCode = this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default';
-      return activeTask.taskType === 'crud'
-        && activeTask.inputs?.['initialChillType'] === chillType
-        && activeTask.inputs?.['initialViewCode'] === viewCode;
-    }
-
     const expectedRoute = this.createDefaultRoute(
-      this.normalizeComponentName(item.componentName),
+      componentName,
       item.title,
       item.description,
       configuration
@@ -278,14 +264,6 @@ export class WorkspaceService {
   }
 
   private async resolveTaskFromRoute(taskType: string, queryParams: ParamMap): Promise<WorkspaceTaskInstance | null> {
-    if (taskType === 'crud') {
-      return this.createCrudTaskInstance({
-        chillType: queryParams.get('type') ?? '',
-        viewCode: queryParams.get('viewCode'),
-        displayName: queryParams.get('label')
-      });
-    }
-
     const taskDefinition = this.getTaskDefinition(taskType);
     if (!taskDefinition) {
       return null;
@@ -320,7 +298,7 @@ export class WorkspaceService {
       title,
       description,
       component,
-      inputs: taskDefinition.kind === 'remote'
+      inputs: taskDefinition.kind === 'remote' || taskDefinition.usesTaskConfigurationInputs
         ? {
             componentConfiguration: normalizedConfiguration ?? {},
             taskTitle: title,
@@ -328,36 +306,6 @@ export class WorkspaceService {
           }
         : undefined,
       route: this.createDefaultRoute(taskDefinition.componentName, title, description, normalizedConfiguration)
-    };
-  }
-
-  private createCrudTaskInstance(request: OpenCrudTaskRequest): WorkspaceTaskInstance | null {
-    const chillType = request.chillType.trim();
-    if (!chillType) {
-      return null;
-    }
-
-    const viewCode = request.viewCode?.trim() || 'default';
-    const displayName = request.displayName?.trim() || chillType;
-
-    return {
-      id: crypto.randomUUID(),
-      taskType: 'crud',
-      title: `${displayName} (${viewCode})`,
-      description: `CRUD task for ${chillType}`,
-      component: CrudTaskComponent,
-      inputs: {
-        initialChillType: chillType,
-        initialViewCode: viewCode
-      },
-      route: {
-        taskType: 'crud',
-        queryParams: {
-          type: chillType,
-          viewCode,
-          label: displayName
-        }
-      }
     };
   }
 
@@ -492,6 +440,34 @@ export class WorkspaceService {
 
   private parseMenuConfiguration(value: string | null): WorkspaceTaskConfiguration | null {
     return this.deserializeConfiguration(value);
+  }
+
+  private toWorkspaceTaskConfiguration(configuration: CrudPageComponentConfiguration | null | undefined): WorkspaceTaskConfiguration | null {
+    if (!configuration) {
+      return null;
+    }
+
+    const entries = Object.entries(configuration)
+      .filter(([, value]) => value !== undefined && value !== null);
+    if (entries.length === 0) {
+      return null;
+    }
+
+    return Object.fromEntries(entries) as WorkspaceTaskConfiguration;
+  }
+
+  private buildCrudTaskConfiguration(request: OpenCrudTaskRequest): WorkspaceTaskConfiguration {
+    const configuration = this.toWorkspaceTaskConfiguration(request.componentConfiguration) ?? {};
+    const chillType = request.chillType.trim();
+    const viewCode = request.viewCode?.trim() || 'default';
+    const queryChillType = request.queryChillType?.trim() || null;
+
+    return {
+      ...configuration,
+      ChillType: chillType,
+      ViewCode: viewCode,
+      ...(queryChillType ? { ChillQuery: queryChillType } : {})
+    };
   }
 
   private readConfigString(

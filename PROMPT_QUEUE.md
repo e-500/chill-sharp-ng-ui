@@ -46,5 +46,10 @@ Once the app starts read the index from each source in order to allow workspace 
 - Export the interfaces to be used for creating external components
 - Write a .md guide (place it in `doc\`) on how to build and publish an external component libs.
 
+## Workspace external components list
+
+Loading sources, build a list to be used in menu edit form to transform componentName in a select input with a complete list of options.
+Add the empty option labeled 'Menu empty node' with '' value.
+If necessary update documentation: "C:\source\personal\chill-sharp-ng-ui\doc\workspace-external-components.md"
 
 

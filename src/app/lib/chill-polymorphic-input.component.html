@@ -10,6 +10,7 @@
           <input
             type="checkbox"
             [formControl]="fieldControl"
+            [disabled]="isPropertyReadOnly(property.name)"
             (blur)="emitFieldBlur(property.name)"
             [name]="property.name" />
         }
@@ -21,17 +22,19 @@
               [ngModel]="lookupCollectionSummary(property.name)"
               [name]="property.name"
               [placeholder]="placeholder(property) || chill.T('8B0ED598-819C-42E5-B41A-439F7066EEA9', 'Select values', 'Seleziona valori')"
+              [disabled]="isPropertyReadOnly(property.name)"
               readonly />
             @if (canOpenLookupDialog(property)) {
               <button
                 type="button"
                 class="lookup-dialog"
                 (click)="openLookupDialog(property)"
+                [disabled]="isPropertyReadOnly(property.name)"
                 [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">
                 ...
               </button>
             }
-            <button type="button" class="lookup-clear" (click)="clearLookup(property)">
+            <button type="button" class="lookup-clear" (click)="clearLookup(property)" [disabled]="isPropertyReadOnly(property.name)">
               {{ chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci') }}
             </button>
           </div>
@@ -62,6 +65,7 @@
                 type="button"
                 class="lookup-selected__clear"
                 (click)="clearLookup(property)"
+                [disabled]="isPropertyReadOnly(property.name)"
                 [attr.aria-label]="chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci')">
                 X
               </button>
@@ -75,6 +79,7 @@
                   (ngModelChange)="updateLookupTerm(property, $event)"
                   (focus)="handleLookupFocus(property)"
                   (blur)="handleLookupBlur(property.name)"
+                  [disabled]="isPropertyReadOnly(property.name)"
                   [name]="property.name"
                   [placeholder]="placeholder(property) || chill.T('FA7B8E01-658C-4D63-B53F-D476CD697892', 'Search entity', 'Cerca entita')" />
               </div>
@@ -83,6 +88,7 @@
                   type="button"
                   class="lookup-dialog"
                   (click)="openLookupDialog(property)"
+                  [disabled]="isPropertyReadOnly(property.name)"
                   [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">
                   ...
                 </button>
@@ -131,6 +137,7 @@
           <textarea
             rows="4"
             [formControl]="fieldControl"
+            [disabled]="isPropertyReadOnly(property.name)"
             (blur)="emitFieldBlur(property.name)"
             [name]="property.name"
             [placeholder]="placeholder(property)"></textarea>
@@ -140,9 +147,19 @@
           [value]="textValue(property.name)"
           [placeholder]="placeholder(property)"
           [invalid]="!!validationMessage(property.name)"
-          [disabled]="control(property.name)?.disabled ?? false"
+          [disabled]="isPropertyReadOnly(property.name) || control(property.name)?.disabled ?? false"
           (valueChange)="updateJsonInput(property.name, $event)"
           (blur)="emitFieldBlur(property.name)"></app-chill-json-input>
+      } @else if (isSelect(property)) {
+        <select
+          [ngModel]="selectValue(property.name)"
+          (ngModelChange)="updateSelectValue(property, $event)"
+          [disabled]="isPropertyReadOnly(property.name)"
+          [name]="property.name">
+          @for (option of selectOptions(property); track option[0] + ':' + option[1]) {
+            <option [value]="option[0]">{{ option[1] }}</option>
+          }
+        </select>
       } @else {
         @if (control(property.name); as fieldControl) {
           @if (isCultureDateInput(property)) {
@@ -151,6 +168,7 @@
               [ngModel]="textValue(property.name)"
               (ngModelChange)="updateTextInput(property.name, $event)"
               (blur)="normalizeTextOnBlur(property)"
+              [disabled]="isPropertyReadOnly(property.name)"
               [name]="property.name"
               [placeholder]="placeholder(property)" />
           } @else {

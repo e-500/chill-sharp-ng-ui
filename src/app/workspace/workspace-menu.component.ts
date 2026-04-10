@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import type { ChillMenuItem } from '../models/chill-menu.models';
@@ -12,6 +12,7 @@ import { WorkspaceService } from '../services/workspace.service';
 interface CrudSchemaOption {
   module: string;
   chillType: string;
+  queryChillType: string;
   displayName: string;
   viewCode: string;
 }
@@ -35,21 +36,15 @@ interface WorkspaceMenuNode {
       <div class="workspace-menu__header">
         <p class="eyebrow">Workspace menu</p>
         <h2>Tasks</h2>
-        <p>Task navigation lives here. The menu structure can be expanded later without changing the shell.</p>
+        <!-- <p>Task navigation lives here. The menu structure can be expanded later without changing the shell.</p> -->
       </div>
 
       <section class="workspace-menu__managed-menu">
         <div class="workspace-menu__section-heading workspace-menu__section-heading--row">
           <div>
             <strong>{{ chill.T('F0E48F17-2E1F-43CC-A37F-21A503E7A1BF', 'Application menu', 'Menu applicazione') }}</strong>
-            <span>{{ chill.T('D7D35597-D998-4892-9288-4FC4B48C53A9', 'Root nodes are loaded first; child branches are prepared lazily.', 'I nodi radice sono caricati per primi; i rami figli sono preparati in modo lazy.') }}</span>
+            <!-- <span>{{ chill.T('D7D35597-D998-4892-9288-4FC4B48C53A9', 'Root nodes are loaded first; child branches are prepared lazily.', 'I nodi radice sono caricati per primi; i rami figli sono preparati in modo lazy.') }}</span> -->
           </div>
-
-          @if (layout.isLayoutEditingEnabled()) {
-            <button type="button" class="workspace-menu__item workspace-menu__item--compact" (click)="createMenuItem(null)">
-              {{ chill.T('9CC0E7F1-D5E2-4A0F-B3BF-E11FB31C26D4', 'Add root item', 'Aggiungi nodo radice') }}
-            </button>
-          }
         </div>
 
         @if (menuLoadError()) {
@@ -60,10 +55,19 @@ interface WorkspaceMenuNode {
           <p class="workspace-menu__status">{{ chill.T('96C1B2E5-D6CA-4C53-8353-D97D4F8E0B09', 'No menu items are available for the current user.', "Nessuna voce menu disponibile per l'utente corrente.") }}</p>
         } @else {
           <nav class="workspace-menu__tree" aria-label="Application menu">
-            @for (node of menuRoots(); track node.item.guid) {
-              <ng-container [ngTemplateOutlet]="treeNode" [ngTemplateOutletContext]="{ $implicit: node, depth: 0 }" />
-            }
+            <ng-container
+              [ngTemplateOutlet]="treeCollection"
+              [ngTemplateOutletContext]="{ nodes: menuRoots(), depth: 0, parent: null }" />
           </nav>
+        }
+
+        @if (layout.isLayoutEditingEnabled()) {
+          <button
+            type="button"
+            class="workspace-menu__item workspace-menu__item--compact workspace-menu__root-action"
+            (click)="createMenuItem(null)">
+            {{ chill.T('9CC0E7F1-D5E2-4A0F-B3BF-E11FB31C26D4', 'Add root item', 'Aggiungi nodo radice') }}
+          </button>
         }
       </section>
 
@@ -98,7 +102,7 @@ interface WorkspaceMenuNode {
             (ngModelChange)="selectedChillType.set($event)"
             [disabled]="isLoadingSchemas() || filteredCrudTypes().length === 0">
             @for (schema of filteredCrudTypes(); track schema.chillType) {
-              <option [value]="schema.chillType">{{ schema.displayName }} ({{ schema.viewCode }})</option>
+              <option [value]="schema.chillType">{{ schema.displayName }} ({{ schema.chillType }})</option>
             }
           </select>
         </label>
@@ -122,7 +126,7 @@ interface WorkspaceMenuNode {
         </button>
       </section>
 
-      <nav class="workspace-menu__list">
+      <!-- <nav class="workspace-menu__list">
         @for (task of quickTasks(); track task.componentName) {
           <button
             type="button"
@@ -133,54 +137,116 @@ interface WorkspaceMenuNode {
             <span>{{ task.description }}</span>
           </button>
         }
-      </nav>
+      </nav> -->
+
+      <ng-template #treeCollection let-nodes="nodes" let-depth="depth" let-parent="parent">
+        @for (node of nodes; track node.item.guid; let index = $index) {
+          @if (layout.isLayoutEditingEnabled()) {
+            <div
+              class="workspace-menu__drop-zone"
+              [style.--menu-depth]="depth"
+              [class.is-active]="isDropTarget(parent, index)"
+              (dragover)="allowMenuDrop($event)"
+              (drop)="dropMenuItem(parent, index)">
+            </div>
+          }
+
+          <ng-container [ngTemplateOutlet]="treeNode" [ngTemplateOutletContext]="{ $implicit: node, depth: depth }" />
+        }
+
+        @if (layout.isLayoutEditingEnabled()) {
+          <div
+            class="workspace-menu__drop-zone"
+            [style.--menu-depth]="depth"
+            [class.is-active]="isDropTarget(parent, nodes.length)"
+            (dragover)="allowMenuDrop($event)"
+            (drop)="dropMenuItem(parent, nodes.length)">
+          </div>
+        }
+      </ng-template>
 
       <ng-template #treeNode let-node let-depth="depth">
         <div class="workspace-menu__tree-node" [style.--menu-depth]="depth">
-          <div class="workspace-menu__tree-row">
-            <div class="workspace-menu__tree-main">
-              <button
-                type="button"
-                class="workspace-menu__tree-expander"
-                [disabled]="!node.hasChildren && !node.isLoadingChildren"
-                [class.is-placeholder]="!node.hasChildren && !node.isLoadingChildren"
-                (click)="toggleNode(node)"
-                [attr.aria-label]="node.isExpanded
-                  ? chill.T('3E81EBAA-9CF7-4259-BCA8-483D30FC0A93', 'Collapse menu branch', 'Comprimi ramo menu')
-                  : chill.T('D2EEB263-B9CA-4C31-910B-BB9C5DC585DF', 'Expand menu branch', 'Espandi ramo menu')">
-                @if (node.isLoadingChildren) {
-                  <span>...</span>
-                } @else if (node.hasChildren) {
-                  <span>{{ node.isExpanded ? '-' : '+' }}</span>
-                } @else {
-                  <span></span>
-                }
-              </button>
-
+          <div
+            class="workspace-menu__tree-row"
+            [class.is-dragging]="draggedMenuItemGuid() === node.item.guid"
+            [draggable]="layout.isLayoutEditingEnabled()"
+            (dragstart)="beginMenuDrag(node.item)"
+            (dragend)="endMenuDrag()">
+            <div
+              class="workspace-menu__tree-main"
+              [class.is-active]="isMenuTaskActive(node.item)"
+              [class.is-pending-expand]="dragHoverExpandGuid() === node.item.guid"
+              (dragover)="allowMenuDrop($event); hoverMenuItem(node)"
+              (drop)="dropMenuItemAsChild(node, $event)"
+              (dragleave)="leaveMenuItem(node, $event)">
               <button
                 type="button"
                 class="workspace-menu__tree-trigger"
-                [class.active]="isMenuTaskActive(node.item)"
+                [disabled]="node.item.componentName === null || node.item.componentName === ''"
                 (click)="openMenuItem(node.item)">
-                <strong>{{ node.item.title }}</strong>
-                @if (node.item.description) {
-                  <span>{{ node.item.description }}</span>
-                } @else {
-                  <span>{{ node.item.componentName }}</span>
-                }
+                <span class="workspace-menu__tree-label">
+                  <strong>{{ node.item.title }}</strong>
+                  @if (node.isExpanded)
+                  {
+                    @if (node.item.description) {
+                      <span>{{ node.item.description }}</span>
+                    } @else {
+                      <span>{{ node.item.componentName }}</span>
+                    }
+                  }
+                </span>
               </button>
+
+              @if(node.isLoadingChildren || node.hasChildren)
+              {
+                <button
+                  type="button"
+                  class="workspace-menu__tree-expander"
+                  [disabled]="!node.hasChildren && !node.isLoadingChildren"
+                  [class.is-placeholder]="!node.hasChildren && !node.isLoadingChildren"
+                  (click)="toggleNode(node)"
+                  [attr.aria-label]="node.isExpanded
+                    ? chill.T('3E81EBAA-9CF7-4259-BCA8-483D30FC0A93', 'Collapse menu branch', 'Comprimi ramo menu')
+                    : chill.T('D2EEB263-B9CA-4C31-910B-BB9C5DC585DF', 'Expand menu branch', 'Espandi ramo menu')">
+                  @if (node.isLoadingChildren) {
+                    <span class="workspace-menu__tree-expander-icon material-symbol-icon">more_horiz</span>
+                  } @else if (node.hasChildren) {
+                    <span class="workspace-menu__tree-expander-icon material-symbol-icon">
+                      {{ node.isExpanded ? 'expand_less' : 'expand_more' }}
+                    </span>
+                  } @else {
+                    <span class="workspace-menu__tree-expander-icon material-symbol-icon">chevron_right</span>
+                  }
+                </button>
+              }
             </div>
 
             @if (layout.isLayoutEditingEnabled()) {
               <div class="workspace-menu__tree-actions">
-                <button type="button" class="workspace-menu__tree-action" (click)="createMenuItem(node.item)">
-                  {{ chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio') }}
+                <button
+                  type="button"
+                  class="workspace-menu__tree-action"
+                  [attr.aria-label]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
+                  [title]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
+                  (click)="createMenuItem(node.item)">
+                  <span class="material-symbol-icon" aria-hidden="true">add</span>
                 </button>
-                <button type="button" class="workspace-menu__tree-action" (click)="editMenuItem(node.item)">
-                  {{ chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica') }}
+                <button
+                  type="button"
+                  class="workspace-menu__tree-action"
+                  [attr.aria-label]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
+                  [title]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
+                  (click)="editMenuItem(node.item)">
+                  <span class="material-symbol-icon" aria-hidden="true">edit</span>
                 </button>
-                <button type="button" class="workspace-menu__tree-action" (click)="deleteMenuItem(node.item)">
-                  {{ chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina') }}
+                <button
+                  type="button"
+                  class="workspace-menu__tree-action"
+                  [attr.aria-label]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
+                  [title]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
+                  (click)="deleteMenuItem(node.item)">
+                  <span class="material-symbol-icon" aria-hidden="true">delete</span>
                 </button>
               </div>
             }
@@ -192,9 +258,9 @@ interface WorkspaceMenuNode {
 
           @if (node.isExpanded && node.children.length > 0) {
             <div class="workspace-menu__tree-children">
-              @for (child of node.children; track child.item.guid) {
-                <ng-container [ngTemplateOutlet]="treeNode" [ngTemplateOutletContext]="{ $implicit: child, depth: depth + 1 }" />
-              }
+              <ng-container
+                [ngTemplateOutlet]="treeCollection"
+                [ngTemplateOutletContext]="{ nodes: node.children, depth: depth + 1, parent: node.item }" />
             </div>
           }
         </div>
@@ -202,7 +268,7 @@ interface WorkspaceMenuNode {
     </div>
   `
 })
-export class WorkspaceMenuComponent implements OnInit {
+export class WorkspaceMenuComponent implements OnInit, OnDestroy {
   readonly chill = inject(ChillService);
   readonly workspace = inject(WorkspaceService);
   readonly dialog = inject(WorkspaceDialogService);
@@ -216,6 +282,9 @@ export class WorkspaceMenuComponent implements OnInit {
   readonly isLoadingMenu = signal(true);
   readonly menuLoadError = signal('');
   readonly menuRoots = signal<WorkspaceMenuNode[]>([]);
+  readonly draggedMenuItemGuid = signal('');
+  readonly dragHoverExpandGuid = signal('');
+  private readonly dragHoverExpandTimers = new Map<string, ReturnType<typeof setTimeout>>();
   readonly quickTasks = computed(() => this.workspace.availableTasks()
     .filter((task) => task.showInQuickLaunch && task.componentName !== 'crud' && task.componentName !== 'permissions'));
   readonly moduleOptions = computed(() => [...new Set(this.crudTypes().map((schema) => schema.module))]);
@@ -227,6 +296,10 @@ export class WorkspaceMenuComponent implements OnInit {
   ngOnInit(): void {
     this.loadCrudTypes();
     void this.loadRootMenu();
+  }
+
+  ngOnDestroy(): void {
+    this.clearAllDragHoverExpandTimers();
   }
 
   selectModule(module: string): void {
@@ -243,6 +316,7 @@ export class WorkspaceMenuComponent implements OnInit {
 
     this.workspace.openCrudTask({
       chillType: schema.chillType,
+      queryChillType: schema.queryChillType,
       viewCode: this.normalizeViewCode(this.viewCode()),
       displayName: schema.displayName
     });
@@ -275,6 +349,160 @@ export class WorkspaceMenuComponent implements OnInit {
 
   openMenuItem(item: ChillMenuItem): void {
     void this.workspace.openMenuItem(item);
+  }
+
+  beginMenuDrag(item: ChillMenuItem): void {
+    if (!this.layout.isLayoutEditingEnabled()) {
+      return;
+    }
+
+    this.draggedMenuItemGuid.set(item.guid);
+  }
+
+  hoverMenuItem(node: WorkspaceMenuNode): void {
+    if (!this.layout.isLayoutEditingEnabled() || !this.draggedMenuItemGuid() || node.isExpanded || node.isLoadingChildren) {
+      return;
+    }
+
+    const draggedGuid = this.draggedMenuItemGuid();
+    if (!draggedGuid || draggedGuid === node.item.guid) {
+      return;
+    }
+
+    const sourceContext = this.findNodeContext(draggedGuid, this.menuRoots(), null);
+    if (!sourceContext || this.isDescendantOf(sourceContext.node, node.item.guid)) {
+      return;
+    }
+
+    if (this.dragHoverExpandTimers.has(node.item.guid)) {
+      return;
+    }
+
+    this.dragHoverExpandGuid.set(node.item.guid);
+    const timer = setTimeout(() => {
+      this.dragHoverExpandTimers.delete(node.item.guid);
+      this.dragHoverExpandGuid.update((current) => current === node.item.guid ? '' : current);
+      void this.expandNodeForHover(node);
+    }, 1000);
+
+    this.dragHoverExpandTimers.set(node.item.guid, timer);
+  }
+
+  leaveMenuItem(node: WorkspaceMenuNode, event: DragEvent): void {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+
+    this.clearDragHoverExpandTimer(node.item.guid);
+  }
+
+  allowMenuDrop(event: DragEvent): void {
+    if (!this.layout.isLayoutEditingEnabled() || !this.draggedMenuItemGuid()) {
+      return;
+    }
+
+    event.preventDefault();
+  }
+
+  async dropMenuItem(parent: ChillMenuItem | null, targetIndex: number): Promise<void> {
+    const sourceGuid = this.draggedMenuItemGuid();
+    this.draggedMenuItemGuid.set('');
+    this.clearAllDragHoverExpandTimers();
+
+    if (!sourceGuid) {
+      return;
+    }
+
+    const sourceContext = this.findNodeContext(sourceGuid, this.menuRoots(), null);
+    if (!sourceContext) {
+      return;
+    }
+
+    if (parent && (parent.guid === sourceGuid || this.isDescendantOf(sourceContext.node, parent.guid))) {
+      return;
+    }
+
+    const sourceParentGuid = sourceContext.parent?.item.guid ?? null;
+    const targetParentGuid = parent?.guid ?? null;
+    const sourceSiblings = [...sourceContext.siblings];
+    const targetSiblings = sourceParentGuid === targetParentGuid
+      ? sourceSiblings
+      : [...(this.findChildCollection(targetParentGuid) ?? [])];
+
+    if (sourceParentGuid !== targetParentGuid && !this.findChildCollection(targetParentGuid)) {
+      return;
+    }
+
+    const [movedNode] = sourceSiblings.splice(sourceContext.index, 1);
+    if (!movedNode) {
+      return;
+    }
+
+    const normalizedTargetIndex = sourceParentGuid === targetParentGuid && sourceContext.index < targetIndex
+      ? targetIndex - 1
+      : targetIndex;
+    const boundedTargetIndex = Math.max(0, Math.min(normalizedTargetIndex, targetSiblings.length));
+
+    if (sourceParentGuid === targetParentGuid && boundedTargetIndex === sourceContext.index) {
+      return;
+    }
+
+    const movedParent = parent ? this.toParentReference(parent) : null;
+    targetSiblings.splice(boundedTargetIndex, 0, {
+      ...movedNode,
+      item: {
+        ...movedNode.item,
+        parent: movedParent
+      }
+    });
+
+    const itemsToSave = sourceParentGuid === targetParentGuid
+      ? this.reindexMenuItems(targetSiblings, movedParent)
+      : [
+          ...this.reindexMenuItems(
+            sourceSiblings,
+            sourceContext.parent ? this.toParentReference(sourceContext.parent.item) : null
+          ),
+          ...this.reindexMenuItems(targetSiblings, movedParent)
+        ];
+
+    for (const item of itemsToSave) {
+      await firstValueFrom(this.chill.setMenu(item));
+    }
+
+    await this.loadRootMenu();
+  }
+
+  async dropMenuItemAsChild(node: WorkspaceMenuNode, event: DragEvent): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    await this.dropMenuItem(node.item, node.children.length);
+  }
+
+  endMenuDrag(): void {
+    this.draggedMenuItemGuid.set('');
+    this.clearAllDragHoverExpandTimers();
+  }
+
+  isDropTarget(parent: ChillMenuItem | null, targetIndex: number): boolean {
+    const draggedGuid = this.draggedMenuItemGuid();
+    if (!draggedGuid) {
+      return false;
+    }
+
+    const sourceContext = this.findNodeContext(draggedGuid, this.menuRoots(), null);
+    if (!sourceContext) {
+      return false;
+    }
+
+    const sourceParentGuid = sourceContext.parent?.item.guid ?? null;
+    const targetParentGuid = parent?.guid ?? null;
+    const normalizedTargetIndex = sourceParentGuid === targetParentGuid && sourceContext.index < targetIndex
+      ? targetIndex - 1
+      : targetIndex;
+
+    return sourceParentGuid === targetParentGuid && normalizedTargetIndex === sourceContext.index;
   }
 
   isMenuTaskActive(item: ChillMenuItem): boolean {
@@ -425,10 +653,11 @@ export class WorkspaceMenuComponent implements OnInit {
   }
 
   private toCrudSchemaOption(schema: ChillSchemaListItem): CrudSchemaOption {
-    const chillType = schema.chillType?.trim() ?? '';
+    const chillType = schema.relatedChillType?.trim() || schema.chillType?.trim() || '';
     return {
       module: schema.module?.trim() || chillType.split('.')[0] || 'Default',
       chillType,
+      queryChillType: schema.chillType?.trim() ?? '',
       displayName: schema.displayName?.trim() || schema.name?.trim() || chillType,
       viewCode: schema.chillViewCode?.trim() || 'default'
     };
@@ -443,6 +672,81 @@ export class WorkspaceMenuComponent implements OnInit {
       isLoadingChildren: false,
       childrenError: '',
       hasChildren: false
+    };
+  }
+
+  private async expandNodeForHover(node: WorkspaceMenuNode): Promise<void> {
+    if (node.isExpanded || node.isLoadingChildren) {
+      return;
+    }
+
+    if (!node.childrenLoaded) {
+      await this.loadNodeChildren(node, true);
+      return;
+    }
+
+    this.menuRoots.update((roots) => this.updateNodeCollection(roots, node.item.guid, (current) => ({
+      ...current,
+      isExpanded: true
+    })));
+  }
+
+  private findNodeContext(
+    targetGuid: string,
+    nodes: WorkspaceMenuNode[],
+    parent: WorkspaceMenuNode | null
+  ): { node: WorkspaceMenuNode; parent: WorkspaceMenuNode | null; siblings: WorkspaceMenuNode[]; index: number } | null {
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index];
+      if (node.item.guid === targetGuid) {
+        return { node, parent, siblings: nodes, index };
+      }
+
+      const childResult = this.findNodeContext(targetGuid, node.children, node);
+      if (childResult) {
+        return childResult;
+      }
+    }
+
+    return null;
+  }
+
+  private findChildCollection(parentGuid: string | null): WorkspaceMenuNode[] | null {
+    if (!parentGuid) {
+      return this.menuRoots();
+    }
+
+    return this.findNodeContext(parentGuid, this.menuRoots(), null)?.node.children ?? null;
+  }
+
+  private isDescendantOf(node: WorkspaceMenuNode, possibleDescendantGuid: string): boolean {
+    for (const child of node.children) {
+      if (child.item.guid === possibleDescendantGuid || this.isDescendantOf(child, possibleDescendantGuid)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private reindexMenuItems(nodes: WorkspaceMenuNode[], parent: ChillMenuItem | null): ChillMenuItem[] {
+    return nodes.map((node, index) => ({
+      ...node.item,
+      parent,
+      positionNo: index + 1
+    }));
+  }
+
+  private toParentReference(item: ChillMenuItem): ChillMenuItem {
+    return {
+      guid: item.guid,
+      positionNo: item.positionNo,
+      title: item.title,
+      description: item.description,
+      parent: null,
+      componentName: item.componentName,
+      componentConfigurationJson: item.componentConfigurationJson,
+      menuHierarchy: item.menuHierarchy
     };
   }
 
@@ -468,6 +772,26 @@ export class WorkspaceMenuComponent implements OnInit {
             children: nextChildren
           };
     });
+  }
+
+  private clearDragHoverExpandTimer(nodeGuid: string): void {
+    const timer = this.dragHoverExpandTimers.get(nodeGuid);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.dragHoverExpandTimers.delete(nodeGuid);
+    this.dragHoverExpandGuid.update((current) => current === nodeGuid ? '' : current);
+  }
+
+  private clearAllDragHoverExpandTimers(): void {
+    for (const timer of this.dragHoverExpandTimers.values()) {
+      clearTimeout(timer);
+    }
+
+    this.dragHoverExpandTimers.clear();
+    this.dragHoverExpandGuid.set('');
   }
 
   private async editOrCreateMenuItem(item: ChillMenuItem | null, parent: ChillMenuItem | null): Promise<void> {

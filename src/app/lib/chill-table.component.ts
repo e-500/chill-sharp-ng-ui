@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
-import type { ChillEntity, ChillEntityChangeNotification, ChillPropertySchema, ChillSchema } from '../models/chill-schema.models';
+import type { ChillEntity, ChillEntityChangeNotification, ChillMetadataRecord, ChillPropertySchema, ChillSchema } from '../models/chill-schema.models';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
@@ -968,7 +968,8 @@ export class ChillTableComponent {
     }));
 
     const metadata = this.readSchemaMetadata(schema);
-    const rawLayout = metadata[TABLE_LAYOUT_METADATA_KEY]?.trim();
+    const rawLayoutValue = metadata[TABLE_LAYOUT_METADATA_KEY];
+    const rawLayout = typeof rawLayoutValue === 'string' ? rawLayoutValue.trim() : '';
     if (!rawLayout) {
       return defaultLayout;
     }
@@ -1011,7 +1012,7 @@ export class ChillTableComponent {
   /**
    * Normalizes schema metadata from camelCase or legacy payload shapes into a mutable string map.
    */
-  private readSchemaMetadata(schema: ChillSchema | null): Record<string, string> {
+  private readSchemaMetadata(schema: ChillSchema | null): ChillMetadataRecord {
     if (!schema) {
       return {};
     }

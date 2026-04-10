@@ -14,10 +14,11 @@ At startup the host reads every configured source URL, downloads its `workspace-
 
 `MenuItem.ComponentName` must match one registered `componentName`.
 `MenuItem.ComponentConfigurationJson` is passed to the loaded task component as the `componentConfiguration` input.
+The workspace menu editor builds the `ComponentName` dropdown from the registered task definitions, including tasks discovered from external sources.
 
 ## Runtime Configuration
 
-The host loads [`public/runtime-config.js`](/c:/source/personal/cini-home/public/runtime-config.js) before Angular bootstraps.
+The host loads [`public/runtime-config.js`](/c:/source/personal/chill-sharp-ng-ui/public/runtime-config.js) before Angular bootstraps.
 
 Default shape:
 
@@ -75,7 +76,7 @@ Field meanings:
 
 ## External Component Contract
 
-Import the shared types from [`src/app/workspace/external-task-api.ts`](/c:/source/personal/cini-home/src/app/workspace/external-task-api.ts).
+Import the shared types from [`src/app/workspace/external-task-api.ts`](/c:/source/personal/chill-sharp-ng-ui/src/app/workspace/external-task-api.ts).
 
 Expected inputs for remote components:
 
@@ -139,6 +140,24 @@ If your remote does not share Angular packages with the host, bundle the require
    - `ComponentName`: the index `componentName`
    - `ComponentConfigurationJson`: startup configuration for the component
 5. Update the host runtime config so `workspaceTaskSources` includes the source URL.
+
+## Menu Editor Metadata
+
+The host form renderer now supports `CHILL_PROPERTY_TYPE.Select = 90`.
+
+Select options are stored in property metadata as an `options` array of `[value, text]` tuples:
+
+```ts
+metadata: {
+  options: [
+    ['', 'Menu empty node'],
+    ['crud', 'CRUD (crud)'],
+    ['finance-dashboard', 'Finance Dashboard (finance-dashboard)']
+  ]
+}
+```
+
+The workspace menu item dialog uses this metadata shape to render the `ComponentName` field as a dropdown.
 
 ## Menu Configuration Example
 

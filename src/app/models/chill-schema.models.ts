@@ -1,5 +1,9 @@
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 
+export type ChillMetadataValue = JsonValue;
+export type ChillPropertySelectOptionTuple = [value: string, text: string];
+export type ChillMetadataRecord = Record<string, ChillMetadataValue>;
+
 export type ChillEntityState = JsonObject & {
   isNew?: boolean;
   isDeleting?: boolean;
@@ -15,7 +19,7 @@ export interface ChillPropertySchema {
   referenceChillTypeQuery?: string | null;
   dateFormat?: string;
   customFormat?: string;
-  metadata?: Record<string, string>;
+  metadata?: ChillMetadataRecord;
 }
 
 export interface ChillSchema {
@@ -23,7 +27,7 @@ export interface ChillSchema {
   chillViewCode?: string;
   displayName?: string;
   queryRelatedChillType?: string;
-  metadata?: Record<string, string>;
+  metadata?: ChillMetadataRecord;
   properties: ChillPropertySchema[];
 }
 
@@ -76,6 +80,7 @@ export const CHILL_PROPERTY_TYPE = {
   Boolean: 70,
   String: 80,
   Text: 81,
+  Select: 90,
   Json: 99,
   ChillEntity: 1000,
   ChillEntityCollection: 1010,

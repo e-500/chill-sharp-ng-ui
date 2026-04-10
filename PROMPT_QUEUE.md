@@ -35,7 +35,7 @@ In the workspace-menu the text ({{ chill.T('96C1B2E5-D6CA-4C53-8353-D97D4F8E0B09
 Select the theme by default using system bright/dark mode.
 Once user select a different theme store it in a variable using localStorage to reopen it using the same settings (before check if already does it)
 
-## Workspace Task abstraction layer
+## Workspace Task abstraction layer OK TEST NEEDED
 
 Create an abstraction layer for workspace tasks in order to have external task components loaded at runtime by name.
 Task source repositories can be binded at runtime using a ENV_VAR containing a list or urls of the source locations.

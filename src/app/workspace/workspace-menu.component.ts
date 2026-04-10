@@ -123,12 +123,12 @@ interface WorkspaceMenuNode {
       </section>
 
       <nav class="workspace-menu__list">
-        @for (task of quickTasks(); track task.type) {
+        @for (task of quickTasks(); track task.componentName) {
           <button
             type="button"
             class="workspace-menu__item"
-            [class.active]="workspace.activeTask()?.taskType === task.type"
-            (click)="workspace.openTask(task.type)">
+            [class.active]="workspace.activeTask()?.taskType === task.componentName"
+            (click)="openQuickTask(task.componentName)">
             <strong>{{ task.title }}</strong>
             <span>{{ task.description }}</span>
           </button>
@@ -216,7 +216,8 @@ export class WorkspaceMenuComponent implements OnInit {
   readonly isLoadingMenu = signal(true);
   readonly menuLoadError = signal('');
   readonly menuRoots = signal<WorkspaceMenuNode[]>([]);
-  readonly quickTasks = computed(() => this.workspace.availableTasks.filter((task) => task.type !== 'crud' && task.type !== 'permissions'));
+  readonly quickTasks = computed(() => this.workspace.availableTasks()
+    .filter((task) => task.showInQuickLaunch && task.componentName !== 'crud' && task.componentName !== 'permissions'));
   readonly moduleOptions = computed(() => [...new Set(this.crudTypes().map((schema) => schema.module))]);
   readonly filteredCrudTypes = computed(() => this.crudTypes()
     .filter((schema) => schema.module === this.selectedModule()));
@@ -247,6 +248,10 @@ export class WorkspaceMenuComponent implements OnInit {
     });
   }
 
+  openQuickTask(componentName: string): void {
+    void this.workspace.openTask(componentName);
+  }
+
   normalizeViewCode(value: string): string {
     const normalizedValue = value.trim();
     return normalizedValue ? normalizedValue : 'default';
@@ -269,66 +274,11 @@ export class WorkspaceMenuComponent implements OnInit {
   }
 
   openMenuItem(item: ChillMenuItem): void {
-    const componentName = item.componentName.trim().toLowerCase();
-    const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
-
-    if (componentName === 'crud') {
-      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
-      if (!chillType) {
-        return;
-      }
-
-      this.workspace.openCrudTask({
-        chillType,
-        viewCode: this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default',
-        displayName: item.title
-      });
-      return;
-    }
-
-    if (componentName === 'permissions' || componentName === 'permission' || componentName === 'permission-page') {
-      this.workspace.openWorkspaceTask({
-        taskType: 'permissions',
-        title: item.title,
-        description: item.description
-      });
-      return;
-    }
-
-    if (componentName === 'eventviewer' || componentName === 'event-viewer' || componentName === 'events') {
-      this.workspace.openWorkspaceTask({
-        taskType: 'event-viewer',
-        title: item.title,
-        description: item.description
-      });
-    }
+    void this.workspace.openMenuItem(item);
   }
 
   isMenuTaskActive(item: ChillMenuItem): boolean {
-    const activeTask = this.workspace.activeTask();
-    if (!activeTask) {
-      return false;
-    }
-
-    const componentName = item.componentName.trim().toLowerCase();
-    if (componentName === 'crud') {
-      const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
-      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
-      const viewCode = this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default';
-      return activeTask.taskType === 'crud'
-        && activeTask.inputs?.['initialChillType'] === chillType
-        && activeTask.inputs?.['initialViewCode'] === viewCode;
-    }
-
-    if (componentName === 'permissions' || componentName === 'permission' || componentName === 'permission-page') {
-      return activeTask.taskType === 'permissions';
-    }
-
-    if (componentName === 'eventviewer' || componentName === 'event-viewer' || componentName === 'events') {
-      return activeTask.taskType === 'event-viewer';
-    }
-
-    return false;
+    return this.workspace.isMenuItemActive(item);
   }
 
   async createMenuItem(parent: ChillMenuItem | null): Promise<void> {
@@ -569,45 +519,5 @@ export class WorkspaceMenuComponent implements OnInit {
         isLoadingChildren: false
       })));
     }
-  }
-
-  private parseMenuConfiguration(value: string | null): Record<string, unknown> | null {
-    if (!value?.trim()) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(value);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? parsed as Record<string, unknown>
-        : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private readConfigString(
-    configuration: Record<string, unknown> | null,
-    keys: string[]
-  ): string {
-    if (!configuration) {
-      return '';
-    }
-
-    for (const key of keys) {
-      const value = configuration[key];
-      if (typeof value === 'string' && value.trim()) {
-        return value.trim();
-      }
-    }
-
-    const normalizedKeys = keys.map((key) => key.toLowerCase());
-    for (const [key, value] of Object.entries(configuration)) {
-      if (typeof value === 'string' && value.trim() && normalizedKeys.includes(key.toLowerCase())) {
-        return value.trim();
-      }
-    }
-
-    return '';
   }
 }

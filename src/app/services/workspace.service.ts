@@ -1,22 +1,15 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ParamMap, Router } from '@angular/router';
-import { EventViewerComponent } from '../pages/atlas/event-viewer/event-viewer.component';
-import { PermissionsPageComponent } from '../pages/permissions/permissions-page.component';
 import { CrudTaskComponent } from '../tasks/crud-task/crud-task.component';
-import type { WorkspaceTaskComponentType } from '../models/workspace-task.models';
+import type { ChillMenuItem } from '../models/chill-menu.models';
+import type { WorkspaceTaskComponentType, WorkspaceTaskConfiguration } from '../models/workspace-task.models';
 import { WorkspaceLayoutService } from './workspace-layout.service';
+import { WorkspaceTaskDefinition, WorkspaceTaskRegistryService } from './workspace-task-registry.service';
 
 const WORKSPACE_THEME_STORAGE_KEY = 'cini-home.workspace-theme';
 
 export type WorkspaceTheme = 'bright' | 'dark' | 'soft';
-
-export interface WorkspaceTaskDefinition {
-  type: string;
-  title: string;
-  description: string;
-  component: WorkspaceTaskComponentType;
-}
 
 interface WorkspaceTaskRoute {
   taskType: string;
@@ -40,31 +33,11 @@ export interface OpenCrudTaskRequest {
 }
 
 export interface OpenWorkspaceTaskRequest {
-  taskType: string;
+  componentName: string;
   title?: string | null;
   description?: string | null;
+  configuration?: WorkspaceTaskConfiguration | null;
 }
-
-const WORKSPACE_TASKS: WorkspaceTaskDefinition[] = [
-  {
-    type: 'event-viewer',
-    title: 'Event Viewer',
-    description: 'Browse event stream data.',
-    component: EventViewerComponent
-  },
-  {
-    type: 'permissions',
-    title: 'Permissions',
-    description: 'Manage roles, users, and access rules.',
-    component: PermissionsPageComponent
-  },
-  {
-    type: 'crud',
-    title: 'CRUD',
-    description: 'Inspect schemas and work with entities.',
-    component: CrudTaskComponent
-  }
-];
 
 @Injectable({
   providedIn: 'root'
@@ -73,6 +46,7 @@ export class WorkspaceService {
   private readonly document = inject(DOCUMENT);
   private readonly router = inject(Router);
   private readonly layout = inject(WorkspaceLayoutService);
+  private readonly taskRegistry = inject(WorkspaceTaskRegistryService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly drawerOpenState = signal(false);
@@ -82,7 +56,7 @@ export class WorkspaceService {
   private readonly hasExplicitThemePreferenceState = signal(this.storedThemePreference !== null);
   private readonly themeState = signal<WorkspaceTheme>(this.storedThemePreference ?? this.readSystemThemePreference());
 
-  readonly availableTasks = WORKSPACE_TASKS;
+  readonly availableTasks = computed(() => this.taskRegistry.definitions());
   readonly isDrawerOpen = this.drawerOpenState.asReadonly();
   readonly theme = this.themeState.asReadonly();
   readonly isLayoutEditingEnabled = this.layout.isLayoutEditingEnabled;
@@ -100,13 +74,13 @@ export class WorkspaceService {
     this.bindSystemThemePreference();
   }
 
-  activateTaskFromRoute(taskType: string | null, queryParams: ParamMap): void {
+  async activateTaskFromRoute(taskType: string | null, queryParams: ParamMap): Promise<void> {
     if (!taskType) {
       this.activeTaskIdState.set(null);
       return;
     }
 
-    const task = this.resolveTaskFromRoute(taskType, queryParams);
+    const task = await this.resolveTaskFromRoute(taskType, queryParams);
     if (!task) {
       void this.router.navigateByUrl('/workspace');
       return;
@@ -127,13 +101,17 @@ export class WorkspaceService {
     this.openTaskInstance(task, false);
   }
 
-  openTask(taskType: string, navigate = true): void {
-    const taskDefinition = this.getTaskDefinition(taskType);
+  async openTask(componentName: string, navigate = true): Promise<void> {
+    const taskDefinition = this.getTaskDefinition(componentName);
     if (!taskDefinition) {
       return;
     }
 
-    const task = this.createStaticTaskInstance(taskDefinition);
+    const task = await this.createStaticTaskInstance(taskDefinition);
+    if (!task) {
+      return;
+    }
+
     const existingTask = this.findTaskByRoute(task.route);
     if (existingTask) {
       this.activateTask(existingTask.id);
@@ -143,13 +121,17 @@ export class WorkspaceService {
     this.openTaskInstance(task, navigate);
   }
 
-  openWorkspaceTask(request: OpenWorkspaceTaskRequest): void {
-    const taskDefinition = this.getTaskDefinition(request.taskType);
+  async openWorkspaceTask(request: OpenWorkspaceTaskRequest): Promise<void> {
+    const taskDefinition = this.getTaskDefinition(request.componentName);
     if (!taskDefinition) {
       return;
     }
 
-    const task = this.createStaticTaskInstance(taskDefinition, request.title, request.description);
+    const task = await this.createStaticTaskInstance(taskDefinition, request.title, request.description, request.configuration ?? null);
+    if (!task) {
+      return;
+    }
+
     const existingTask = this.findTaskByRoute(task.route);
     if (existingTask) {
       this.activateTask(existingTask.id);
@@ -166,6 +148,59 @@ export class WorkspaceService {
     }
 
     this.openTaskInstance(task);
+  }
+
+  async openMenuItem(item: ChillMenuItem): Promise<void> {
+    const componentName = item.componentName.trim();
+    const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
+
+    if (this.normalizeComponentName(componentName) === 'crud') {
+      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
+      if (!chillType) {
+        return;
+      }
+
+      this.openCrudTask({
+        chillType,
+        viewCode: this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default',
+        displayName: item.title
+      });
+      return;
+    }
+
+    await this.openWorkspaceTask({
+      componentName,
+      title: item.title,
+      description: item.description,
+      configuration
+    });
+  }
+
+  isMenuItemActive(item: ChillMenuItem): boolean {
+    const activeTask = this.activeTask();
+    if (!activeTask) {
+      return false;
+    }
+
+    const componentName = this.normalizeComponentName(item.componentName);
+    const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
+
+    if (componentName === 'crud') {
+      const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
+      const viewCode = this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default';
+      return activeTask.taskType === 'crud'
+        && activeTask.inputs?.['initialChillType'] === chillType
+        && activeTask.inputs?.['initialViewCode'] === viewCode;
+    }
+
+    const expectedRoute = this.createDefaultRoute(
+      this.normalizeComponentName(item.componentName),
+      item.title,
+      item.description,
+      configuration
+    );
+
+    return this.isSameTaskRoute(activeTask.route, expectedRoute);
   }
 
   activateTask(taskInstanceId: string): void {
@@ -242,7 +277,7 @@ export class WorkspaceService {
     });
   }
 
-  private resolveTaskFromRoute(taskType: string, queryParams: ParamMap): WorkspaceTaskInstance | null {
+  private async resolveTaskFromRoute(taskType: string, queryParams: ParamMap): Promise<WorkspaceTaskInstance | null> {
     if (taskType === 'crud') {
       return this.createCrudTaskInstance({
         chillType: queryParams.get('type') ?? '',
@@ -252,23 +287,47 @@ export class WorkspaceService {
     }
 
     const taskDefinition = this.getTaskDefinition(taskType);
-    return taskDefinition ? this.createStaticTaskInstance(taskDefinition) : null;
+    if (!taskDefinition) {
+      return null;
+    }
+
+    return this.createStaticTaskInstance(
+      taskDefinition,
+      queryParams.get('title'),
+      queryParams.get('description'),
+      this.deserializeConfiguration(queryParams.get('config'))
+    );
   }
 
-  private createStaticTaskInstance(
+  private async createStaticTaskInstance(
     taskDefinition: WorkspaceTaskDefinition,
     titleOverride?: string | null,
-    descriptionOverride?: string | null
-  ): WorkspaceTaskInstance {
+    descriptionOverride?: string | null,
+    configuration?: WorkspaceTaskConfiguration | null
+  ): Promise<WorkspaceTaskInstance | null> {
+    const component = await this.taskRegistry.resolveComponent(taskDefinition.componentName);
+    if (!component) {
+      return null;
+    }
+
+    const title = titleOverride?.trim() || taskDefinition.title;
+    const description = descriptionOverride?.trim() || taskDefinition.description;
+    const normalizedConfiguration = this.normalizeConfiguration(configuration);
+
     return {
       id: crypto.randomUUID(),
-      taskType: taskDefinition.type,
-      title: titleOverride?.trim() || taskDefinition.title,
-      description: descriptionOverride?.trim() || taskDefinition.description,
-      component: taskDefinition.component,
-      route: {
-        taskType: taskDefinition.type
-      }
+      taskType: taskDefinition.componentName,
+      title,
+      description,
+      component,
+      inputs: taskDefinition.kind === 'remote'
+        ? {
+            componentConfiguration: normalizedConfiguration ?? {},
+            taskTitle: title,
+            taskDescription: description
+          }
+        : undefined,
+      route: this.createDefaultRoute(taskDefinition.componentName, title, description, normalizedConfiguration)
     };
   }
 
@@ -303,7 +362,7 @@ export class WorkspaceService {
   }
 
   private getTaskDefinition(taskType: string): WorkspaceTaskDefinition | null {
-    return this.availableTasks.find((task) => task.type === taskType) ?? null;
+    return this.taskRegistry.getTaskDefinition(taskType);
   }
 
   private findTaskByRoute(route: WorkspaceTaskRoute): WorkspaceTaskInstance | null {
@@ -363,5 +422,100 @@ export class WorkspaceService {
     return typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
       : 'bright';
+  }
+
+  private createDefaultRoute(
+    componentName: string,
+    title: string | null | undefined,
+    description: string | null | undefined,
+    configuration: WorkspaceTaskConfiguration | null
+  ): WorkspaceTaskRoute {
+    const queryParams: Record<string, string> = {};
+    const normalizedTitle = title?.trim() ?? '';
+    if (normalizedTitle) {
+      queryParams['title'] = normalizedTitle;
+    }
+    const normalizedDescription = description?.trim() ?? '';
+    if (normalizedDescription) {
+      queryParams['description'] = normalizedDescription;
+    }
+
+    const serializedConfiguration = this.serializeConfiguration(configuration);
+    if (serializedConfiguration) {
+      queryParams['config'] = serializedConfiguration;
+    }
+
+    return {
+      taskType: this.normalizeComponentName(componentName),
+      queryParams
+    };
+  }
+
+  private normalizeComponentName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  private normalizeConfiguration(configuration: WorkspaceTaskConfiguration | null | undefined): WorkspaceTaskConfiguration | null {
+    if (!configuration || Object.keys(configuration).length === 0) {
+      return null;
+    }
+
+    return configuration;
+  }
+
+  private serializeConfiguration(configuration: WorkspaceTaskConfiguration | null): string {
+    if (!configuration) {
+      return '';
+    }
+
+    try {
+      return JSON.stringify(configuration);
+    } catch {
+      return '';
+    }
+  }
+
+  private deserializeConfiguration(rawConfiguration: string | null): WorkspaceTaskConfiguration | null {
+    if (!rawConfiguration?.trim()) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(rawConfiguration);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as WorkspaceTaskConfiguration
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private parseMenuConfiguration(value: string | null): WorkspaceTaskConfiguration | null {
+    return this.deserializeConfiguration(value);
+  }
+
+  private readConfigString(
+    configuration: WorkspaceTaskConfiguration | null,
+    keys: string[]
+  ): string {
+    if (!configuration) {
+      return '';
+    }
+
+    for (const key of keys) {
+      const value = configuration[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    const normalizedKeys = keys.map((key) => key.toLowerCase());
+    for (const [key, value] of Object.entries(configuration)) {
+      if (typeof value === 'string' && value.trim() && normalizedKeys.includes(key.toLowerCase())) {
+        return value.trim();
+      }
+    }
+
+    return '';
   }
 }

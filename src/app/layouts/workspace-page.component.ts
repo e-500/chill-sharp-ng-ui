@@ -169,7 +169,7 @@ export class WorkspacePageComponent implements OnInit {
 
   ngOnInit(): void {
     combineLatest([this.route.paramMap, this.route.queryParamMap]).subscribe(([paramMap, queryParamMap]: [ParamMap, ParamMap]) => {
-      this.workspace.activateTaskFromRoute(paramMap.get('taskId'), queryParamMap);
+      void this.workspace.activateTaskFromRoute(paramMap.get('taskId'), queryParamMap);
     });
   }
 
@@ -216,7 +216,7 @@ export class WorkspacePageComponent implements OnInit {
 
   openPermissionsTask(): void {
     this.closeUserMenu();
-    this.workspace.openTask('permissions');
+    void this.workspace.openTask('permissions');
   }
 
   goToChangePassword(): void {

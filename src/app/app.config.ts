@@ -1,9 +1,10 @@
-import { ApplicationConfig, inject, provideZoneChangeDetection } from '@angular/core';
+import { APP_INITIALIZER, ApplicationConfig, inject, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { CHILL_SHARP_CLIENT, ChillSharpNgClient, provideChillSharpClient } from 'chill-sharp-ng-client';
 
 import { CHILL_BASE_URL, CHILL_CULTURE } from './chill.config';
 import { routes } from './app.routes';
+import { WorkspaceTaskRegistryService } from './services/workspace-task-registry.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -21,6 +22,11 @@ export const appConfig: ApplicationConfig = {
     {
       provide: ChillSharpNgClient,
       useFactory: () => new ChillSharpNgClient(inject(CHILL_SHARP_CLIENT))
+    },
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      useFactory: () => () => inject(WorkspaceTaskRegistryService).initialize()
     }
   ]
 };

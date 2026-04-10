@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "cini-home": {
+    "chill-sharp-ng-ui": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -17,7 +17,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/cini-home",
+            "outputPath": "dist/chill-sharp-ng-ui",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "preserveSymlinks": true,
@@ -68,10 +68,10 @@
           },
           "configurations": {
             "production": {
-              "buildTarget": "cini-home:build:production"
+              "buildTarget": "chill-sharp-ng-ui:build:production"
             },
             "development": {
-              "buildTarget": "cini-home:build:development"
+              "buildTarget": "chill-sharp-ng-ui:build:development"
             }
           },
           "defaultConfiguration": "development"

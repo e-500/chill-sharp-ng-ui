@@ -254,7 +254,7 @@ function ensureTrailingSlash(value: string): string {
 }
 
 function readWorkspaceRuntimeConfig(): WorkspaceTaskRuntimeConfig {
-  return globalThis.__ciniHomeRuntimeConfig__ ?? {};
+  return globalThis.__chillSharpNgUiRuntimeConfig__ ?? {};
 }
 
 function readFederationContainer(remoteName: string): WorkspaceFederationContainer | null {

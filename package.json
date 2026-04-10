@@ -1,5 +1,5 @@
 {
-  "name": "cini-home",
+  "name": "chill-sharp-ng-ui",
   "version": "0.0.0",
   "scripts": {
     "sync:local-clients": "node scripts/sync-local-clients.mjs",

@@ -1,7 +1,7 @@
 import type { WorkspaceTaskRuntimeConfig } from './models/workspace-task.models';
 
 declare global {
-  var __ciniHomeRuntimeConfig__: WorkspaceTaskRuntimeConfig | undefined;
+  var __chillSharpNgUiRuntimeConfig__: WorkspaceTaskRuntimeConfig | undefined;
 }
 
 export {};

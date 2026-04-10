@@ -1,3 +1,3 @@
-globalThis.__ciniHomeRuntimeConfig__ = globalThis.__ciniHomeRuntimeConfig__ ?? {
+globalThis.__chillSharpNgUiRuntimeConfig__ = globalThis.__chillSharpNgUiRuntimeConfig__ ?? {
   workspaceTaskSources: []
 };

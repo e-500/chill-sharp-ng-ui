@@ -1,12 +1,12 @@
 # Workspace External Components
 
-This document describes how to publish external workspace task components that `cini-home` can discover and load at runtime.
+This document describes how to publish external workspace task components that `chill-sharp-ng-ui` can discover and load at runtime.
 
 ## Overview
 
-- Host application: `cini-home`
+- Host application: `chill-sharp-ng-ui`
 - Discovery mechanism: runtime task source indexes
-- Runtime binding: `globalThis.__ciniHomeRuntimeConfig__.workspaceTaskSources`
+- Runtime binding: `globalThis.__chillSharpNgUiRuntimeConfig__.workspaceTaskSources`
 - Component contract: standalone Angular component exposed through Module Federation
 - Built-in exception: the `CRUD` task stays implemented inside the host application
 
@@ -22,7 +22,7 @@ The host loads [`public/runtime-config.js`](/c:/source/personal/cini-home/public
 Default shape:
 
 ```js
-globalThis.__ciniHomeRuntimeConfig__ = {
+globalThis.__chillSharpNgUiRuntimeConfig__ = {
   workspaceTaskSources: [
     "https://tasks.company.net/finance/",
     "https://tasks.company.net/hr/workspace-tasks.index.json"
@@ -33,7 +33,7 @@ globalThis.__ciniHomeRuntimeConfig__ = {
 In deployment, generate that file from an environment variable such as:
 
 ```text
-CINI_HOME_WORKSPACE_TASK_SOURCES=https://tasks.company.net/finance/,https://tasks.company.net/hr/
+CHILL_SHARP_NG_UI_WORKSPACE_TASK_SOURCES=https://tasks.company.net/finance/,https://tasks.company.net/hr/
 ```
 
 and split it into the JavaScript array above.

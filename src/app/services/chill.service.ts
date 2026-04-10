@@ -55,7 +55,7 @@ import type {
 import type { ChillMenuItem as AppChillMenuItem } from '../models/chill-menu.models';
 import { CHILL_BASE_URL, CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE, CHILL_SECONDARY_TEXT_CULTURE } from '../chill.config';
 
-const SESSION_STORAGE_KEY = 'cini-home.chill-auth-session';
+const SESSION_STORAGE_KEY = 'chill-sharp-ng-ui.chill-auth-session';
 const TEXT_QUEUE_DELAY_MS = 50;
 const CHILL_PROPERTY_TYPE = {
   Unknown: 0,

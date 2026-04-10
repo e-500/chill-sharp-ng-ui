@@ -1,6 +1,6 @@
 import { Injectable, effect, signal } from '@angular/core';
 
-const WORKSPACE_LAYOUT_EDITING_STORAGE_KEY = 'cini-home.workspace-layout-editing';
+const WORKSPACE_LAYOUT_EDITING_STORAGE_KEY = 'chill-sharp-ng-ui.workspace-layout-editing';
 
 @Injectable({
   providedIn: 'root'

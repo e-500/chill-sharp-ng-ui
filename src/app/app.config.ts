@@ -66,7 +66,7 @@ function shouldRewriteI18nBodyRequest(url: string, method: string, body: BodyIni
 }
 
 function readStoredAccessToken(): string {
-  const rawSession = globalThis.localStorage?.getItem('cini-home.chill-auth-session');
+  const rawSession = globalThis.localStorage?.getItem('chill-sharp-ng-ui.chill-auth-session');
   if (!rawSession) {
     return '';
   }

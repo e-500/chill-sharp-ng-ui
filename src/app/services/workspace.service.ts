@@ -7,7 +7,7 @@ import type { WorkspaceTaskComponentType, WorkspaceTaskConfiguration } from '../
 import { WorkspaceLayoutService } from './workspace-layout.service';
 import { WorkspaceTaskDefinition, WorkspaceTaskRegistryService } from './workspace-task-registry.service';
 
-const WORKSPACE_THEME_STORAGE_KEY = 'cini-home.workspace-theme';
+const WORKSPACE_THEME_STORAGE_KEY = 'chill-sharp-ng-ui.workspace-theme';
 
 export type WorkspaceTheme = 'bright' | 'dark' | 'soft';
 

@@ -12,9 +12,9 @@ import { ChillService } from '../services/chill.service';
       <div class="auth-layout__hero">
         <p class="auth-layout__eyebrow">
           <app-chill-i18n-label
-            [labelGuid]="'F339653B-60A0-4589-B6EA-3BD8220D17EE'"
-            [primaryDefaultText]="'Cini Home'"
-            [secondaryDefaultText]="'Cini Home'" />
+            [labelGuid]="'D8E9F1A4-3E8A-47A7-BE9C-1C702F81C6B0'"
+            [primaryDefaultText]="'ChillSharp UI'"
+            [secondaryDefaultText]="'ChillSharp UI'" />
         </p>
         <h1>
           <app-chill-i18n-label

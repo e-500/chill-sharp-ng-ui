@@ -44,9 +44,17 @@
   color: var(--success);
 }
 
+.i18n-label__action.cancel {
+  color: var(--text-muted);
+}
+
 .i18n-label__action:disabled {
   cursor: progress;
   opacity: 0.6;
+}
+
+.i18n-label__action .material-symbol-icon {
+  font-size: 1rem;
 }
 
 .i18n-label__error {

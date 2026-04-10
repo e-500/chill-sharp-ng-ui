@@ -14,6 +14,7 @@ import { WorkspaceLayoutService } from '../services/workspace-layout.service';
         <input
           type="text"
           class="i18n-label__input"
+          [style.width]="inputWidth()"
           [ngModel]="draftText()"
           (ngModelChange)="draftText.set($event)"
           [disabled]="isSaving()"
@@ -23,11 +24,13 @@ import { WorkspaceLayoutService } from '../services/workspace-layout.service';
 
         <button
           type="button"
-          class="i18n-label__action confirm"
-          (click)="save()"
-          [disabled]="isSaving() || !canSave()"
-          [attr.aria-label]="saveAriaLabel()">
-          ✓
+          class="i18n-label__action"
+          [class.confirm]="canSave()"
+          [class.cancel]="!canSave()"
+          (click)="canSave() ? save() : cancel()"
+          [disabled]="isSaving()"
+          [attr.aria-label]="canSave() ? saveAriaLabel() : cancelAriaLabel()">
+          <span class="material-symbol-icon">{{ canSave() ? 'check' : 'close' }}</span>
         </button>
       } @else {
         <span class="i18n-label__text">{{ text() }}</span>
@@ -38,7 +41,7 @@ import { WorkspaceLayoutService } from '../services/workspace-layout.service';
             class="i18n-label__action edit"
             (click)="startEditing()"
             [attr.aria-label]="editAriaLabel()">
-            ✎
+            <span class="material-symbol-icon">edit</span>
           </button>
         }
       }
@@ -51,6 +54,8 @@ import { WorkspaceLayoutService } from '../services/workspace-layout.service';
   styleUrl: './chill-i18n-label.component.scss'
 })
 export class ChillI18nLabelComponent {
+  private static readonly MIN_INPUT_WIDTH_CH = 24;
+
   readonly chill = inject(ChillService);
   readonly layout = inject(WorkspaceLayoutService);
 
@@ -62,6 +67,7 @@ export class ChillI18nLabelComponent {
   readonly isEditing = signal(false);
   readonly isSaving = signal(false);
   readonly draftText = signal('');
+  readonly inputWidth = signal(`min(100%, ${ChillI18nLabelComponent.MIN_INPUT_WIDTH_CH}ch)`);
   readonly errorMessage = signal('');
 
   readonly text = computed(() => this.chill.T(this.labelGuid(), this.primaryDefaultText(), this.secondaryDefaultText()));
@@ -73,13 +79,18 @@ export class ChillI18nLabelComponent {
   readonly saveAriaLabel = computed(() =>
     this.chill.T('1A77383B-6A11-489A-B527-0CD15A9DBE84', 'Save label', 'Salva etichetta')
   );
+  readonly cancelAriaLabel = computed(() =>
+    this.chill.T('D51111F2-5230-416E-9957-4E91D6F7C527', 'Cancel label edit', 'Annulla modifica etichetta')
+  );
 
   startEditing(): void {
     if (!this.editEnabled()) {
       return;
     }
 
-    this.draftText.set(this.text());
+    const text = this.text();
+    this.draftText.set(text);
+    this.inputWidth.set(this.buildInputWidth(text));
     this.errorMessage.set('');
     this.isEditing.set(true);
   }
@@ -113,5 +124,11 @@ export class ChillI18nLabelComponent {
         this.isSaving.set(false);
       }
     });
+  }
+
+  private buildInputWidth(text: string): string {
+    const widthCh = Math.max(text.trim().length + 2, ChillI18nLabelComponent.MIN_INPUT_WIDTH_CH);
+    return `min(100%, ${widthCh}ch)`;
+    //return `min(${widthCh}ch)`;
   }
 }

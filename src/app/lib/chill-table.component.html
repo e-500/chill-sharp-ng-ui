@@ -98,19 +98,32 @@
                   </td>
                 }
                 @if (hasActionColumn()) {
-                  <td class="action-column">
-                    <div class="row-action-list">
-                      @for (action of resolvedRowActions(); track $index) {
-                        <button
-                          type="button"
-                          class="row-action-button"
-                          (click)="runRowAction(action, entity)"
-                          [disabled]="isRowActionDisabled(action, entity)"
-                          [attr.aria-label]="action.ariaLabel || chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga')">
-                          <span
-                            class="row-action-button__icon"
-                            [class.material-symbol-icon]="action.iconClass === 'material-symbol-icon'">{{ rowActionIcon(action) }}</span>
-                        </button>
+                  <td class="action-column" [class.menu-open]="isRowActionMenuOpen(entity)">
+                    <div class="row-action-menu">
+                      <button
+                        type="button"
+                        class="row-action-menu__trigger"
+                        (click)="toggleRowActionMenu($event, entity)"
+                        [attr.aria-label]="chill.T('7143A8CE-9D46-4509-8D26-AC954C88F277', 'Open row actions', 'Apri azioni riga')">
+                        <span class="material-symbol-icon">more_horiz</span>
+                      </button>
+
+                      @if (isRowActionMenuOpen(entity)) {
+                        <div class="row-action-menu__panel" [ngStyle]="rowActionMenuStyle()" (click)="$event.stopPropagation()">
+                        @for (action of resolvedRowActions(); track $index) {
+                          <button
+                            type="button"
+                            class="row-action-menu__item"
+                            (click)="runRowAction(action, entity)"
+                            [disabled]="isRowActionDisabled(action, entity)"
+                            [attr.aria-label]="rowActionLabel(action)">
+                            <span
+                              class="row-action-button__icon"
+                              [class.material-symbol-icon]="rowActionIconClass(action) === 'material-symbol-icon'">{{ rowActionIcon(action) }}</span>
+                            <span class="row-action-menu__label">{{ rowActionLabel(action) }}</span>
+                          </button>
+                        }
+                        </div>
                       }
                     </div>
                   </td>

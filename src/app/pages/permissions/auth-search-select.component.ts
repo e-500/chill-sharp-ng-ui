@@ -80,7 +80,7 @@ export interface AuthSearchSelectOption {
       min-height: 3rem;
       border-radius: 0.85rem;
       border: 1px solid var(--border-color);
-      background: rgba(255, 255, 255, 0.92);
+      background: var(--surface-0);
       color: var(--text-main);
       font: inherit;
     }
@@ -119,7 +119,7 @@ export interface AuthSearchSelectOption {
       height: 2rem;
       border: 0;
       border-radius: 999px;
-      background: rgba(35, 48, 73, 0.1);
+      background: var(--accent-soft);
       color: var(--text-main);
       cursor: pointer;
       font: inherit;
@@ -162,7 +162,7 @@ export interface AuthSearchSelectOption {
     }
 
     .auth-search-select__result:hover {
-      background: rgba(35, 48, 73, 0.08);
+      background: var(--accent-soft);
     }
 
     .auth-search-select__result small,

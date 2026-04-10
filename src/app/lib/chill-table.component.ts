@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import type { ChillEntity, ChillEntityChangeNotification, ChillPropertySchema, ChillSchema } from '../models/chill-schema.models';
@@ -66,6 +66,12 @@ interface ActiveCellEditState {
   isCommitting: boolean;
 }
 
+interface ActiveRowActionMenuState {
+  entityKey: string;
+  top: number;
+  left: number;
+}
+
 @Component({
   selector: 'app-chill-table',
   standalone: true,
@@ -102,6 +108,7 @@ export class ChillTableComponent {
   readonly dragColumnName = signal('');
   readonly layoutState = signal<ColumnLayoutState[]>([]);
   readonly activeCellEdit = signal<ActiveCellEditState | null>(null);
+  readonly activeRowActionMenu = signal<ActiveRowActionMenuState | null>(null);
   readonly displayedEntities = signal<ChillEntity[]>([]);
   private readonly entityNotificationSubscriptions = new Map<string, Subscription>();
   private subscribedNotificationChillType = '';
@@ -388,8 +395,61 @@ export class ChillTableComponent {
   /**
    * Invokes the configured row action with the current entity.
    */
-  runRowAction(action: ChillTableRowAction, entity: ChillEntity): void {
+  runRowAction(action: ChillTableRowAction, entity: ChillEntity, menu?: HTMLDetailsElement): void {
+    void menu;
+    this.closeRowActionMenu();
     action.handler(entity);
+  }
+
+  /**
+   * Toggles the floating row-action menu anchored to the trigger button.
+   */
+  toggleRowActionMenu(event: MouseEvent, entity: ChillEntity): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const trigger = event.currentTarget;
+    if (!(trigger instanceof HTMLElement)) {
+      return;
+    }
+
+    const entityKey = this.trackByEntity(0, entity);
+    const currentMenu = this.activeRowActionMenu();
+    if (currentMenu?.entityKey === entityKey) {
+      this.closeRowActionMenu();
+      return;
+    }
+
+    this.activeRowActionMenu.set(this.buildRowActionMenuState(entityKey, trigger));
+  }
+
+  /**
+   * Returns true when the floating row-action menu belongs to the provided entity.
+   */
+  isRowActionMenuOpen(entity: ChillEntity): boolean {
+    return this.activeRowActionMenu()?.entityKey === this.trackByEntity(0, entity);
+  }
+
+  /**
+   * Closes the floating row-action menu.
+   */
+  closeRowActionMenu(): void {
+    this.activeRowActionMenu.set(null);
+  }
+
+  /**
+   * Exposes the computed fixed-position style for the active row-action menu.
+   */
+  rowActionMenuStyle(): Record<string, string> | null {
+    const menu = this.activeRowActionMenu();
+    if (!menu) {
+      return null;
+    }
+
+    return {
+      top: `${menu.top}px`,
+      left: `${menu.left}px`
+    };
   }
 
   /**
@@ -398,7 +458,7 @@ export class ChillTableComponent {
   rowActionIcon(action: ChillTableRowAction): string {
     const icon = action.icon?.trim();
     if (!icon) {
-      return '✎';
+      return 'edit';
     }
 
     if (action.iconClass === 'material-symbol-icon') {
@@ -408,13 +468,47 @@ export class ChillTableComponent {
     switch (icon.toLowerCase()) {
       case 'pencil':
       case 'edit':
-        return '✎';
+        return 'edit';
       case 'bin':
       case 'delete':
       case 'trash':
-        return '🗑';
+        return 'delete';
       default:
         return icon;
+    }
+  }
+
+  /**
+   * Applies Material Symbols automatically for common semantic row actions.
+   */
+  rowActionIconClass(action: ChillTableRowAction): string {
+    if (action.iconClass === 'material-symbol-icon') {
+      return 'material-symbol-icon';
+    }
+
+    const icon = action.icon?.trim().toLowerCase();
+    if (!icon || icon === 'pencil' || icon === 'edit' || icon === 'bin' || icon === 'delete' || icon === 'trash') {
+      return 'material-symbol-icon';
+    }
+
+    return action.iconClass?.trim() ?? '';
+  }
+
+  /**
+   * Derives a readable row-action label when the host does not provide one.
+   */
+  rowActionLabel(action: ChillTableRowAction): string {
+    if (action.ariaLabel?.trim()) {
+      return action.ariaLabel.trim();
+    }
+
+    switch (this.rowActionIcon(action).trim().toLowerCase()) {
+      case 'edit':
+        return this.chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga');
+      case 'delete':
+        return this.chill.T('04290FEE-910B-4A1B-B83D-A3AC0427BAAB', 'Delete row', 'Elimina riga');
+      default:
+        return this.chill.T('6455D4FC-D267-4AA1-83C9-749D511838CB', 'Row action', 'Azione riga');
     }
   }
 
@@ -444,6 +538,21 @@ export class ChillTableComponent {
    */
   isRowActionDisabled(action: ChillTableRowAction, entity: ChillEntity): boolean {
     return action.disabled?.(entity) ?? false;
+  }
+
+  @HostListener('document:click')
+  handleDocumentClick(): void {
+    this.closeRowActionMenu();
+  }
+
+  @HostListener('window:resize')
+  handleWindowResize(): void {
+    this.closeRowActionMenu();
+  }
+
+  @HostListener('window:scroll')
+  handleWindowScroll(): void {
+    this.closeRowActionMenu();
   }
 
   /**
@@ -1187,6 +1296,25 @@ export class ChillTableComponent {
    */
   private areJsonValuesEqual(left: JsonValue | undefined, right: JsonValue | undefined): boolean {
     return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  }
+
+  /**
+   * Computes a viewport-clamped fixed position for the row-action menu.
+   */
+  private buildRowActionMenuState(entityKey: string, trigger: HTMLElement): ActiveRowActionMenuState {
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 176;
+    const menuHeight = 112;
+    const viewportPadding = 8;
+    const preferredLeft = rect.right - menuWidth;
+    const maxLeft = window.innerWidth - menuWidth - viewportPadding;
+    const left = Math.max(viewportPadding, Math.min(preferredLeft, maxLeft));
+    const fitsBelow = rect.bottom + 6 + menuHeight <= window.innerHeight - viewportPadding;
+    const top = fitsBelow
+      ? rect.bottom + 6
+      : Math.max(viewportPadding, rect.top - menuHeight - 6);
+
+    return { entityKey, top, left };
   }
 
   // #endregion

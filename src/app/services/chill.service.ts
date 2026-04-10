@@ -25,6 +25,7 @@ import type {
   AuthRoleAccessDetails,
   AuthUserAccessDetails,
   AuthPermissionRule,
+  CreateAuthUserRequest,
   AuthRole,
   AuthSession,
   AuthTokenResponse,
@@ -399,6 +400,28 @@ export class ChillService {
   getAuthUserDetails(userGuid: string) {
     return this.chill.getAuthUser(userGuid).pipe(
       map((response) => response as AuthUserDetailsResponse),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  createAuthUser(request: CreateAuthUserRequest) {
+    return this.chill.setAuthUser({
+      guid: null,
+      externalId: request.externalId,
+      userName: request.userName,
+      displayName: request.displayName,
+      displayCultureName: request.displayCultureName,
+      displayTimeZone: request.displayTimeZone,
+      displayDateFormat: request.displayDateFormat,
+      displayNumberFormat: request.displayNumberFormat,
+      isActive: request.isActive,
+      canManagePermissions: request.canManagePermissions,
+      canManageSchema: request.canManageSchema,
+      menuHierarchy: request.menuHierarchy,
+      roleGuids: [],
+      permissions: []
+    }).pipe(
+      map((response) => this.normalizeAuthUser(response)),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }

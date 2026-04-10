@@ -123,12 +123,12 @@ interface WorkspaceMenuNode {
       </section>
 
       <nav class="workspace-menu__list">
-        @for (task of quickTasks(); track task.id) {
+        @for (task of quickTasks(); track task.type) {
           <button
             type="button"
             class="workspace-menu__item"
-            [class.active]="workspace.activeTask()?.definitionId === task.id"
-            (click)="workspace.openTask(task.id)">
+            [class.active]="workspace.activeTask()?.taskType === task.type"
+            (click)="workspace.openTask(task.type)">
             <strong>{{ task.title }}</strong>
             <span>{{ task.description }}</span>
           </button>
@@ -216,7 +216,7 @@ export class WorkspaceMenuComponent implements OnInit {
   readonly isLoadingMenu = signal(true);
   readonly menuLoadError = signal('');
   readonly menuRoots = signal<WorkspaceMenuNode[]>([]);
-  readonly quickTasks = computed(() => this.workspace.availableTasks.filter((task) => task.id !== 'crud'));
+  readonly quickTasks = computed(() => this.workspace.availableTasks.filter((task) => task.type !== 'crud' && task.type !== 'permissions'));
   readonly moduleOptions = computed(() => [...new Set(this.crudTypes().map((schema) => schema.module))]);
   readonly filteredCrudTypes = computed(() => this.crudTypes()
     .filter((schema) => schema.module === this.selectedModule()));
@@ -288,7 +288,7 @@ export class WorkspaceMenuComponent implements OnInit {
 
     if (componentName === 'permissions' || componentName === 'permission' || componentName === 'permission-page') {
       this.workspace.openWorkspaceTask({
-        taskId: 'permissions',
+        taskType: 'permissions',
         title: item.title,
         description: item.description
       });
@@ -297,7 +297,7 @@ export class WorkspaceMenuComponent implements OnInit {
 
     if (componentName === 'eventviewer' || componentName === 'event-viewer' || componentName === 'events') {
       this.workspace.openWorkspaceTask({
-        taskId: 'event-viewer',
+        taskType: 'event-viewer',
         title: item.title,
         description: item.description
       });
@@ -315,15 +315,17 @@ export class WorkspaceMenuComponent implements OnInit {
       const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
       const chillType = this.readConfigString(configuration, ['ChillType', 'chillType', 'Type', 'type']);
       const viewCode = this.readConfigString(configuration, ['ViewCode', 'viewCode']) || 'default';
-      return activeTask.id === `crud:${chillType}:${viewCode}`;
+      return activeTask.taskType === 'crud'
+        && activeTask.inputs?.['initialChillType'] === chillType
+        && activeTask.inputs?.['initialViewCode'] === viewCode;
     }
 
     if (componentName === 'permissions' || componentName === 'permission' || componentName === 'permission-page') {
-      return activeTask.definitionId === 'permissions';
+      return activeTask.taskType === 'permissions';
     }
 
     if (componentName === 'eventviewer' || componentName === 'event-viewer' || componentName === 'events') {
-      return activeTask.definitionId === 'event-viewer';
+      return activeTask.taskType === 'event-viewer';
     }
 
     return false;

@@ -17,19 +17,18 @@
       <p><app-chill-i18n-label [labelGuid]="'0C03BF4E-57B4-47DB-8E71-0B5B3D165CB5'" [primaryDefaultText]="'You have insufficient permission to handle permissions.'" [secondaryDefaultText]="'Non disponi dei permessi sufficienti per gestire i permessi.'" /></p>
     </section>
   } @else {
-    <section class="tabs">
-      <button type="button" [class.active]="activeTab() === 'user'" (click)="setActiveTab('user')">
-        <app-chill-i18n-button-label [labelGuid]="'8455C9A5-BAC8-457C-B726-F79DA6D758DF'" [primaryDefaultText]="'Users'" [secondaryDefaultText]="'Utenti'" />
-      </button>
-      <button type="button" [class.active]="activeTab() === 'role'" (click)="setActiveTab('role')">
-        <app-chill-i18n-button-label [labelGuid]="'B3CC2B2C-8B89-4D4B-B5A0-88CDE26F61A6'" [primaryDefaultText]="'Roles'" [secondaryDefaultText]="'Ruoli'" />
-      </button>
-    </section>
-
-    @if (activeTab() === 'user') {
-      <app-user-permission [users]="users()" [roles]="roles()" />
+    @if (activeSection() === 'users') {
+      <app-user-permission
+        [users]="users()"
+        [roles]="roles()"
+        (userCreated)="handleUserCreated($event)"
+        (userUpdated)="handleUserUpdated($event)" />
     } @else {
-      <app-role-permission [users]="users()" [roles]="roles()" (roleCreated)="handleRoleCreated($event)" />
+      <app-role-permission
+        [users]="users()"
+        [roles]="roles()"
+        (roleCreated)="handleRoleCreated($event)"
+        (roleUpdated)="handleRoleUpdated($event)" />
     }
   }
 </section>

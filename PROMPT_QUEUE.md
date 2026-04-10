@@ -1,6 +1,6 @@
 # Prompt queue
 
-## User, Role and Permission managment refactoring
+## User, Role and Permission managment refactoring OK
 
 Refactor permission-page:
 - Remove link from the "workspace-menu" and put it in the "user-menu" replacing "user profile" link to dialog.
@@ -21,7 +21,7 @@ Introduce Google fonts icons without including in the index.html external links 
 Introduce only icons into crud-page for Add, Edit, Search and Delete buttons in workspace-toolbar.
 Create in `doc\` a google-icons-update.md file with the procedure to update icons to latest version.
 
-## Bugfix taskbar elements
+## Bugfix taskbar elements BETTER BUT NOT PERFECT
 
 - Task switching sometimes miss showing the empty workspace placeholder "nothing shows after click".
 - Using id can be repeated opening the same task type so the select may select the wrong task: use `crypto.randomUUID()` to generate a unique id and move current id value to type (or better name) to be used in the url.

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ChillService } from '../../services/chill.service';
+import { WorkspaceToolbarService } from '../../services/workspace-toolbar.service';
 import { PermissionsPageComponent } from './permissions-page.component';
 
 describe('PermissionsPageComponent', () => {
@@ -80,6 +81,14 @@ describe('PermissionsPageComponent', () => {
               permissions: []
             })
           }
+        },
+        {
+          provide: WorkspaceToolbarService,
+          useValue: {
+            setButtons: () => void 0,
+            clearButtons: () => void 0,
+            buttons: () => []
+          }
         }
       ]
     }).compileComponents();
@@ -94,9 +103,9 @@ describe('PermissionsPageComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Non disponi dei permessi sufficienti per gestire i permessi.');
   });
 
-  it('shows user and role tabs when the current user can manage permissions', async () => {
+  it('shows user and role content when the current user can manage permissions', async () => {
     const fixture = await createComponent(true);
     expect(fixture.nativeElement.textContent).toContain('Utenti');
-    expect(fixture.nativeElement.textContent).toContain('Ruoli');
+    expect(fixture.nativeElement.textContent).toContain('Cerca e seleziona un utente');
   });
 });

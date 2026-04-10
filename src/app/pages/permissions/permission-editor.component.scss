@@ -7,8 +7,30 @@
   gap: 1rem;
 }
 
+.entity-header,
+.entity-toolbar,
 .editor-layout {
   display: grid;
+  gap: 1rem;
+}
+
+.entity-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.entity-toolbar__lookup {
+  min-width: 0;
+}
+
+.entity-toolbar__actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.editor-layout {
   gap: 1.25rem;
   grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
   align-items: start;
@@ -260,9 +282,14 @@ button:disabled {
 }
 
 @media (max-width: 1100px) {
+  .entity-toolbar,
   .editor-layout,
   .box-grid {
     grid-template-columns: 1fr;
+  }
+
+  .entity-toolbar__actions {
+    justify-content: start;
   }
 }
 

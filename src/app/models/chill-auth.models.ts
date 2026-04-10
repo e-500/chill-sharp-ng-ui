@@ -66,6 +66,20 @@ export interface AuthUser {
   menuHierarchy: string;
 }
 
+export interface CreateAuthUserRequest {
+  externalId: string;
+  userName: string;
+  displayName: string;
+  displayCultureName: string;
+  displayTimeZone: string;
+  displayDateFormat: string;
+  displayNumberFormat: string;
+  isActive: boolean;
+  canManagePermissions: boolean;
+  canManageSchema: boolean;
+  menuHierarchy: string;
+}
+
 export interface UpdateAuthUserRequest {
   externalId: string;
   userName: string;

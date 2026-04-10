@@ -91,8 +91,8 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
 
             <div class="user-menu__panel">
               <p class="user-menu__name">{{ chill.userName() || chill.T('B0311DA4-F864-4E15-93A4-894D177F7017', 'current user', 'utente corrente') }}</p>
-              <button type="button" (click)="openUserProfileDialog()">
-                <app-chill-i18n-button-label [labelGuid]="'EF63959A-FF5D-4AC5-8AE5-BEB27B2FAE90'" [primaryDefaultText]="'User profile'" [secondaryDefaultText]="'Profilo utente'" />
+              <button type="button" (click)="openPermissionsTask()">
+                <app-chill-i18n-button-label [labelGuid]="'830A6D96-0332-4B08-8EC7-B850702B4337'" [primaryDefaultText]="'Permissions'" [secondaryDefaultText]="'Permessi'" />
               </button>
               <button type="button" (click)="workspace.toggleLayoutEditingEnabled()">
                 @if (workspace.isLayoutEditingEnabled()) {
@@ -120,7 +120,9 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
         <main class="workspace-content">
           @if (workspace.activeTask(); as task) {
             <div class="workspace-task-host">
-              <ng-container *ngComponentOutlet="task.component; inputs: task.inputs ?? {}" />
+              @for (activeTask of [task]; track activeTask.id) {
+                <ng-container *ngComponentOutlet="activeTask.component; inputs: activeTask.inputs ?? {}" />
+              }
             </div>
           } @else {
             <section class="workspace-empty-state">
@@ -212,19 +214,9 @@ export class WorkspacePageComponent implements OnInit {
     }
   }
 
-  async openUserProfileDialog(): Promise<void> {
+  openPermissionsTask(): void {
     this.closeUserMenu();
-
-    const userGuid = this.chill.session()?.userId?.trim() ?? '';
-    const { UserProfileDialogComponent } = await import('../workspace/user-profile-dialog.component');
-    await this.dialog.openDialog({
-      title: this.chill.T('EF63959A-FF5D-4AC5-8AE5-BEB27B2FAE90', 'User profile', 'Profilo utente'),
-      component: UserProfileDialogComponent,
-      okLabel: await this.chill.TAsync('F4905C90-AC2F-4A26-95FE-63312CA133AF', 'Save', 'Salva'),
-      inputs: {
-        userGuid
-      }
-    });
+    this.workspace.openTask('permissions');
   }
 
   goToChangePassword(): void {

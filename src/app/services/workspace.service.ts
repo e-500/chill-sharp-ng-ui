@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { DestroyRef, Injectable, Type, computed, effect, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ParamMap, Router } from '@angular/router';
 import { EventViewerComponent } from '../pages/atlas/event-viewer/event-viewer.component';
 import { PermissionsPageComponent } from '../pages/permissions/permissions-page.component';
@@ -12,20 +12,20 @@ const WORKSPACE_THEME_STORAGE_KEY = 'cini-home.workspace-theme';
 export type WorkspaceTheme = 'bright' | 'dark' | 'soft';
 
 export interface WorkspaceTaskDefinition {
-  id: string;
+  type: string;
   title: string;
   description: string;
   component: WorkspaceTaskComponentType;
 }
 
 interface WorkspaceTaskRoute {
-  taskId: string;
+  taskType: string;
   queryParams?: Record<string, string>;
 }
 
 export interface WorkspaceTaskInstance {
   id: string;
-  definitionId: string;
+  taskType: string;
   title: string;
   description: string;
   component: WorkspaceTaskComponentType;
@@ -40,26 +40,26 @@ export interface OpenCrudTaskRequest {
 }
 
 export interface OpenWorkspaceTaskRequest {
-  taskId: string;
+  taskType: string;
   title?: string | null;
   description?: string | null;
 }
 
 const WORKSPACE_TASKS: WorkspaceTaskDefinition[] = [
   {
-    id: 'event-viewer',
+    type: 'event-viewer',
     title: 'Event Viewer',
     description: 'Browse event stream data.',
     component: EventViewerComponent
   },
   {
-    id: 'permissions',
+    type: 'permissions',
     title: 'Permissions',
     description: 'Manage roles, users, and access rules.',
     component: PermissionsPageComponent
   },
   {
-    id: 'crud',
+    type: 'crud',
     title: 'CRUD',
     description: 'Inspect schemas and work with entities.',
     component: CrudTaskComponent
@@ -100,37 +100,63 @@ export class WorkspaceService {
     this.bindSystemThemePreference();
   }
 
-  activateTaskFromRoute(taskId: string | null, queryParams: ParamMap): void {
-    if (!taskId) {
+  activateTaskFromRoute(taskType: string | null, queryParams: ParamMap): void {
+    if (!taskType) {
       this.activeTaskIdState.set(null);
       return;
     }
 
-    const task = this.resolveTaskFromRoute(taskId, queryParams);
+    const task = this.resolveTaskFromRoute(taskType, queryParams);
     if (!task) {
       void this.router.navigateByUrl('/workspace');
+      return;
+    }
+
+    const activeTask = this.activeTask();
+    if (activeTask && this.isSameTaskRoute(activeTask.route, task.route)) {
+      return;
+    }
+
+    const existingTask = this.findTaskByRoute(task.route);
+    if (existingTask) {
+      this.activeTaskIdState.set(existingTask.id);
+      this.drawerOpenState.set(false);
       return;
     }
 
     this.openTaskInstance(task, false);
   }
 
-  openTask(taskId: string, navigate = true): void {
-    const taskDefinition = this.getTaskDefinition(taskId);
+  openTask(taskType: string, navigate = true): void {
+    const taskDefinition = this.getTaskDefinition(taskType);
     if (!taskDefinition) {
       return;
     }
 
-    this.openTaskInstance(this.createStaticTaskInstance(taskDefinition), navigate);
+    const task = this.createStaticTaskInstance(taskDefinition);
+    const existingTask = this.findTaskByRoute(task.route);
+    if (existingTask) {
+      this.activateTask(existingTask.id);
+      return;
+    }
+
+    this.openTaskInstance(task, navigate);
   }
 
   openWorkspaceTask(request: OpenWorkspaceTaskRequest): void {
-    const taskDefinition = this.getTaskDefinition(request.taskId);
+    const taskDefinition = this.getTaskDefinition(request.taskType);
     if (!taskDefinition) {
       return;
     }
 
-    this.openTaskInstance(this.createStaticTaskInstance(taskDefinition, request.title, request.description));
+    const task = this.createStaticTaskInstance(taskDefinition, request.title, request.description);
+    const existingTask = this.findTaskByRoute(task.route);
+    if (existingTask) {
+      this.activateTask(existingTask.id);
+      return;
+    }
+
+    this.openTaskInstance(task);
   }
 
   openCrudTask(request: OpenCrudTaskRequest): void {
@@ -199,10 +225,10 @@ export class WorkspaceService {
   }
 
   private openTaskInstance(task: WorkspaceTaskInstance, navigate = true): void {
-    this.activeTaskIdState.set(task.id);
     this.openTaskInstancesState.update((tasks) => tasks.some((candidate) => candidate.id === task.id)
       ? tasks
       : [...tasks, task]);
+    this.activeTaskIdState.set(task.id);
     this.drawerOpenState.set(false);
 
     if (navigate) {
@@ -211,13 +237,13 @@ export class WorkspaceService {
   }
 
   private navigateToTask(task: WorkspaceTaskInstance): void {
-    void this.router.navigate(['/workspace', task.route.taskId], {
+    void this.router.navigate(['/workspace', task.route.taskType], {
       queryParams: task.route.queryParams ?? {}
     });
   }
 
-  private resolveTaskFromRoute(taskId: string, queryParams: ParamMap): WorkspaceTaskInstance | null {
-    if (taskId === 'crud') {
+  private resolveTaskFromRoute(taskType: string, queryParams: ParamMap): WorkspaceTaskInstance | null {
+    if (taskType === 'crud') {
       return this.createCrudTaskInstance({
         chillType: queryParams.get('type') ?? '',
         viewCode: queryParams.get('viewCode'),
@@ -225,7 +251,7 @@ export class WorkspaceService {
       });
     }
 
-    const taskDefinition = this.getTaskDefinition(taskId);
+    const taskDefinition = this.getTaskDefinition(taskType);
     return taskDefinition ? this.createStaticTaskInstance(taskDefinition) : null;
   }
 
@@ -235,13 +261,13 @@ export class WorkspaceService {
     descriptionOverride?: string | null
   ): WorkspaceTaskInstance {
     return {
-      id: taskDefinition.id,
-      definitionId: taskDefinition.id,
+      id: crypto.randomUUID(),
+      taskType: taskDefinition.type,
       title: titleOverride?.trim() || taskDefinition.title,
       description: descriptionOverride?.trim() || taskDefinition.description,
       component: taskDefinition.component,
       route: {
-        taskId: taskDefinition.id
+        taskType: taskDefinition.type
       }
     };
   }
@@ -256,8 +282,8 @@ export class WorkspaceService {
     const displayName = request.displayName?.trim() || chillType;
 
     return {
-      id: `crud:${chillType}:${viewCode}`,
-      definitionId: 'crud',
+      id: crypto.randomUUID(),
+      taskType: 'crud',
       title: `${displayName} (${viewCode})`,
       description: `CRUD task for ${chillType}`,
       component: CrudTaskComponent,
@@ -266,7 +292,7 @@ export class WorkspaceService {
         initialViewCode: viewCode
       },
       route: {
-        taskId: 'crud',
+        taskType: 'crud',
         queryParams: {
           type: chillType,
           viewCode,
@@ -276,8 +302,28 @@ export class WorkspaceService {
     };
   }
 
-  private getTaskDefinition(taskId: string): WorkspaceTaskDefinition | null {
-    return this.availableTasks.find((task) => task.id === taskId) ?? null;
+  private getTaskDefinition(taskType: string): WorkspaceTaskDefinition | null {
+    return this.availableTasks.find((task) => task.type === taskType) ?? null;
+  }
+
+  private findTaskByRoute(route: WorkspaceTaskRoute): WorkspaceTaskInstance | null {
+    return this.openTaskInstancesState().find((task) => this.isSameTaskRoute(task.route, route)) ?? null;
+  }
+
+  private isSameTaskRoute(left: WorkspaceTaskRoute, right: WorkspaceTaskRoute): boolean {
+    if (left.taskType !== right.taskType) {
+      return false;
+    }
+
+    const leftQueryParams = left.queryParams ?? {};
+    const rightQueryParams = right.queryParams ?? {};
+    const leftKeys = Object.keys(leftQueryParams);
+    const rightKeys = Object.keys(rightQueryParams);
+    if (leftKeys.length !== rightKeys.length) {
+      return false;
+    }
+
+    return leftKeys.every((key) => leftQueryParams[key] === rightQueryParams[key]);
   }
 
   private bindSystemThemePreference(): void {

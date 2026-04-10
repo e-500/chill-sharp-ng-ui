@@ -97,6 +97,28 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Make scrollbar thin */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+/* Track (background) */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Thumb (the draggable part) */
+::-webkit-scrollbar-thumb {
+  background-color: var(--accent-soft);
+  border-radius: 10px;
+}
+
+/* On hover (slightly more visible) */
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent);
+}
+
 button,
 input,
 textarea,
@@ -598,7 +620,8 @@ a {
 .taskbar__close:hover,
 .theme-pill:hover,
 .icon-button:hover {
-  background: var(--accent-soft);
+  /*background: var(--accent-soft);*/
+  opacity: 1;
 }
 
 .workspace-main {
@@ -606,7 +629,7 @@ a {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 }
 
 .workspace-drawer {

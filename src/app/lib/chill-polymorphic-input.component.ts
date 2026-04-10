@@ -11,7 +11,6 @@ import {
   type ChillPropertySelectOptionTuple,
   type ChillSchema
 } from '../models/chill-schema.models';
-import { CHILL_CULTURE } from '../chill.config';
 import { ChillService } from '../services/chill.service';
 import { ChillJsonInputComponent } from './chill-json-input.component';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
@@ -263,6 +262,15 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       || property.propertyType === CHILL_PROPERTY_TYPE.DateTime;
   }
 
+  isFormattedTextInput(property: ChillPropertySchema): boolean {
+    return property.propertyType === CHILL_PROPERTY_TYPE.Date
+      || property.propertyType === CHILL_PROPERTY_TYPE.DateTime
+      || property.propertyType === CHILL_PROPERTY_TYPE.Time
+      || property.propertyType === CHILL_PROPERTY_TYPE.Duration
+      || property.propertyType === CHILL_PROPERTY_TYPE.Integer
+      || property.propertyType === CHILL_PROPERTY_TYPE.Decimal;
+  }
+
   /**
    * Resolves the native input type for scalar fields.
    */
@@ -313,17 +321,27 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   textValue(propertyName: string): string {
     const value = this.fieldValues()[propertyName];
     const property = this.properties().find((candidate) => candidate.name === propertyName);
-    if (property && typeof value === 'string') {
-      if (property.propertyType === CHILL_PROPERTY_TYPE.Date) {
-        return this.formatDateDisplayValue(value);
+    if (property) {
+      if (property.propertyType === CHILL_PROPERTY_TYPE.Integer || property.propertyType === CHILL_PROPERTY_TYPE.Decimal) {
+        if (typeof value === 'number') {
+          return this.chill.formatDisplayNumber(value);
+        }
+
+        return typeof value === 'string' ? value : '';
       }
 
-      if (property.propertyType === CHILL_PROPERTY_TYPE.Time) {
-        return this.formatTimeDisplayValue(value);
-      }
+      if (typeof value === 'string') {
+        if (property.propertyType === CHILL_PROPERTY_TYPE.Date) {
+          return this.chill.formatDisplayDate(value);
+        }
 
-      if (property.propertyType === CHILL_PROPERTY_TYPE.DateTime) {
-        return this.formatDateTimeDisplayValue(value);
+        if (property.propertyType === CHILL_PROPERTY_TYPE.Time) {
+          return this.formatTimeDisplayValue(value);
+        }
+
+        if (property.propertyType === CHILL_PROPERTY_TYPE.DateTime) {
+          return this.chill.formatDisplayDateTime(value);
+        }
       }
     }
 
@@ -1164,23 +1182,17 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
 
     switch (property.propertyType) {
       case CHILL_PROPERTY_TYPE.Integer: {
-        const numericValue = Number(trimmedValue);
-        return Number.isInteger(numericValue)
-          ? numericValue
-          : null;
+        return this.chill.parseDisplayInteger(trimmedValue);
       }
       case CHILL_PROPERTY_TYPE.Decimal: {
-        const numericValue = Number(trimmedValue);
-        return Number.isFinite(numericValue)
-          ? numericValue
-          : null;
+        return this.chill.parseDisplayDecimal(trimmedValue);
       }
       case CHILL_PROPERTY_TYPE.Date:
-        return this.parseDateDisplayValue(trimmedValue);
+        return this.chill.parseDisplayDate(trimmedValue);
       case CHILL_PROPERTY_TYPE.Time:
         return this.parseTimeDisplayValue(trimmedValue);
       case CHILL_PROPERTY_TYPE.DateTime:
-        return this.parseDateTimeDisplayValue(trimmedValue);
+        return this.chill.parseDisplayDateTime(trimmedValue);
       case CHILL_PROPERTY_TYPE.Duration:
         return this.parseDurationDisplayValue(trimmedValue);
       case CHILL_PROPERTY_TYPE.Json:
@@ -1369,7 +1381,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
         : null;
     }
 
-    const culture = CHILL_CULTURE.toLowerCase();
+    const culture = this.chill.currentCultureName().toLowerCase();
     const isMonthFirstCulture = culture === 'en-us';
     const month = isMonthFirstCulture ? left : middle;
     const day = isMonthFirstCulture ? middle : left;
@@ -1449,7 +1461,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       return normalizedValue;
     }
 
-    return new Intl.DateTimeFormat(CHILL_CULTURE, {
+    return new Intl.DateTimeFormat(this.chill.currentCultureName(), {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -1548,18 +1560,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Converts numeric strings and finite numbers into a comparable numeric value.
    */
   private readNumber(value: JsonValue | undefined): number | null {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim()) {
-      const parsedValue = Number(value);
-      return Number.isFinite(parsedValue)
-        ? parsedValue
-        : null;
-    }
-
-    return null;
+    return this.chill.readDisplayNumber(value);
   }
 
   /**

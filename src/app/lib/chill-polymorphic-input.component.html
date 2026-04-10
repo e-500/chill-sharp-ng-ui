@@ -162,7 +162,7 @@
         </select>
       } @else {
         @if (control(property.name); as fieldControl) {
-          @if (isCultureDateInput(property)) {
+          @if (isFormattedTextInput(property)) {
             <input
               type="text"
               [ngModel]="textValue(property.name)"

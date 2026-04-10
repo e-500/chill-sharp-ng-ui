@@ -4,6 +4,7 @@ import { CHILL_SHARP_CLIENT, ChillSharpNgClient, provideChillSharpClient } from 
 
 import { CHILL_BASE_URL, CHILL_CULTURE } from './chill.config';
 import { routes } from './app.routes';
+import { ChillService } from './services/chill.service';
 import { WorkspaceTaskRegistryService } from './services/workspace-task-registry.service';
 
 export const appConfig: ApplicationConfig = {
@@ -13,7 +14,7 @@ export const appConfig: ApplicationConfig = {
     ...provideChillSharpClient({
       baseUrl: CHILL_BASE_URL,
       options: {
-        cultureName: CHILL_CULTURE,
+        cultureName: readStoredCultureName(),
         accessToken: readStoredAccessToken(),
         fetchImpl: authAwareFetch,
         signalRWithCredentials: false
@@ -27,6 +28,11 @@ export const appConfig: ApplicationConfig = {
       provide: APP_INITIALIZER,
       multi: true,
       useFactory: () => () => inject(WorkspaceTaskRegistryService).initialize()
+    },
+    {
+      provide: APP_INITIALIZER,
+      multi: true,
+      useFactory: () => () => inject(ChillService).initialize()
     }
   ]
 };
@@ -76,5 +82,19 @@ function readStoredAccessToken(): string {
     return parsed.accessToken?.trim() ?? '';
   } catch {
     return '';
+  }
+}
+
+function readStoredCultureName(): string {
+  const rawPreferences = globalThis.localStorage?.getItem('chill-sharp-ng-ui.user-preferences');
+  if (!rawPreferences) {
+    return CHILL_CULTURE;
+  }
+
+  try {
+    const parsed = JSON.parse(rawPreferences) as { displayCultureName?: string };
+    return parsed.displayCultureName?.trim() || CHILL_CULTURE;
+  } catch {
+    return CHILL_CULTURE;
   }
 }

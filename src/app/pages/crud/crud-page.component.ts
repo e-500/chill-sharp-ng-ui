@@ -10,6 +10,7 @@ import { ChillTableComponent, type ChillTableCellEditCommitEvent, type ChillTabl
 import { CHILL_PROPERTY_TYPE, ChillEntityStatus, ChillState, type ChillEntity, type ChillEntityChangeNotification, type ChillFormSubmitEvent, type ChillQuery, type ChillSchema, type ChillSchemaListItem } from '../../models/chill-schema.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
+import { WorkspaceService } from '../../services/workspace.service';
 
 const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
@@ -22,6 +23,7 @@ export class CrudPageComponentConfiguration {
   DefaultValues?: Record<string, JsonValue> | null;
   FixedQueryValues?: Record<string, JsonValue> | null;
   DefaultQueryValues?: Record<string, JsonValue> | null;
+  relations?: CrudPageComponentConfiguration[] | null;
 }
 
 @Component({
@@ -36,6 +38,7 @@ export class CrudPageComponent implements OnInit {
   //#region Service injection
   readonly chill = inject(ChillService);
   readonly dialog = inject(WorkspaceDialogService);
+  readonly workspace = inject(WorkspaceService);
   //#endregion
 
   //#region Component inputs
@@ -118,7 +121,8 @@ export class CrudPageComponent implements OnInit {
       ariaLabel: this.chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete row', 'Elimina riga'),
       disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
       handler: (entity) => this.markEntityDeleted(entity)
-    }
+    },
+    ...this.createRelationRowActions()
   ]);
   readonly activeRowActions = computed<ChillTableRowAction[] | null>(() => this.selectionEnabled() ? null : this.rowActions());
   readonly selectionColumn = computed<ChillTableSelectionColumn | null>(() => this.selectionEnabled()
@@ -1152,15 +1156,19 @@ export class CrudPageComponent implements OnInit {
   }
 
   private defaultEntityValues(): Record<string, JsonValue> {
-    return this.normalizedConfiguration().DefaultValues ?? {};
+    return this.resolveConfigRecord(this.normalizedConfiguration().DefaultValues);
   }
 
   private defaultQueryValues(): Record<string, JsonValue> {
-    return this.normalizedConfiguration().DefaultQueryValues ?? {};
+    return this.resolveConfigRecord(this.normalizedConfiguration().DefaultQueryValues);
   }
 
   private fixedQueryValues(): Record<string, JsonValue> {
-    return this.normalizedConfiguration().FixedQueryValues ?? {};
+    return this.resolveConfigRecord(this.normalizedConfiguration().FixedQueryValues);
+  }
+
+  private relations(): CrudPageComponentConfiguration[] {
+    return this.normalizedConfiguration().relations ?? [];
   }
 
   private normalizeComponentConfiguration(configuration: CrudPageComponentConfiguration | null): CrudPageComponentConfiguration {
@@ -1175,6 +1183,7 @@ export class CrudPageComponent implements OnInit {
     normalizedConfiguration.DefaultValues = this.readConfigRecord(configuration['DefaultValues']);
     normalizedConfiguration.FixedQueryValues = this.readConfigRecord(configuration['FixedQueryValues']);
     normalizedConfiguration.DefaultQueryValues = this.readConfigRecord(configuration['DefaultQueryValues']);
+    normalizedConfiguration.relations = this.readRelationConfigurations(configuration['relations']);
     return normalizedConfiguration;
   }
 
@@ -1194,6 +1203,127 @@ export class CrudPageComponent implements OnInit {
         .map(([key, entryValue]) => [key.trim(), entryValue] as const)
         .filter(([key]) => key.length > 0)
     );
+  }
+
+  private readRelationConfigurations(value: unknown): CrudPageComponentConfiguration[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => this.normalizeComponentConfiguration(this.isJsonObject(entry)
+        ? entry as unknown as CrudPageComponentConfiguration
+        : null))
+      .filter((entry) => entry.ChillType.trim().length > 0);
+  }
+
+  private createRelationRowActions(): ChillTableRowAction[] {
+    return this.relations().map((relation, index) => ({
+      icon: 'account_tree',
+      iconClass: 'material-symbol-icon',
+      ariaLabel: this.relationActionLabel(relation, index),
+      disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
+      handler: (entity) => this.openRelation(entity, relation)
+    }));
+  }
+
+  private openRelation(entity: ChillEntity, relation: CrudPageComponentConfiguration): void {
+    const resolvedRelation = this.resolveRelationConfiguration(relation, entity);
+    const chillType = resolvedRelation.ChillType.trim();
+    if (!chillType) {
+      return;
+    }
+
+    this.workspace.openCrudTask({
+      chillType,
+      queryChillType: resolvedRelation.ChillQuery,
+      viewCode: resolvedRelation.ViewCode,
+      componentConfiguration: resolvedRelation
+    });
+  }
+
+  private resolveRelationConfiguration(
+    configuration: CrudPageComponentConfiguration,
+    entity: ChillEntity
+  ): CrudPageComponentConfiguration {
+    return {
+      ChillType: configuration.ChillType,
+      ChillQuery: configuration.ChillQuery ?? null,
+      ViewCode: configuration.ViewCode ?? null,
+      DefaultValues: this.resolveConfigRecord(configuration.DefaultValues, entity),
+      FixedQueryValues: this.resolveConfigRecord(configuration.FixedQueryValues, entity),
+      DefaultQueryValues: this.resolveConfigRecord(configuration.DefaultQueryValues, entity),
+      relations: (configuration.relations ?? []).map((relation) => this.resolveRelationConfiguration(relation, entity))
+    };
+  }
+
+  private relationActionLabel(relation: CrudPageComponentConfiguration, index: number): string {
+    const chillType = relation.ChillType.trim();
+    return chillType
+      ? this.chill.T(
+          `crud-relation-${index + 1}`,
+          `Open related ${chillType}`,
+          `Apri collegata ${chillType}`
+        )
+      : this.chill.T(
+          `crud-relation-${index + 1}`,
+          'Open related CRUD',
+          'Apri CRUD collegata'
+        );
+  }
+
+  private resolveConfigRecord(
+    value: Record<string, JsonValue> | null | undefined,
+    entity?: ChillEntity | null
+  ): Record<string, JsonValue> {
+    if (!value) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [key, this.resolveConfigValue(entryValue, entity)] as const)
+    );
+  }
+
+  private resolveConfigValue(value: JsonValue, entity?: ChillEntity | null): JsonValue {
+    if (typeof value !== 'string') {
+      return value;
+    }
+
+    const placeholderMatch = /^@\{(.+)\}$/.exec(value.trim());
+    if (!placeholderMatch) {
+      return value;
+    }
+
+    const token = placeholderMatch[1].trim();
+    if (!token) {
+      return value;
+    }
+
+    if (!entity) {
+      return null;
+    }
+
+    if (token.toLowerCase() === 'mock') {
+      return this.createEntityMock(entity);
+    }
+
+    return this.readEntityPropertyValue(entity, token) ?? null;
+  }
+
+  private createEntityMock(entity: ChillEntity): ChillEntity {
+    const clonedEntity = this.cloneEntity(entity);
+    const guid = this.readEntityKey(clonedEntity);
+    const chillType = this.readStringValue(clonedEntity['chillType']);
+    const label = this.readStringValue(clonedEntity['label']);
+    return {
+      ...(guid ? { guid } : {}),
+      ...(chillType ? { chillType } : {}),
+      ...(label ? { label } : {}),
+      properties: {
+        ...(clonedEntity.properties ?? {})
+      }
+    };
   }
 
   private isQuerySchema(item: ChillSchemaListItem): boolean {

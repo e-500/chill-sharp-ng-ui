@@ -14,6 +14,7 @@ export interface RegisterRequest {
   Password: string;
   DisplayName: string;
   DisplayCultureName: string;
+  DisplayTimeZone: string;
   CreateChillAuthUser: boolean;
 }
 

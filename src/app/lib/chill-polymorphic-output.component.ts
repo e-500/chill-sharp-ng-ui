@@ -131,6 +131,9 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
 
     const propertyType = property?.propertyType ?? CHILL_PROPERTY_TYPE.Unknown;
     switch (propertyType) {
+      case CHILL_PROPERTY_TYPE.Integer:
+      case CHILL_PROPERTY_TYPE.Decimal:
+        return this.formatNumber(value);
       case CHILL_PROPERTY_TYPE.Boolean:
         return value === true
           ? this.chill.T('1A29951D-C442-4187-B0AA-F80454DEB09D', 'Yes', 'Si')
@@ -159,10 +162,7 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
       return '';
     }
 
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleDateString();
+    return this.chill.formatDisplayDate(value);
   }
 
   /**
@@ -173,10 +173,22 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
       return '';
     }
 
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleString();
+    return this.chill.formatDisplayDateTime(value);
+  }
+
+  private formatNumber(value: JsonValue): string {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return this.chill.formatDisplayNumber(value);
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      const parsedValue = this.chill.parseDisplayDecimal(value);
+      return parsedValue === null
+        ? value
+        : this.chill.formatDisplayNumber(parsedValue);
+    }
+
+    return '';
   }
 
   /**

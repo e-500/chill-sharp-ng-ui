@@ -55,8 +55,10 @@ import type {
 } from '../models/chill-schema.models';
 import type { ChillMenuItem as AppChillMenuItem } from '../models/chill-menu.models';
 import { CHILL_BASE_URL, CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE, CHILL_SECONDARY_TEXT_CULTURE } from '../chill.config';
+import { WorkspaceDialogService } from './workspace-dialog.service';
 
 const SESSION_STORAGE_KEY = 'chill-sharp-ng-ui.chill-auth-session';
+const USER_PREFERENCES_STORAGE_KEY = 'chill-sharp-ng-ui.user-preferences';
 const TEXT_QUEUE_DELAY_MS = 50;
 const CHILL_PROPERTY_TYPE = {
   Unknown: 0,
@@ -84,6 +86,18 @@ interface PendingTextRequest {
 interface PermissionRuleOwner {
   kind: 'user' | 'role';
   guid: string;
+}
+
+interface StoredUserPreferences {
+  displayCultureName: string;
+  displayTimeZone: string;
+  displayDateFormat: string;
+  displayNumberFormat: string;
+}
+
+interface LoadCurrentUserPreferencesOptions {
+  promptForTimeZoneMismatch: boolean;
+  clearSessionOnNotFound: boolean;
 }
 
 interface ChillSharpClientSessionSync {
@@ -154,22 +168,49 @@ interface PrepareFormOptions<TSchema extends ChillSchema> {
 })
 export class ChillService {
   private readonly chill = inject(ChillSharpNgClient);
+  private readonly dialog = inject(WorkspaceDialogService);
   private readonly sessionState = signal<AuthSession | null>(this.readStoredSession());
+  private readonly currentUserGuidState = signal('');
+  private readonly userPreferencesState = signal<StoredUserPreferences>(this.readStoredUserPreferences());
   private readonly textVersion = signal(0);
   private readonly textCache = new Map<string, string>();
   private readonly pendingTextRequests = new Map<string, PendingTextRequest>();
   private readonly inFlightTextRequests = new Set<string>();
   private readonly pendingTextResolvers = new Map<string, Array<(value: string) => void>>();
   private readonly permissionRuleOwners = new Map<string, PermissionRuleOwner>();
+  private isTimeZoneAlignmentPromptOpen = false;
   private textQueueHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
 
   readonly session = this.sessionState.asReadonly();
   readonly isAuthenticated = computed(() => this.sessionState() !== null);
   readonly userName = computed(() => this.sessionState()?.userName ?? '');
+  readonly displayCultureName = computed(() => this.userPreferencesState().displayCultureName);
+  readonly displayTimeZone = computed(() => this.userPreferencesState().displayTimeZone);
+  readonly displayDateFormat = computed(() => this.userPreferencesState().displayDateFormat);
+  readonly displayNumberFormat = computed(() => this.userPreferencesState().displayNumberFormat);
 
   constructor() {
     this.syncClientSession(this.sessionState());
     this.logStartupDiagnostics();
+  }
+
+  async initialize(): Promise<void> {
+    const userGuid = await this.resolveCurrentUserGuid();
+    if (!userGuid) {
+      return;
+    }
+
+    const user = await this.loadCurrentUserPreferences(userGuid, {
+      promptForTimeZoneMismatch: false,
+      clearSessionOnNotFound: true
+    });
+    if (!user) {
+      return;
+    }
+
+    globalThis.setTimeout(() => {
+      void this.promptForTimeZoneAlignment(userGuid, user);
+    }, 0);
   }
 
   version(): string {
@@ -179,6 +220,23 @@ export class ChillService {
     }
 
     return versionFn.call(this.chill);
+  }
+
+  currentCultureName(): string {
+    return this.displayCultureName().trim() || CHILL_CULTURE;
+  }
+
+  currentTimeZone(): string {
+    return this.displayTimeZone().trim() || this.readBrowserTimeZone();
+  }
+
+  currentDateFormat(): string {
+    const configuredFormat = this.displayDateFormat().trim();
+    return configuredFormat || this.defaultDateFormatForCulture(this.currentCultureName());
+  }
+
+  currentNumberFormat(): string {
+    return this.displayNumberFormat().trim() || this.currentCultureName();
   }
 
   T(labelGuid: string, primaryDefaultText: string, secondaryDefaultText: string): string {
@@ -227,7 +285,7 @@ export class ChillService {
   }
 
   getSchema(chillType: string, chillViewCode: string, cultureName?: string) {
-    return this.chill.getSchema(chillType, chillViewCode, cultureName).pipe(
+    return this.chill.getSchema(chillType, chillViewCode, this.resolveCultureName(cultureName)).pipe(
       map((response) => response as ChillSchema | null),
       catchError((error) => this.rethrowFriendlyError(error))
     );
@@ -259,9 +317,10 @@ export class ChillService {
 
   getSchemaList(cultureName?: string) {
     const client = this.chill as unknown as ChillSharpNgClientSchemaListSupport;
+    const resolvedCultureName = this.resolveCultureName(cultureName);
 
     if (typeof client.getSchemaList === 'function') {
-      return this.chill.getSchemaList(cultureName).pipe(
+      return this.chill.getSchemaList(resolvedCultureName).pipe(
         map((response) => (response ?? []) as ChillSchemaListItem[]),
         catchError((error) => this.rethrowFriendlyError(error))
       );
@@ -269,7 +328,7 @@ export class ChillService {
 
     const rawClient = client.getRawClient?.();
     if (typeof rawClient?.getSchemaList === 'function') {
-      return from(rawClient.getSchemaList(cultureName)).pipe(
+      return from(rawClient.getSchemaList(resolvedCultureName)).pipe(
         map((response) => (response ?? []) as ChillSchemaListItem[]),
         catchError((error) => this.rethrowFriendlyError(error))
       );
@@ -284,13 +343,13 @@ export class ChillService {
     ));
   }
 
-  setText(labelGuid: string, value: string, cultureName = CHILL_CULTURE) {
+  setText(labelGuid: string, value: string, cultureName?: string) {
     const normalizedLabelGuid = this.normalizeLabelGuid(labelGuid);
     const normalizedValue = value.trim();
 
     return this.chill.setText({
       labelGuid: normalizedLabelGuid,
-      cultureName,
+      cultureName: this.resolveCultureName(cultureName),
       value: normalizedValue
     }).pipe(
       map((response) => {
@@ -453,6 +512,11 @@ export class ChillService {
       })),
       switchMap((payload) => this.chill.setAuthUser(payload)),
       map((response) => response as AuthUserDetailsResponse),
+      tap((response) => {
+        if (this.isCurrentUser(userGuid)) {
+          this.persistUserPreferences(this.toStoredUserPreferences(response));
+        }
+      }),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -830,6 +894,155 @@ export class ChillService {
     return this.serializePropertyValue(property, value);
   }
 
+  formatDisplayNumber(value: number): string {
+    const numberFormat = this.readNumberFormatConfig();
+    if (numberFormat.kind === 'locale') {
+      return new Intl.NumberFormat(numberFormat.locale).format(value);
+    }
+
+    return this.formatNumberWithPattern(value, numberFormat);
+  }
+
+  parseDisplayInteger(value: string): number | null {
+    const parsedValue = this.parseLocalizedNumber(value);
+    return parsedValue !== null && Number.isInteger(parsedValue)
+      ? parsedValue
+      : null;
+  }
+
+  parseDisplayDecimal(value: string): number | null {
+    return this.parseLocalizedNumber(value);
+  }
+
+  readDisplayNumber(value: JsonValue | undefined): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      return this.parseLocalizedNumber(value);
+    }
+
+    return null;
+  }
+
+  formatDisplayDate(value: string): string {
+    const normalizedValue = value.trim();
+    const match = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      return normalizedValue;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    return this.isValidDateParts(year, month, day)
+      ? this.formatDateParts(year, month, day)
+      : normalizedValue;
+  }
+
+  parseDisplayDate(value: string): string | null {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return null;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+      return normalizedValue;
+    }
+
+    const parts = this.parseDisplayDateParts(normalizedValue);
+    if (parts) {
+      return this.toIsoDate(parts.year, parts.month, parts.day);
+    }
+
+    const parsed = new Date(normalizedValue);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return this.toIsoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+  }
+
+  formatDisplayDateTime(value: string): string {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return '';
+    }
+
+    const parsed = new Date(normalizedValue);
+    if (Number.isNaN(parsed.getTime())) {
+      return normalizedValue;
+    }
+
+    const parts = this.readZonedDateTimeParts(parsed, this.currentTimeZone());
+    const formattedDate = this.formatDateParts(parts.year, parts.month, parts.day);
+    const seconds = parts.second !== 0 ? `:${`${parts.second}`.padStart(2, '0')}` : '';
+    return `${formattedDate} ${`${parts.hour}`.padStart(2, '0')}:${`${parts.minute}`.padStart(2, '0')}${seconds}`;
+  }
+
+  parseDisplayDateTime(value: string): string | null {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return null;
+    }
+
+    const directMatch = normalizedValue.match(
+      /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{1,2}):(\d{2})(?::(\d{2})(\.\d{1,7})?)?(Z|[+-]\d{2}:\d{2})?$/
+    );
+    if (directMatch) {
+      const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText, offsetText] = directMatch;
+      const year = Number(yearText);
+      const month = Number(monthText);
+      const day = Number(dayText);
+      const hour = Number(hourText);
+      const minute = Number(minuteText);
+      const second = secondText ? Number(secondText) : 0;
+      if (!this.isValidDateParts(year, month, day) || hour > 23 || minute > 59 || second > 59) {
+        return null;
+      }
+
+      if (offsetText) {
+        const parsed = new Date(`${yearText}-${monthText}-${dayText}T${`${hour}`.padStart(2, '0')}:${minuteText}:${`${second}`.padStart(2, '0')}${fractionText ?? ''}${offsetText}`);
+        return Number.isNaN(parsed.getTime())
+          ? null
+          : parsed.toISOString();
+      }
+
+      return this.toZonedIsoDateTime(year, month, day, hour, minute, second, fractionText ?? '');
+    }
+
+    const splitMatch = normalizedValue.match(/^(.*?)[T\s]+(\d{1,2}):(\d{2})(?::(\d{2})(\.\d{1,7})?)?$/);
+    if (splitMatch) {
+      const dateParts = this.parseDisplayDateParts(splitMatch[1]);
+      if (!dateParts) {
+        return null;
+      }
+
+      const hour = Number(splitMatch[2]);
+      const minute = Number(splitMatch[3]);
+      const second = splitMatch[4] ? Number(splitMatch[4]) : 0;
+      if (hour > 23 || minute > 59 || second > 59) {
+        return null;
+      }
+
+      return this.toZonedIsoDateTime(
+        dateParts.year,
+        dateParts.month,
+        dateParts.day,
+        hour,
+        minute,
+        second,
+        splitMatch[5] ?? ''
+      );
+    }
+
+    const parsed = new Date(normalizedValue);
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : parsed.toISOString();
+  }
+
   prepareForm<TSchema extends ChillSchema>(
     schema: TSchema,
     source?: ChillEntity | ChillQuery | null,
@@ -864,7 +1077,7 @@ export class ChillService {
   register(request: RegisterRequest) {
     return this.chill.registerAuthAccount(this.toRegisterAuthIdentityRequest(request)).pipe(
       map((response) => this.toTokenResponse(response as JsonObject)),
-      tap((response) => this.persistSession(response)),
+      switchMap((response) => from(this.handleAuthenticatedResponse(response, false)).pipe(map(() => response))),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -872,7 +1085,7 @@ export class ChillService {
   login(request: LoginRequest) {
     return this.chill.loginAuthAccount(this.toLoginAuthIdentityRequest(request)).pipe(
       map((response) => this.toTokenResponse(response as JsonObject)),
-      tap((response) => this.persistSession(response)),
+      switchMap((response) => from(this.handleAuthenticatedResponse(response, true)).pipe(map(() => response))),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -880,7 +1093,7 @@ export class ChillService {
   refreshSession() {
     return this.chill.refreshAuthAccount().pipe(
       map((response) => this.toTokenResponse(response as JsonObject)),
-      tap((response) => this.persistSession(response)),
+      switchMap((response) => from(this.handleAuthenticatedResponse(response, false)).pipe(map(() => response))),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -900,9 +1113,7 @@ export class ChillService {
   }
 
   logout() {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    this.sessionState.set(null);
-    this.syncClientSession(null);
+    this.clearSession();
   }
 
   formatError(error: unknown): string {
@@ -935,6 +1146,79 @@ export class ChillService {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
     this.sessionState.set(session);
     this.syncClientSession(session);
+  }
+
+  private clearSession(): void {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    this.sessionState.set(null);
+    this.currentUserGuidState.set('');
+    this.syncClientSession(null);
+  }
+
+  private async handleAuthenticatedResponse(
+    response: AuthTokenResponse,
+    promptForTimeZoneMismatch: boolean
+  ): Promise<void> {
+    this.persistSession(response);
+    const userGuid = await this.resolveCurrentUserGuid();
+    if (!userGuid) {
+      return;
+    }
+
+    await this.loadCurrentUserPreferences(userGuid, {
+      promptForTimeZoneMismatch,
+      clearSessionOnNotFound: false
+    });
+  }
+
+  private async loadCurrentUserPreferences(
+    userGuid: string,
+    options: LoadCurrentUserPreferencesOptions
+  ): Promise<AuthUserDetailsResponse | null> {
+    try {
+      const user = await firstValueFrom(this.getAuthUserDetails(userGuid));
+      this.currentUserGuidState.set(user.guid?.trim() ?? userGuid.trim());
+      this.persistUserPreferences(this.toStoredUserPreferences(user));
+      if (options.promptForTimeZoneMismatch) {
+        await this.promptForTimeZoneAlignment(userGuid, user);
+      }
+      return user;
+    } catch (error) {
+      if (options.clearSessionOnNotFound && this.isNotFoundError(error)) {
+        console.info('[ChillService] Current user was not found while loading preferences. Clearing stale session.', {
+          userGuid
+        });
+        this.clearSession();
+        return null;
+      }
+
+      console.warn('[ChillService] Unable to load current user preferences', error);
+      return null;
+    }
+  }
+
+  private async resolveCurrentUserGuid(): Promise<string> {
+    const session = this.sessionState();
+    const normalizedUserId = session?.userId?.trim() ?? '';
+    const normalizedUserName = session?.userName?.trim().toLowerCase() ?? '';
+    if (!normalizedUserId && !normalizedUserName) {
+      return '';
+    }
+
+    try {
+      const users = await firstValueFrom(this.getAuthUsers());
+      const matchedUser = users.find((user) =>
+        user.guid.trim() === normalizedUserId
+        || user.userName.trim().toLowerCase() === normalizedUserName
+      );
+      if (matchedUser?.guid.trim()) {
+        return matchedUser.guid.trim();
+      }
+    } catch (error) {
+      console.warn('[ChillService] Unable to resolve current user guid from auth user list', error);
+    }
+
+    return normalizedUserId;
   }
 
   private readStoredSession(): AuthSession | null {
@@ -1166,18 +1450,11 @@ export class ChillService {
   }
 
   private parseIntegerValue(value: string): JsonValue {
-    if (!/^-?\d+$/.test(value)) {
-      return null;
-    }
-
-    return Number(value);
+    return this.parseDisplayInteger(value);
   }
 
   private parseDecimalValue(value: string): JsonValue {
-    const normalized = Number(value);
-    return Number.isFinite(normalized)
-      ? normalized
-      : null;
+    return this.parseDisplayDecimal(value);
   }
 
   private parseBooleanValue(value: string): JsonValue {
@@ -1194,26 +1471,289 @@ export class ChillService {
   }
 
   private parseDateValue(value: string): JsonValue {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return value;
-    }
-
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
-    }
-
-    const year = parsed.getUTCFullYear();
-    const month = `${parsed.getUTCMonth() + 1}`.padStart(2, '0');
-    const day = `${parsed.getUTCDate()}`.padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return this.parseDisplayDate(value);
   }
 
   private parseDateTimeValue(value: string): JsonValue {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
+    return this.parseDisplayDateTime(value);
+  }
+
+  private resolveCultureName(cultureName?: string | null): string {
+    const normalizedCultureName = cultureName?.trim();
+    return normalizedCultureName || this.currentCultureName();
+  }
+
+  private defaultDateFormatForCulture(cultureName: string): string {
+    return cultureName.trim().toLowerCase() === 'en-us'
+      ? 'MM/dd/yyyy'
+      : 'dd/MM/yyyy';
+  }
+
+  private formatDateParts(year: number, month: number, day: number): string {
+    return this.currentDateFormat().replace(/yyyy|yy|YYYY|YY|dd|DD|MM/g, (token) => {
+      switch (token) {
+        case 'yyyy':
+        case 'YYYY':
+          return `${year}`.padStart(4, '0');
+        case 'yy':
+        case 'YY':
+          return `${year % 100}`.padStart(2, '0');
+        case 'dd':
+        case 'DD':
+          return `${day}`.padStart(2, '0');
+        case 'MM':
+          return `${month}`.padStart(2, '0');
+        default:
+          return token;
+      }
+    });
+  }
+
+  private parseDisplayDateParts(value: string): { year: number; month: number; day: number } | null {
+    const normalizedValue = value.trim();
+    const format = this.currentDateFormat();
+    const tokenRegex = /(dd|MM|yyyy|yy|DD|YYYY|YY)/g;
+    const tokens = format.match(tokenRegex) ?? [];
+    if (tokens.length !== 3) {
+      return null;
+    }
+
+    const separators = format.split(tokenRegex).filter((_, index) => index % 2 === 0);
+    const escapedSeparators = separators.map((separator) => separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const capturePattern = tokens
+      .map((token, index) => `${escapedSeparators[index] ?? ''}${this.normalizeDateFormatToken(token) === 'yyyy' ? '(\\d{4})' : this.normalizeDateFormatToken(token) === 'yy' ? '(\\d{2})' : '(\\d{1,2})'}`)
+      .join('') + (escapedSeparators[separators.length - 1] ?? '');
+    const match = normalizedValue.match(new RegExp(`^${capturePattern}$`));
+    if (!match) {
+      return null;
+    }
+
+    const values = match.slice(1);
+    const parsedValues = Object.fromEntries(
+      tokens.map((token, index) => [this.normalizeDateFormatToken(token), values[index]])
+    ) as Record<string, string | undefined>;
+    const yearToken = parsedValues['yyyy'] ?? parsedValues['yy'] ?? '';
+    const year = (parsedValues['yyyy']
+      ? Number(yearToken)
+      : 2000 + Number(yearToken));
+    const month = Number(parsedValues['MM'] ?? '');
+    const day = Number(parsedValues['dd'] ?? '');
+    return this.isValidDateParts(year, month, day)
+      ? { year, month, day }
+      : null;
+  }
+
+  private normalizeDateFormatToken(token: string): 'dd' | 'MM' | 'yyyy' | 'yy' {
+    switch (token) {
+      case 'DD':
+        return 'dd';
+      case 'YYYY':
+        return 'yyyy';
+      case 'YY':
+        return 'yy';
+      default:
+        return token as 'dd' | 'MM' | 'yyyy' | 'yy';
+    }
+  }
+
+  private toIsoDate(year: number, month: number, day: number): string {
+    return `${year}-${`${month}`.padStart(2, '0')}-${`${day}`.padStart(2, '0')}`;
+  }
+
+  private isValidDateParts(year: number, month: number, day: number): boolean {
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+      return false;
+    }
+
+    const candidate = new Date(year, month - 1, day);
+    return candidate.getFullYear() === year
+      && candidate.getMonth() === month - 1
+      && candidate.getDate() === day;
+  }
+
+  private parseLocalizedNumber(value: string): number | null {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return null;
+    }
+
+    const numberFormat = this.readNumberFormatConfig();
+    const formatter = numberFormat.kind === 'locale'
+      ? new Intl.NumberFormat(numberFormat.locale)
+      : null;
+    const parts = formatter?.formatToParts(12345.6) ?? [];
+    const groupSeparator = numberFormat.kind === 'pattern'
+      ? numberFormat.groupSeparator
+      : (parts.find((part) => part.type === 'group')?.value ?? ',');
+    const decimalSeparator = numberFormat.kind === 'pattern'
+      ? numberFormat.decimalSeparator
+      : (parts.find((part) => part.type === 'decimal')?.value ?? '.');
+    const signParts = formatter?.formatToParts(-1) ?? [];
+    const minusSign = signParts.find((part) => part.type === 'minusSign')?.value ?? '-';
+
+    let sanitizedValue = normalizedValue
+      .replaceAll(String.fromCharCode(160), '')
+      .replaceAll(' ', '');
+
+    if (groupSeparator) {
+      sanitizedValue = sanitizedValue.replaceAll(groupSeparator, '');
+    }
+
+    sanitizedValue = sanitizedValue
+      .replaceAll(decimalSeparator, '.')
+      .replaceAll(minusSign, '-');
+    const parsedValue = Number(sanitizedValue);
+    return Number.isFinite(parsedValue)
+      ? parsedValue
+      : null;
+  }
+
+  private readNumberFormatConfig():
+    | { kind: 'locale'; locale: string }
+    | { kind: 'pattern'; groupSeparator: string; decimalSeparator: string; fractionDigits: number } {
+    const configuredFormat = this.currentNumberFormat().trim();
+    if (this.isSupportedLocale(configuredFormat)) {
+      return {
+        kind: 'locale',
+        locale: configuredFormat
+      };
+    }
+
+    return this.parseNumberFormatPattern(configuredFormat);
+  }
+
+  private isSupportedLocale(value: string): boolean {
+    if (!value) {
+      return false;
+    }
+
+    try {
+      return Intl.NumberFormat.supportedLocalesOf([value]).length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private parseNumberFormatPattern(value: string): {
+    kind: 'pattern';
+    groupSeparator: string;
+    decimalSeparator: string;
+    fractionDigits: number;
+  } {
+    const normalizedValue = value.trim();
+    const lastDot = normalizedValue.lastIndexOf('.');
+    const lastComma = normalizedValue.lastIndexOf(',');
+    const decimalIndex = Math.max(lastDot, lastComma);
+    const decimalSeparator = decimalIndex >= 0 ? normalizedValue[decimalIndex] : '.';
+    const integerPart = decimalIndex >= 0 ? normalizedValue.slice(0, decimalIndex) : normalizedValue;
+    const fractionPart = decimalIndex >= 0 ? normalizedValue.slice(decimalIndex + 1).replace(/[^\d]/g, '') : '';
+    const groupSeparatorMatch = integerPart.match(/[^\d]/);
+
+    return {
+      kind: 'pattern',
+      groupSeparator: groupSeparatorMatch?.[0] ?? '',
+      decimalSeparator,
+      fractionDigits: fractionPart.length
+    };
+  }
+
+  private formatNumberWithPattern(
+    value: number,
+    pattern: { groupSeparator: string; decimalSeparator: string; fractionDigits: number }
+  ): string {
+    const sign = value < 0 ? '-' : '';
+    const absoluteValue = Math.abs(value);
+    const fixedValue = pattern.fractionDigits > 0
+      ? absoluteValue.toFixed(pattern.fractionDigits)
+      : Math.round(absoluteValue).toString();
+    const [integerPart, fractionPart = ''] = fixedValue.split('.');
+    const groupedInteger = pattern.groupSeparator
+      ? integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, pattern.groupSeparator)
+      : integerPart;
+    const hasNonZeroFraction = fractionPart.replace(/0/g, '').length > 0;
+
+    return pattern.fractionDigits > 0 && hasNonZeroFraction
+      ? `${sign}${groupedInteger}${pattern.decimalSeparator}${fractionPart}`
+      : `${sign}${groupedInteger}`;
+  }
+
+  private toZonedIsoDateTime(
+    year: number,
+    month: number,
+    day: number,
+    hour: number,
+    minute: number,
+    second: number,
+    fraction: string
+  ): string | null {
+    const baseUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+    let candidate = new Date(baseUtc);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const offsetMinutes = this.readTimeZoneOffsetMinutes(candidate, this.currentTimeZone());
+      const nextCandidate = new Date(baseUtc - offsetMinutes * 60_000);
+      if (nextCandidate.getTime() === candidate.getTime()) {
+        break;
+      }
+
+      candidate = nextCandidate;
+    }
+
+    const isoValue = candidate.toISOString().replace(/\.\d{3}Z$/, `${fraction || ''}Z`);
+    return Number.isNaN(candidate.getTime())
       ? null
-      : parsed.toISOString();
+      : isoValue;
+  }
+
+  private readZonedDateTimeParts(date: Date, timeZone: string): {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  } {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    });
+    const parts = formatter.formatToParts(date);
+    return {
+      year: Number(parts.find((part) => part.type === 'year')?.value ?? '0'),
+      month: Number(parts.find((part) => part.type === 'month')?.value ?? '0'),
+      day: Number(parts.find((part) => part.type === 'day')?.value ?? '0'),
+      hour: Number(parts.find((part) => part.type === 'hour')?.value ?? '0'),
+      minute: Number(parts.find((part) => part.type === 'minute')?.value ?? '0'),
+      second: Number(parts.find((part) => part.type === 'second')?.value ?? '0')
+    };
+  }
+
+  private readTimeZoneOffsetMinutes(date: Date, timeZone: string): number {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'shortOffset',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const offsetText = formatter.formatToParts(date).find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+    if (offsetText === 'GMT' || offsetText === 'UTC') {
+      return 0;
+    }
+
+    const match = offsetText.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/i);
+    if (!match) {
+      return 0;
+    }
+
+    const sign = match[1] === '-' ? -1 : 1;
+    const hours = Number(match[2]);
+    const minutes = Number(match[3] ?? '0');
+    return sign * (hours * 60 + minutes);
   }
 
   private normalizeEntityChangeNotification(change: ChillEntityChangeNotification): ChillEntityChangeNotification {
@@ -1259,6 +1799,112 @@ export class ChillService {
     };
   }
 
+  private readStoredUserPreferences(): StoredUserPreferences {
+    const rawPreferences = globalThis.localStorage?.getItem(USER_PREFERENCES_STORAGE_KEY);
+    if (!rawPreferences) {
+      return this.createEmptyUserPreferences();
+    }
+
+    try {
+      const parsed = JSON.parse(rawPreferences) as Partial<StoredUserPreferences>;
+      return {
+        displayCultureName: parsed.displayCultureName?.trim() ?? '',
+        displayTimeZone: parsed.displayTimeZone?.trim() ?? '',
+        displayDateFormat: parsed.displayDateFormat?.trim() ?? '',
+        displayNumberFormat: parsed.displayNumberFormat?.trim() ?? ''
+      };
+    } catch {
+      globalThis.localStorage?.removeItem(USER_PREFERENCES_STORAGE_KEY);
+      return this.createEmptyUserPreferences();
+    }
+  }
+
+  private createEmptyUserPreferences(): StoredUserPreferences {
+    return {
+      displayCultureName: '',
+      displayTimeZone: '',
+      displayDateFormat: '',
+      displayNumberFormat: ''
+    };
+  }
+
+  private persistUserPreferences(preferences: StoredUserPreferences): void {
+    const previousPreferences = this.userPreferencesState();
+    const previousCultureName = this.userPreferencesState().displayCultureName.trim().toLowerCase();
+    const nextCultureName = preferences.displayCultureName.trim().toLowerCase();
+    globalThis.localStorage?.setItem(USER_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+    this.userPreferencesState.set(preferences);
+    this.logUserPreferencesUpdate(previousPreferences, preferences);
+    if (previousCultureName !== nextCultureName) {
+      this.textCache.clear();
+      this.pendingTextRequests.clear();
+      this.inFlightTextRequests.clear();
+      this.pendingTextResolvers.clear();
+      this.textVersion.update((current) => current + 1);
+    }
+  }
+
+  private toStoredUserPreferences(user: AuthUserDetailsResponse): StoredUserPreferences {
+    return {
+      displayCultureName: this.readJsonString(user, 'DisplayCultureName') ?? user.displayCultureName ?? '',
+      displayTimeZone: this.readJsonString(user, 'DisplayTimeZone') ?? user.displayTimeZone ?? '',
+      displayDateFormat: this.readJsonString(user, 'DisplayDateFormat') ?? user.displayDateFormat ?? '',
+      displayNumberFormat: this.readJsonString(user, 'DisplayNumberFormat') ?? user.displayNumberFormat ?? ''
+    };
+  }
+
+  private async promptForTimeZoneAlignment(userGuid: string, user: AuthUserDetailsResponse): Promise<void> {
+    const browserTimeZone = this.readBrowserTimeZone();
+    const userTimeZone = (this.readJsonString(user, 'DisplayTimeZone') ?? user.displayTimeZone ?? '').trim();
+    if (!browserTimeZone || !userTimeZone || browserTimeZone === userTimeZone || this.isTimeZoneAlignmentPromptOpen) {
+      return;
+    }
+
+    this.isTimeZoneAlignmentPromptOpen = true;
+    try {
+      const shouldAlign = await this.dialog.confirmYesNo(
+        this.T('3A9D83B1-B1D0-48A1-B917-340496692645', 'Align time zone', 'Allinea fuso orario'),
+        this.T(
+          'B8D2AC57-314D-4B0B-B6C6-ED4D6422163F',
+          `Your browser uses ${browserTimeZone}, but your profile is set to ${userTimeZone}. Do you want to align your profile time zone?`,
+          `Il browser usa ${browserTimeZone}, ma il profilo e impostato su ${userTimeZone}. Vuoi allineare il fuso orario del profilo?`
+        )
+      );
+      if (!shouldAlign) {
+        return;
+      }
+
+      const updatedUser = await firstValueFrom(this.updateUserProfile(userGuid, {
+        displayName: user.displayName ?? '',
+        displayCultureName: user.displayCultureName ?? '',
+        displayTimeZone: browserTimeZone,
+        displayDateFormat: user.displayDateFormat ?? '',
+        displayNumberFormat: user.displayNumberFormat ?? ''
+      }));
+      this.persistUserPreferences(this.toStoredUserPreferences(updatedUser));
+    } finally {
+      this.isTimeZoneAlignmentPromptOpen = false;
+    }
+  }
+
+  private readBrowserTimeZone(): string {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  }
+
+  private isCurrentUser(userGuid: string): boolean {
+    const normalizedUserGuid = userGuid.trim();
+    if (!normalizedUserGuid) {
+      return false;
+    }
+
+    const resolvedCurrentUserGuid = this.currentUserGuidState().trim();
+    if (resolvedCurrentUserGuid) {
+      return normalizedUserGuid === resolvedCurrentUserGuid;
+    }
+
+    return normalizedUserGuid === (this.sessionState()?.userId?.trim() ?? '');
+  }
+
   private toRegisterAuthIdentityRequest(request: RegisterRequest): RegisterAuthIdentityRequest {
     return {
       userName: request.UserName,
@@ -1266,6 +1912,7 @@ export class ChillService {
       password: request.Password,
       displayName: request.DisplayName,
       displayCultureName: request.DisplayCultureName,
+      displayTimeZone: request.DisplayTimeZone,
       createChillAuthUser: request.CreateChillAuthUser
     };
   }
@@ -1483,7 +2130,7 @@ export class ChillService {
     this.pendingTextRequests.set(key, {
       request: {
         labelGuid: key,
-        cultureName: CHILL_CULTURE,
+        cultureName: this.currentCultureName(),
         primaryCultureName: CHILL_PRIMARY_TEXT_CULTURE,
         primaryDefaultText: primaryDefaultText ?? '',
         secondaryCultureName: CHILL_SECONDARY_TEXT_CULTURE,
@@ -1558,11 +2205,12 @@ export class ChillService {
     const primaryText = primaryDefaultText.trim();
     const secondaryText = secondaryDefaultText.trim();
 
-    if (this.culturesMatch(CHILL_CULTURE, CHILL_SECONDARY_TEXT_CULTURE) && secondaryText) {
+    const cultureName = this.currentCultureName();
+    if (this.culturesMatch(cultureName, CHILL_SECONDARY_TEXT_CULTURE) && secondaryText) {
       return secondaryText;
     }
 
-    if (this.culturesMatch(CHILL_CULTURE, CHILL_PRIMARY_TEXT_CULTURE) && primaryText) {
+    if (this.culturesMatch(cultureName, CHILL_PRIMARY_TEXT_CULTURE) && primaryText) {
       return primaryText;
     }
 
@@ -1573,10 +2221,23 @@ export class ChillService {
     return left.trim().toLowerCase() === right.trim().toLowerCase();
   }
 
+  private logUserPreferencesUpdate(previous: StoredUserPreferences, next: StoredUserPreferences): void {
+    console.log('[ChillService] User preferences updated', {
+      previous,
+      next,
+      changed: {
+        displayCultureName: previous.displayCultureName !== next.displayCultureName,
+        displayTimeZone: previous.displayTimeZone !== next.displayTimeZone,
+        displayDateFormat: previous.displayDateFormat !== next.displayDateFormat,
+        displayNumberFormat: previous.displayNumberFormat !== next.displayNumberFormat
+      }
+    });
+  }
+
   private logStartupDiagnostics(): void {
     console.log('[ChillService] Startup', {
       baseUrl: CHILL_BASE_URL,
-      culture: CHILL_CULTURE,
+      culture: this.currentCultureName(),
       hasStoredSession: this.sessionState() !== null
     });
 
@@ -1644,6 +2305,18 @@ export class ChillService {
     }
 
     return throwError(() => error);
+  }
+
+  private isNotFoundError(error: unknown): boolean {
+    if (error instanceof ChillSharpClientError) {
+      return error.statusCode === 404;
+    }
+
+    if (error instanceof Error) {
+      return error.message.trim().toLowerCase() === 'not found';
+    }
+
+    return false;
   }
 
   private readChillErrorMessage(error: ChillSharpClientError): string {

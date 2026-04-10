@@ -3,8 +3,11 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import type { AuthUserDetailsResponse, JsonValue } from 'chill-sharp-ng-client';
 import { firstValueFrom } from 'rxjs';
+import { getCultureNameOptions } from '../lib/culture-name-options';
+import { getDateFormatOptions } from '../lib/date-format-options';
+import { getIanaTimeZoneOptions } from '../lib/iana-time-zone-options';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
-import { CHILL_PROPERTY_TYPE, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import type { UpdateUserProfileRequest } from '../models/chill-auth.models';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { ChillService } from '../services/chill.service';
@@ -86,6 +89,9 @@ export class UserProfileDialogComponent {
     displayDateFormat: new FormControl<JsonValue>('', { nonNullable: true }),
     displayNumberFormat: new FormControl<JsonValue>('', { nonNullable: true })
   });
+  private readonly cultureNameOptions = getCultureNameOptions();
+  private readonly dateFormatOptions = getDateFormatOptions();
+  private readonly timeZoneOptions = getIanaTimeZoneOptions();
 
   private readonly properties: ChillPropertySchema[] = [
     {
@@ -98,23 +104,32 @@ export class UserProfileDialogComponent {
     {
       name: 'displayCultureName',
       displayName: this.chill.T('771A6B48-7330-4852-A6B5-5BD314EC5662', 'Culture', 'Cultura'),
-      propertyType: CHILL_PROPERTY_TYPE.String,
+      propertyType: CHILL_PROPERTY_TYPE.Select,
       isNullable: false,
-      metadata: { required: 'true', maxLength: '64' }
+      metadata: {
+        required: 'true',
+        options: this.cultureNameOptions
+      } as ChillMetadataRecord
     },
     {
       name: 'displayTimeZone',
       displayName: this.chill.T('98E424F1-0183-4D9E-9B69-CDB16EBD41CF', 'Time zone', 'Fuso orario'),
-      propertyType: CHILL_PROPERTY_TYPE.String,
+      propertyType: CHILL_PROPERTY_TYPE.Select,
       isNullable: false,
-      metadata: { required: 'true', maxLength: '128' }
+      metadata: {
+        required: 'true',
+        options: this.timeZoneOptions
+      } as ChillMetadataRecord
     },
     {
       name: 'displayDateFormat',
       displayName: this.chill.T('49988673-8DBD-4C2B-9430-DA3054F0E294', 'Date format', 'Formato data'),
-      propertyType: CHILL_PROPERTY_TYPE.String,
+      propertyType: CHILL_PROPERTY_TYPE.Select,
       isNullable: false,
-      metadata: { required: 'true', maxLength: '64' }
+      metadata: {
+        required: 'true',
+        options: this.dateFormatOptions
+      } as ChillMetadataRecord
     },
     {
       name: 'displayNumberFormat',

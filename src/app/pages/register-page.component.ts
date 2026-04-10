@@ -118,6 +118,7 @@ export class RegisterPageComponent {
       Password: value.password,
       DisplayName: value.displayName,
       DisplayCultureName: this.readBrowserCultureName(),
+      DisplayTimeZone: this.readBrowserTimeZone(),
       CreateChillAuthUser: value.createChillAuthUser
     }).subscribe({
       next: () => {
@@ -140,5 +141,9 @@ export class RegisterPageComponent {
       ?? globalThis.navigator?.language
       ?? '';
     return browserCultureName.trim() || CHILL_CULTURE;
+  }
+
+  private readBrowserTimeZone(): string {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   }
 }

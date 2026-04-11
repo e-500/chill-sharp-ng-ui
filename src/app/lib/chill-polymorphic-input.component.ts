@@ -17,6 +17,7 @@ import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 
 type FieldValueMap = Record<string, JsonValue>;
 type ErrorMap = Record<string, string>;
+type DraftTextMap = Record<string, string>;
 
 interface LookupState {
   term: string;
@@ -58,6 +59,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
 
   // #region State
   readonly fieldValues = signal<FieldValueMap>({});
+  readonly draftTextValues = signal<DraftTextMap>({});
   readonly errors = signal<ErrorMap>({});
   readonly lookups = signal<Record<string, LookupState>>({});
   readonly lookupOverlayPositions: ConnectedPosition[] = [
@@ -164,19 +166,31 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
             ...current,
             [property.name]: value
           }));
+          this.draftTextValues.update((current) => {
+            if (!(property.name in current)) {
+              return current;
+            }
+
+            const { [property.name]: _, ...rest } = current;
+            return rest;
+          });
           this.syncLookupState(property, value);
-          this.validateField(property);
+          if (this.shouldValidateOnChange(property)) {
+            this.validateField(property);
+          }
         }));
       }
 
       if (!form) {
         this.fieldValues.set({});
+        this.draftTextValues.set({});
         this.errors.set({});
         this.lookups.set({});
         return;
       }
 
       this.fieldValues.update((current) => this.areRecordsEqual(current, fields) ? current : fields);
+      this.draftTextValues.set({});
       this.errors.update((current) => this.areStringRecordsEqual(current, errors) ? current : errors);
       this.lookups.update((current) => this.areLookupStatesEqual(current, lookups) ? current : lookups);
     });
@@ -319,6 +333,11 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Converts string and numeric field values into the text representation expected by native inputs.
    */
   textValue(propertyName: string): string {
+    const draftValue = this.draftTextValues()[propertyName];
+    if (typeof draftValue === 'string') {
+      return draftValue;
+    }
+
     const value = this.fieldValues()[propertyName];
     const property = this.properties().find((candidate) => candidate.name === propertyName);
     if (property) {
@@ -336,7 +355,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
         }
 
         if (property.propertyType === CHILL_PROPERTY_TYPE.Time) {
-          return this.formatTimeDisplayValue(value);
+          return this.chill.formatDisplayTime(value);
         }
 
         if (property.propertyType === CHILL_PROPERTY_TYPE.DateTime) {
@@ -461,7 +480,10 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Trims and type-normalizes free-text input on blur, then revalidates before notifying the parent.
    */
   normalizeTextOnBlur(property: ChillPropertySchema): void {
-    const currentValue = this.fieldValues()[property.name];
+    const draftValue = this.draftTextValues()[property.name];
+    const currentValue = typeof draftValue === 'string'
+      ? draftValue
+      : this.fieldValues()[property.name];
     if (typeof currentValue !== 'string') {
       this.notifyFieldBlur(property.name);
       return;
@@ -469,12 +491,12 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
 
     const normalizedValue = this.normalizeBlurValue(property, currentValue);
     if (normalizedValue === null) {
-      this.validateField(property);
-      this.notifyFieldBlur(property.name);
+      this.setLocalError(property.name, this.getValidationMessage(property, currentValue));
       return;
     }
 
     this.setFieldValue(property.name, normalizedValue);
+    this.clearDraftTextValue(property.name);
     this.validateField(property);
     this.notifyFieldBlur(property.name);
   }
@@ -483,6 +505,16 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Tracks raw typing for date and date-time inputs until blur normalization rewrites the value in culture format.
    */
   updateTextInput(propertyName: string, value: string): void {
+    const property = this.properties().find((candidate) => candidate.name === propertyName);
+    if (property && this.shouldCommitTextOnBlur(property)) {
+      this.draftTextValues.update((current) => ({
+        ...current,
+        [propertyName]: value
+      }));
+      this.clearLocalError(propertyName);
+      return;
+    }
+
     this.setFieldValue(propertyName, value);
   }
 
@@ -938,17 +970,53 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   private validateField(property: ChillPropertySchema): void {
     const message = this.getValidationMessage(property, this.fieldValues()[property.name]);
+    this.setLocalError(property.name, message);
+  }
+
+  private setLocalError(propertyName: string, message: string): void {
     this.errors.update((current) => {
       if (!message) {
-        const { [property.name]: _, ...rest } = current;
+        const { [propertyName]: _, ...rest } = current;
         return rest;
       }
 
       return {
         ...current,
-        [property.name]: message
+        [propertyName]: message
       };
     });
+  }
+
+  private clearLocalError(propertyName: string): void {
+    this.errors.update((current) => {
+      if (!(propertyName in current)) {
+        return current;
+      }
+
+      const { [propertyName]: _, ...rest } = current;
+      return rest;
+    });
+  }
+
+  private clearDraftTextValue(propertyName: string): void {
+    this.draftTextValues.update((current) => {
+      if (!(propertyName in current)) {
+        return current;
+      }
+
+      const { [propertyName]: _, ...rest } = current;
+      return rest;
+    });
+  }
+
+  private shouldValidateOnChange(property: ChillPropertySchema): boolean {
+    return !this.shouldCommitTextOnBlur(property);
+  }
+
+  private shouldCommitTextOnBlur(property: ChillPropertySchema): boolean {
+    return property.propertyType === CHILL_PROPERTY_TYPE.Date
+      || property.propertyType === CHILL_PROPERTY_TYPE.Time
+      || property.propertyType === CHILL_PROPERTY_TYPE.DateTime;
   }
 
   /**
@@ -1076,8 +1144,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       return this.chill.T('8EC86C1D-B626-40FB-BEA8-1FE80B66E51F', 'Enter a valid date.', 'Inserisci una data valida.');
     }
 
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
+    return this.chill.parseDisplayDate(value.trim()) === null
       ? this.chill.T('8EC86C1D-B626-40FB-BEA8-1FE80B66E51F', 'Enter a valid date.', 'Inserisci una data valida.')
       : '';
   }
@@ -1090,7 +1157,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       return this.chill.T('6E14B3A1-498E-4B11-A8C9-E16189E60AFD', 'Enter a valid time.', 'Inserisci un orario valido.');
     }
 
-    return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,7})?)?$/.test(value.trim())
+    return this.chill.parseDisplayTime(value.trim()) !== null
       ? ''
       : this.chill.T('6E14B3A1-498E-4B11-A8C9-E16189E60AFD', 'Enter a valid time.', 'Inserisci un orario valido.');
   }
@@ -1103,7 +1170,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       return this.chill.T('B08EAAE2-7AA8-45C6-A531-0A37A4DE65F5', 'Enter a valid date and time.', 'Inserisci una data e ora valida.');
     }
 
-    return this.parseDateTimeDisplayValue(value.trim()) === null
+    return this.chill.parseDisplayDateTime(value.trim()) === null
       ? this.chill.T('B08EAAE2-7AA8-45C6-A531-0A37A4DE65F5', 'Enter a valid date and time.', 'Inserisci una data e ora valida.')
       : '';
   }
@@ -1190,7 +1257,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       case CHILL_PROPERTY_TYPE.Date:
         return this.chill.parseDisplayDate(trimmedValue);
       case CHILL_PROPERTY_TYPE.Time:
-        return this.parseTimeDisplayValue(trimmedValue);
+        return this.chill.parseDisplayTime(trimmedValue);
       case CHILL_PROPERTY_TYPE.DateTime:
         return this.chill.parseDisplayDateTime(trimmedValue);
       case CHILL_PROPERTY_TYPE.Duration:
@@ -1489,15 +1556,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Formats normalized storage time values as `HH:MM`, keeping seconds only when they are non-zero.
    */
   private formatTimeDisplayValue(value: string): string {
-    const normalizedValue = value.trim();
-    const match = normalizedValue.match(/^(\d{2}):(\d{2})(?::(\d{2})(\.\d{1,7})?)?$/);
-    if (!match) {
-      return normalizedValue;
-    }
-
-    const seconds = match[3] && match[3] !== '00' ? `:${match[3]}` : '';
-    const fraction = seconds ? (match[4] ?? '') : '';
-    return `${match[1]}:${match[2]}${seconds}${fraction}`;
+    return this.chill.formatDisplayTime(value);
   }
 
   /**

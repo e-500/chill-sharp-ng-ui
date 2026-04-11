@@ -140,6 +140,8 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
           : this.chill.T('8A65EBA6-81BD-4733-87D5-4CFE3F5C2D3F', 'No', 'No');
       case CHILL_PROPERTY_TYPE.Date:
         return this.formatDate(value);
+      case CHILL_PROPERTY_TYPE.Time:
+        return this.formatTime(value);
       case CHILL_PROPERTY_TYPE.DateTime:
         return this.formatDateTime(value);
       case CHILL_PROPERTY_TYPE.ChillEntity:
@@ -174,6 +176,14 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     }
 
     return this.chill.formatDisplayDateTime(value);
+  }
+
+  private formatTime(value: JsonValue): string {
+    if (typeof value !== 'string' || !value.trim()) {
+      return '';
+    }
+
+    return this.chill.formatDisplayTime(value);
   }
 
   private formatNumber(value: JsonValue): string {

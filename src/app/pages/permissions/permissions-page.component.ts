@@ -17,6 +17,10 @@ type PermissionSection = 'users' | 'roles';
   styleUrl: './permissions-page.component.scss'
 })
 export class PermissionsPageComponent implements OnInit, OnDestroy {
+  static getComponentConfigurationJsonExample(): Record<string, never> {
+    return {};
+  }
+
   readonly chill = inject(ChillService);
   readonly toolbar = inject(WorkspaceToolbarService);
 

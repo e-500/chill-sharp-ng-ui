@@ -5,8 +5,13 @@ export interface WorkspaceTaskComponent<TResult = unknown> {
   canDialogSubmit?(): boolean;
 }
 
-export type WorkspaceTaskComponentType = Type<unknown>;
 export type WorkspaceTaskConfiguration = Record<string, unknown>;
+
+export interface WorkspaceTaskComponentClass {
+  getComponentConfigurationJsonExample(): WorkspaceTaskConfiguration | null;
+}
+
+export type WorkspaceTaskComponentType = Type<unknown> & Partial<WorkspaceTaskComponentClass>;
 
 export interface WorkspaceRemoteTaskDefinition {
   componentName: string;

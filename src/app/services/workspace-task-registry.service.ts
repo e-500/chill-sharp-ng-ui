@@ -16,6 +16,7 @@ export interface WorkspaceTaskDefinition {
   title: string;
   description: string;
   kind: 'builtin' | 'remote';
+  componentConfigurationJsonExample?: string | null;
   usesTaskConfigurationInputs?: boolean;
   showInQuickLaunch: boolean;
   loadComponent: () => Promise<WorkspaceTaskComponentType>;
@@ -79,6 +80,7 @@ export class WorkspaceTaskRegistryService {
       title: 'Event Viewer',
       description: 'Browse event stream data.',
       kind: 'builtin',
+      componentConfigurationJsonExample: this.serializeComponentConfigurationJsonExample(EventViewerComponent),
       showInQuickLaunch: true,
       loadComponent: async () => EventViewerComponent,
       aliases: ['event-viewer', 'eventviewer', 'events']
@@ -89,6 +91,7 @@ export class WorkspaceTaskRegistryService {
       title: 'Permissions',
       description: 'Manage roles, users, and access rules.',
       kind: 'builtin',
+      componentConfigurationJsonExample: this.serializeComponentConfigurationJsonExample(PermissionsPageComponent),
       showInQuickLaunch: false,
       loadComponent: async () => PermissionsPageComponent,
       aliases: ['permissions', 'permission', 'permission-page']
@@ -99,6 +102,7 @@ export class WorkspaceTaskRegistryService {
       title: 'CRUD',
       description: 'Inspect schemas and work with entities.',
       kind: 'builtin',
+      componentConfigurationJsonExample: this.serializeComponentConfigurationJsonExample(CrudTaskComponent),
       usesTaskConfigurationInputs: true,
       showInQuickLaunch: false,
       loadComponent: async () => CrudTaskComponent,
@@ -155,6 +159,7 @@ export class WorkspaceTaskRegistryService {
       title: task.title?.trim() || componentName,
       description: task.description?.trim() || 'External workspace task.',
       kind: 'remote',
+      componentConfigurationJsonExample: null,
       showInQuickLaunch: Boolean(task.showInQuickLaunch),
       loadComponent: () => this.loadRemoteComponent(cacheKey, remoteEntryUrl, remoteName, exposedModule, task.exportedComponentName?.trim() || 'default'),
       aliases: [componentName]
@@ -178,6 +183,19 @@ export class WorkspaceTaskRegistryService {
         aliases: normalizedAliases
       }];
     });
+  }
+
+  private serializeComponentConfigurationJsonExample(component: WorkspaceTaskComponentType): string | null {
+    const example = component.getComponentConfigurationJsonExample?.();
+    if (!example || typeof example !== 'object' || Array.isArray(example)) {
+      return '{}';
+    }
+
+    try {
+      return JSON.stringify(example, null, 2);
+    } catch {
+      return '{}';
+    }
   }
 
   private loadRemoteComponent(

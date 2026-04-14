@@ -19,6 +19,10 @@ const DEFAULT_VIEW_CODE = 'default';
   styleUrl: './event-viewer.component.scss'
 })
 export class EventViewerComponent implements OnInit {
+  static getComponentConfigurationJsonExample(): Record<string, never> {
+    return {};
+  }
+
   readonly chill = inject(ChillService);
 
   readonly isLoadingSchema = signal(true);

@@ -120,7 +120,17 @@
                             <span
                               class="row-action-button__icon"
                               [class.material-symbol-icon]="rowActionIconClass(action) === 'material-symbol-icon'">{{ rowActionIcon(action) }}</span>
-                            <span class="row-action-menu__label">{{ rowActionLabel(action) }}</span>
+                            <span class="row-action-menu__label">
+                              @if (action.labelGuid && action.primaryDefaultText && action.secondaryDefaultText) {
+                                <app-chill-i18n-label
+                                  [labelGuid]="action.labelGuid"
+                                  [primaryDefaultText]="action.primaryDefaultText"
+                                  [secondaryDefaultText]="action.secondaryDefaultText"
+                                  [editable]="false" />
+                              } @else {
+                                {{ rowActionLabel(action) }}
+                              }
+                            </span>
                           </button>
                         }
                         </div>

@@ -16,14 +16,37 @@
         }
       } @else if (isLookupCollection(property)) {
         <div class="lookup">
+          @for (entity of selectedLookupCollectionEntities(property.name); track lookupGuid(entity) || $index) {
+            <div class="lookup-selected" [title]="lookupLabel(entity)">
+              <span class="lookup-selected__label lookup-selected__label--full">
+                {{ lookupLabel(entity) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+              </span>
+              <span class="lookup-selected__label lookup-selected__label--short">
+                {{ lookupShortLabel(entity) || lookupLabel(entity) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+              </span>
+              <button
+                type="button"
+                class="lookup-selected__clear"
+                (click)="removeLookupCollectionEntity(property, entity)"
+                [disabled]="isPropertyReadOnly(property.name)"
+                [attr.aria-label]="chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci')">
+                X
+              </button>
+            </div>
+          }
+
           <div class="lookup-bar">
-            <input
-              type="text"
-              [ngModel]="lookupCollectionSummary(property.name)"
-              [name]="property.name"
-              [placeholder]="placeholder(property) || chill.T('8B0ED598-819C-42E5-B41A-439F7066EEA9', 'Select values', 'Seleziona valori')"
-              [disabled]="isPropertyReadOnly(property.name)"
-              readonly />
+            <div class="lookup-input-slot" cdkOverlayOrigin #lookupOrigin="cdkOverlayOrigin" #lookupOriginElement>
+              <input
+                type="text"
+                [ngModel]="lookupTerm(property.name)"
+                (ngModelChange)="updateLookupTerm(property, $event)"
+                (focus)="handleLookupFocus(property)"
+                (blur)="handleLookupBlur(property.name)"
+                [disabled]="isPropertyReadOnly(property.name)"
+                [name]="property.name"
+                [placeholder]="placeholder(property) || chill.T('FA7B8E01-658C-4D63-B53F-D476CD697892', 'Search entity', 'Cerca entita')" />
+            </div>
             @if (canOpenLookupDialog(property)) {
               <button
                 type="button"
@@ -39,16 +62,40 @@
             </button>
           </div>
 
-          @if (collectionLookupLabels(property.name).length > 0) {
-            <div class="lookup-tags">
-              @for (label of collectionLookupLabels(property.name); track $index) {
-                <span class="lookup-tag">{{ label }}</span>
+          <ng-template
+            cdkConnectedOverlay
+            [cdkConnectedOverlayOrigin]="lookupOrigin"
+            [cdkConnectedOverlayOpen]="lookupResults(property.name).length > 0"
+            [cdkConnectedOverlayPositions]="lookupOverlayPositions"
+            [cdkConnectedOverlayPush]="true"
+            [cdkConnectedOverlayFlexibleDimensions]="true"
+            [cdkConnectedOverlayViewportMargin]="8"
+            [cdkConnectedOverlayOffsetY]="6">
+            <div
+              class="lookup-results"
+              role="listbox"
+              [style.--lookup-overlay-width.px]="lookupOverlayWidth(lookupOriginElement)">
+              @for (result of lookupResults(property.name); track $index) {
+                <button
+                  type="button"
+                  class="lookup-result"
+                  [class.is-selected]="isLookupResultSelected(property.name, result)"
+                  (mousedown)="$event.preventDefault()"
+                  (click)="selectLookupResult(property, result)">
+                  {{ lookupLabel(result) || chill.T('B93CA88B-01FE-44B6-9C2F-C9878A7B324B', 'Select value', 'Seleziona valore') }}
+                </button>
               }
             </div>
-          }
+          </ng-template>
 
           @if (lookupError(property.name)) {
             <small class="field-error">{{ lookupError(property.name) }}</small>
+          }
+
+          @if (lookupIsSearching(property.name)) {
+            <small class="lookup-status">
+              {{ chill.T('ABAF5996-C2BB-4F85-BE0F-CC75883A648B', 'Searching...', 'Ricerca in corso...') }}
+            </small>
           }
         </div>
       } @else if (isLookup(property)) {
@@ -147,7 +194,7 @@
           [value]="textValue(property.name)"
           [placeholder]="placeholder(property)"
           [invalid]="!!validationMessage(property.name)"
-          [disabled]="isPropertyReadOnly(property.name) || control(property.name)?.disabled ?? false"
+          [disabled]="isPropertyReadOnly(property.name) || (control(property.name)?.disabled ?? false)"
           (valueChange)="updateJsonInput(property.name, $event)"
           (blur)="emitFieldBlur(property.name)"></app-chill-json-input>
       } @else if (isSelect(property)) {

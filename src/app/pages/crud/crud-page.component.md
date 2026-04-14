@@ -37,6 +37,134 @@ Purpose:
 
 The ignore window currently lasts 1 second.
 
+## CRUD Relations
+
+`CrudPageComponentConfiguration` supports a `Relations` array. Each relation defines another CRUD page that can be opened from the row action menu of the current table.
+
+Typical use case:
+
+- master-detail navigation
+- opening child entities filtered by the selected parent row
+- pre-filling default values for create flows in the child CRUD
+
+### Configuration Shape
+
+Each relation uses the same configuration type as the root CRUD page:
+
+```ts
+{
+  chillType: 'Model.General.OrderRow',
+  chillQuery: 'Model.Query.OrderRowQuery',
+  viewCode: 'default',
+  relationLabel: 'Rows',
+  defaultValues: { ... },
+  fixedQueryValues: { ... },
+  defaultQueryValues: { ... },
+  relations: [ ... ]
+}
+```
+
+Notes:
+
+- `chillType` is the child CRUD entity type to open.
+- `chillQuery` is optional and can be used to choose the child query type.
+- `viewCode` is optional and defaults to `default`.
+- `relationLabel` is optional and can be either a plain string or an i18n object with `labelGuid`, `primaryDefaultText`, and `secondaryDefaultText`.
+- `relations` can be nested if the child CRUD should expose its own row relations.
+
+### Basic Example
+
+This example opens an order row CRUD from an order row action:
+
+```ts
+const configuration = {
+  chillType: 'Model.General.Order',
+  chillQuery: 'Model.Query.OrderQuery',
+  relations: [
+    {
+      chillType: 'Model.General.OrderRow',
+      chillQuery: 'Model.Query.OrderRowQuery',
+      relationLabel: {
+        labelGuid: 'ORDER-ROWS-LABEL',
+        primaryDefaultText: 'Rows',
+        secondaryDefaultText: 'Righe'
+      },
+      fixedQueryValues: {
+        OrderGuid: '@{Guid}'
+      },
+      defaultQueryValues: {
+        OrderGuid: '@{Guid}'
+      },
+      defaultValues: {
+        OrderGuid: '@{Guid}'
+      }
+    }
+  ]
+};
+```
+
+Behavior:
+
+- the current row gets an extra action in the row menu
+- clicking the action opens the child CRUD in the workspace
+- the selected row values are injected into the child configuration before opening it
+
+### Placeholder Syntax
+
+Inside `defaultValues`, `fixedQueryValues`, and `defaultQueryValues`, string values can use placeholder syntax:
+
+- `@{FieldName}`
+- `@{mock}`
+
+Examples:
+
+```ts
+defaultValues: {
+  OrderGuid: '@{Guid}',
+  CustomerGuid: '@{CustomerGuid}',
+  Parent: '@{mock}'
+}
+```
+
+Meaning:
+
+- `@{FieldName}` reads a property from the selected row
+- `@{mock}` creates a lightweight Chill entity object from the selected row
+
+If a value does not match the placeholder syntax, it is used as-is.
+
+### When To Use Each Value Bag
+
+- `fixedQueryValues`: use for mandatory query filters that the user should not change
+- `defaultQueryValues`: use for initial query values that the user may still edit
+- `defaultValues`: use for initial create-dialog defaults in the child CRUD
+
+### Custom Menu Label
+
+If `relationLabel` is set, the row action menu uses that label:
+
+```ts
+{
+  chillType: 'Model.General.InvoiceRow',
+  relationLabel: 'Invoice rows'
+}
+```
+
+Or with i18n text:
+
+```ts
+{
+  chillType: 'Model.General.InvoiceRow',
+  relationLabel: {
+    labelGuid: 'INVOICE-ROWS-LABEL',
+    primaryDefaultText: 'Invoice rows',
+    secondaryDefaultText: 'Righe fattura'
+  }
+}
+```
+
+If `RelationLabel` is not set, the CRUD page falls back to an automatic label based on `ChillType`.
+
 ## Related Components
 
 - `ChillFormComponent` owns dialog autocomplete, validation, and default save behavior.

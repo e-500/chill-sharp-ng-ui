@@ -1,13 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import type { JsonValue } from 'chill-sharp-ng-client';
+import { Subscription } from 'rxjs';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
 import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import type { ChillMenuItem } from '../models/chill-menu.models';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceService } from '../services/workspace.service';
 import type { WorkspaceTaskComponent } from '../models/workspace-task.models';
+import { WorkspaceToolbarService } from '../services/workspace-toolbar.service';
 
 type MenuFormGroup = FormGroup<Record<string, FormControl<JsonValue>>>;
 
@@ -61,14 +63,16 @@ interface MenuItemDialogResult {
     }
   `
 })
-export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<MenuItemDialogResult> {
+export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<MenuItemDialogResult>, OnDestroy {
   readonly chill = inject(ChillService);
   readonly workspace = inject(WorkspaceService);
+  readonly toolbar = inject(WorkspaceToolbarService);
 
   readonly item = input<ChillMenuItem | null>(null);
   readonly parent = input<ChillMenuItem | null>(null);
 
   readonly isValid = signal(true);
+  readonly selectedComponentName = signal('');
   readonly componentOptions = computed<[string, string][]>(() => {
     const registryOptions = this.workspace.availableTasks()
       .map((task) => [task.componentName, `${task.title} (${task.componentName})`] as [string, string])
@@ -79,6 +83,17 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
       ...registryOptions
     ];
   });
+  readonly selectedTaskDefinition = computed(() => {
+    const componentName = this.selectedComponentName().toLowerCase();
+    if (!componentName) {
+      return null;
+    }
+
+    return this.workspace.availableTasks().find((task) => task.componentName === componentName) ?? null;
+  });
+  readonly selectedComponentConfigurationJsonExample = computed(() =>
+    this.selectedTaskDefinition()?.componentConfigurationJsonExample?.trim() || '{}'
+  );
   readonly properties = computed<ChillPropertySchema[]>(() => [
     {
       name: 'title',
@@ -134,16 +149,48 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
     componentConfigurationJson: new FormControl<JsonValue>('', { nonNullable: true }),
     menuHierarchy: new FormControl<JsonValue>('', { nonNullable: true })
   });
+  private readonly componentNameSubscription: Subscription;
 
   constructor() {
+    this.componentNameSubscription = this.form.controls['componentName'].valueChanges.subscribe((value) => {
+      this.selectedComponentName.set(typeof value === 'string' ? value.trim() : '');
+    });
+
     effect(() => {
       const source = this.item();
       this.form.controls['title'].setValue(source?.title ?? '');
       this.form.controls['description'].setValue(source?.description ?? '');
       this.form.controls['componentName'].setValue(source?.componentName ?? '');
+      this.selectedComponentName.set(source?.componentName?.trim() ?? '');
       this.form.controls['componentConfigurationJson'].setValue(source?.componentConfigurationJson ?? '');
       this.form.controls['menuHierarchy'].setValue(source?.menuHierarchy ?? '');
     });
+
+    effect(() => {
+      const selectedTask = this.selectedTaskDefinition();
+      this.toolbar.setButtons([
+        {
+          id: 'menu-item-apply-configuration-example',
+          labelGuid: '64BFBDFC-EA1B-47C5-95E1-8B5074B9E98A',
+          primaryDefaultText: 'Use config example',
+          secondaryDefaultText: 'Usa esempio config',
+          ariaLabel: this.chill.T(
+            '64BFBDFC-EA1B-47C5-95E1-8B5074B9E98A',
+            'Use config example',
+            'Usa esempio config'
+          ),
+          icon: 'data_object',
+          iconClass: 'material-symbol-icon',
+          action: () => this.applyComponentConfigurationJsonExample(),
+          disabled: !selectedTask
+        }
+      ], 'dialog');
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.componentNameSubscription.unsubscribe();
+    this.toolbar.clearButtons('dialog');
   }
 
   canDialogSubmit(): boolean {
@@ -171,11 +218,16 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
     return this.parent()?.title?.trim() ?? '';
   }
 
+  applyComponentConfigurationJsonExample(): void {
+    this.form.controls['componentConfigurationJson'].setValue(this.selectedComponentConfigurationJsonExample());
+    this.form.controls['componentConfigurationJson'].markAsDirty();
+    this.form.controls['componentConfigurationJson'].markAsTouched();
+  }
+
   private readString(controlName: string): string {
     const value = this.form.controls[controlName].value;
     return typeof value === 'string' ? value.trim() : '';
   }
-
   private readOptionalString(controlName: string): string | null {
     const value = this.readString(controlName);
     return value ? value : null;

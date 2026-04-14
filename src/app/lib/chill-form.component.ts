@@ -463,8 +463,12 @@ export class ChillFormComponent implements OnDestroy {
 
   private buildEntityPayload(): ChillEntity {
     const entity = this.entity();
+    const schema = this.schema();
+    const sanitizedEntity = entity && schema
+      ? this.stripSchemaPropertiesFromRoot(entity, schema)
+      : entity;
     return {
-      ...(entity ?? {}),
+      ...(sanitizedEntity ?? {}),
       properties: this.buildPropertiesObject(this.form())
     };
   }
@@ -630,12 +634,38 @@ export class ChillFormComponent implements OnDestroy {
   }
 
   private normalizeEntityForSubmit(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    const sanitizedSourceEntity = this.entity()
+      ? this.stripSchemaPropertiesFromRoot(this.entity() as ChillEntity, schema)
+      : null;
+    const sanitizedEntity = this.stripSchemaPropertiesFromRoot(entity, schema);
     return {
-      ...(this.entity() ?? {}),
-      ...entity,
+      ...(sanitizedSourceEntity ?? {}),
+      ...sanitizedEntity,
       chillType: this.readEntityChillType(entity, schema),
       properties: this.buildPropertiesObject(this.form())
     };
+  }
+
+  private stripSchemaPropertiesFromRoot(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    const nextEntity = { ...entity } as ChillEntity;
+    const protectedNames = new Set(['guid', 'Guid', 'chillType', 'ChillType', 'chillState', 'ChillState', 'properties', 'Properties']);
+
+    for (const property of schema.properties ?? []) {
+      const propertyName = property.name?.trim();
+      if (!propertyName || protectedNames.has(propertyName)) {
+        continue;
+      }
+
+      delete nextEntity[propertyName];
+      const pascalCaseName = propertyName.length > 0
+        ? `${propertyName[0].toUpperCase()}${propertyName.slice(1)}`
+        : propertyName;
+      if (!protectedNames.has(pascalCaseName)) {
+        delete nextEntity[pascalCaseName];
+      }
+    }
+
+    return nextEntity;
   }
 
   private readEntityChillType(entity: ChillEntity, schema: ChillSchema): string {

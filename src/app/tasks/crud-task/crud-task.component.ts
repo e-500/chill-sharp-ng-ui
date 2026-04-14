@@ -31,6 +31,23 @@ import { WorkspaceToolbarService } from '../../services/workspace-toolbar.servic
   `
 })
 export class CrudTaskComponent implements OnDestroy {
+  static getComponentConfigurationJsonExample(): WorkspaceTaskConfiguration | null {
+    return {
+      chillType: '',
+      chillQuery: null,
+      viewCode: 'default',
+      relationLabel: {
+        labelGuid: "",
+        primaryDefaultText: "",
+        secondaryDefaultText: ""
+      },
+      defaultValues: {},
+      fixedQueryValues: {},
+      defaultQueryValues: {},
+      relations: []
+    };
+  }
+
   readonly chill = inject(ChillService);
   readonly dialog = inject(WorkspaceDialogService, { optional: true });
   readonly toolbar = inject(WorkspaceToolbarService);
@@ -91,6 +108,8 @@ export class CrudTaskComponent implements OnDestroy {
           primaryDefaultText: 'Save',
           secondaryDefaultText: 'Salva',
           ariaLabel: this.chill.T('B8076F7C-34A3-4C28-B4FC-F7D673C0D088', 'Save', 'Salva'),
+          icon: 'save',
+          iconClass: 'material-symbol-icon',
           action: () => void page.savePendingEntities(),
           disabled: !page.hasPendingEntities() || page.isSaving()
         }

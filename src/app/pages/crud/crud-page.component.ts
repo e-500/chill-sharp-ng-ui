@@ -16,13 +16,20 @@ const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
 const ENTITY_NOTIFICATION_IGNORE_WINDOW_MS = 1000;
 
+export interface I18nText {
+  labelGuid: string;
+  primaryDefaultText: string;
+  secondaryDefaultText: string;
+}
+
 export class CrudPageComponentConfiguration {
-  ChillType = '';
-  ChillQuery?: string | null;
-  ViewCode?: string | null;
-  DefaultValues?: Record<string, JsonValue> | null;
-  FixedQueryValues?: Record<string, JsonValue> | null;
-  DefaultQueryValues?: Record<string, JsonValue> | null;
+  chillType = '';
+  chillQuery?: string | null;
+  viewCode?: string | null;
+  relationLabel?: string | I18nText | null;
+  defaultValues?: Record<string, JsonValue> | null;
+  fixedQueryValues?: Record<string, JsonValue> | null;
+  defaultQueryValues?: Record<string, JsonValue> | null;
   relations?: CrudPageComponentConfiguration[] | null;
 }
 
@@ -141,7 +148,7 @@ export class CrudPageComponent implements OnInit {
    * Initializes the component by setting up initial state and loading query schemas.
    */
   ngOnInit(): void {
-    this.selectedViewCode.set(this.normalizeViewCode(this.normalizedConfiguration().ViewCode));
+    this.selectedViewCode.set(this.normalizeViewCode(this.normalizedConfiguration().viewCode));
     this.selectedEntityKeys.set(this.readInitialSelectedEntityKeys());
     this.loadQuerySchemas();
   }
@@ -456,7 +463,17 @@ export class CrudPageComponent implements OnInit {
           ?? null;
         
         if (!initialSchema) {
-          this.errorMessage.set(this.chill.T('5C237896-63A2-4E59-809A-12598DC24882', 'No query schemas are available.', 'Nessuno schema di query disponibile.'));
+          const backupQuerySchema = this.createBackupQuerySchema(configuredResultType, this.selectedViewCode());
+          if (!backupQuerySchema) {
+            this.errorMessage.set(this.chill.T('5C237896-63A2-4E59-809A-12598DC24882', 'No query schemas are available.', 'Nessuno schema di query disponibile.'));
+            return;
+          }
+
+          this.selectedQueryType.set(backupQuerySchema.chillType?.trim() ?? '');
+          this.querySchema.set(backupQuerySchema);
+          this.queryModel.set(this.createQueryModel(backupQuerySchema));
+          this.results.set([]);
+          void this.loadResultSchema(configuredResultType, backupQuerySchema.chillViewCode?.trim() || this.selectedViewCode());
           return;
         }
         this.selectQuerySchema(initialSchema.chillType?.trim() ?? '');
@@ -633,10 +650,42 @@ export class CrudPageComponent implements OnInit {
     };
   }
 
+  private createBackupQuerySchema(entityChillType: string, viewCode: string): ChillSchema | null {
+    const normalizedEntityChillType = entityChillType.trim();
+    if (!normalizedEntityChillType) {
+      return null;
+    }
+
+    return {
+      chillType: normalizedEntityChillType,
+      chillViewCode: this.normalizeViewCode(viewCode),
+      displayName: normalizedEntityChillType,
+      queryRelatedChillType: normalizedEntityChillType,
+      metadata: {},
+      properties: [
+        {
+          name: 'Guid',
+          displayName: 'Guid',
+          propertyType: CHILL_PROPERTY_TYPE.Guid,
+          isNullable: true,
+          metadata: {}
+        },
+        {
+          name: 'FullTextSearch',
+          displayName: 'FullTextSearch',
+          propertyType: CHILL_PROPERTY_TYPE.String,
+          isNullable: true,
+          metadata: {}
+        }
+      ]
+    };
+  }
+
   private normalizeCreateEntity(entity: ChillEntity, schema: ChillSchema): ChillEntity {
     const preparedEntity = this.prepareEntityForSchema(entity, schema);
     const entityChillType = this.readStringValue(preparedEntity['chillType']);
-    const { chillState: _chillState, ...normalizedEntity } = preparedEntity as ChillEntity & {
+    const sanitizedEntity = this.stripSchemaPropertiesFromRoot(preparedEntity, schema);
+    const { chillState: _chillState, ...normalizedEntity } = sanitizedEntity as ChillEntity & {
       chillState?: ChillState;
     };
     return {
@@ -646,6 +695,28 @@ export class CrudPageComponent implements OnInit {
         ...(preparedEntity.properties ?? {})
       }
     };
+  }
+
+  private stripSchemaPropertiesFromRoot(entity: ChillEntity, schema: ChillSchema): ChillEntity {
+    const nextEntity = { ...entity } as ChillEntity;
+    const protectedNames = new Set(['guid', 'Guid', 'chillType', 'ChillType', 'chillState', 'ChillState', 'properties', 'Properties']);
+
+    for (const property of schema.properties ?? []) {
+      const propertyName = property.name?.trim();
+      if (!propertyName || protectedNames.has(propertyName)) {
+        continue;
+      }
+
+      delete nextEntity[propertyName];
+      const pascalCaseName = propertyName.length > 0
+        ? `${propertyName[0].toUpperCase()}${propertyName.slice(1)}`
+        : propertyName;
+      if (!protectedNames.has(pascalCaseName)) {
+        delete nextEntity[pascalCaseName];
+      }
+    }
+
+    return nextEntity;
   }
 
   private buildChunkOperations(entities: ChillEntity[], schema: ChillSchema): JsonObject[] {
@@ -1148,23 +1219,23 @@ export class CrudPageComponent implements OnInit {
   }
 
   private configuredResultChillType(): string {
-    return this.normalizedConfiguration().ChillType?.trim() || '';
+    return this.normalizedConfiguration().chillType?.trim() || '';
   }
 
   private configuredQueryChillType(): string {
-    return this.normalizedConfiguration().ChillQuery?.trim() || '';
+    return this.normalizedConfiguration().chillQuery?.trim() || '';
   }
 
   private defaultEntityValues(): Record<string, JsonValue> {
-    return this.resolveConfigRecord(this.normalizedConfiguration().DefaultValues);
+    return this.resolveConfigRecord(this.normalizedConfiguration().defaultValues);
   }
 
   private defaultQueryValues(): Record<string, JsonValue> {
-    return this.resolveConfigRecord(this.normalizedConfiguration().DefaultQueryValues);
+    return this.resolveConfigRecord(this.normalizedConfiguration().defaultQueryValues);
   }
 
   private fixedQueryValues(): Record<string, JsonValue> {
-    return this.resolveConfigRecord(this.normalizedConfiguration().FixedQueryValues);
+    return this.resolveConfigRecord(this.normalizedConfiguration().fixedQueryValues);
   }
 
   private relations(): CrudPageComponentConfiguration[] {
@@ -1177,13 +1248,14 @@ export class CrudPageComponent implements OnInit {
       return normalizedConfiguration;
     }
 
-    normalizedConfiguration.ChillType = this.readConfigString(configuration['ChillType']);
-    normalizedConfiguration.ChillQuery = this.readConfigString(configuration['ChillQuery']) || null;
-    normalizedConfiguration.ViewCode = this.readConfigString(configuration['ViewCode']) || null;
-    normalizedConfiguration.DefaultValues = this.readConfigRecord(configuration['DefaultValues']);
-    normalizedConfiguration.FixedQueryValues = this.readConfigRecord(configuration['FixedQueryValues']);
-    normalizedConfiguration.DefaultQueryValues = this.readConfigRecord(configuration['DefaultQueryValues']);
-    normalizedConfiguration.relations = this.readRelationConfigurations(configuration['relations']);
+    normalizedConfiguration.chillType = this.readConfigString(configuration['chillType']);
+    normalizedConfiguration.chillQuery = this.readConfigString(configuration['chillQuery']) || null;
+    normalizedConfiguration.viewCode = this.readConfigString(configuration['viewCode']) || null;
+    normalizedConfiguration.relationLabel = this.readRelationLabel(configuration['relationLabel']);
+    normalizedConfiguration.defaultValues = this.readConfigRecord(configuration['defaultValues']);
+    normalizedConfiguration.fixedQueryValues = this.readConfigRecord(configuration['fixedQueryValues']);
+    normalizedConfiguration.defaultQueryValues = this.readConfigRecord(configuration['defaultQueryValues']);
+    normalizedConfiguration.relations = this.readRelationConfigurations(configuration.relations);
     return normalizedConfiguration;
   }
 
@@ -1205,6 +1277,31 @@ export class CrudPageComponent implements OnInit {
     );
   }
 
+  private readRelationLabel(value: unknown): string | I18nText | null {
+    if (typeof value === 'string') {
+      const normalizedValue = value.trim();
+      return normalizedValue ? normalizedValue : null;
+    }
+
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    const source = value as Record<string, unknown>;
+    const labelGuid = this.readConfigString(source['labelGuid'] ?? source['guid']);
+    const primaryDefaultText = this.readConfigString(source['primaryDefaultText'] ?? source['primaryText']);
+    const secondaryDefaultText = this.readConfigString(source['secondaryDefaultText'] ?? source['secondaryText']);
+    if (!labelGuid || !primaryDefaultText || !secondaryDefaultText) {
+      return null;
+    }
+
+    return {
+      labelGuid,
+      primaryDefaultText,
+      secondaryDefaultText
+    };
+  }
+
   private readRelationConfigurations(value: unknown): CrudPageComponentConfiguration[] {
     if (!Array.isArray(value)) {
       return [];
@@ -1214,30 +1311,45 @@ export class CrudPageComponent implements OnInit {
       .map((entry) => this.normalizeComponentConfiguration(this.isJsonObject(entry)
         ? entry as unknown as CrudPageComponentConfiguration
         : null))
-      .filter((entry) => entry.ChillType.trim().length > 0);
+      .filter((entry) => entry.chillType.trim().length > 0);
   }
 
   private createRelationRowActions(): ChillTableRowAction[] {
-    return this.relations().map((relation, index) => ({
-      icon: 'account_tree',
-      iconClass: 'material-symbol-icon',
-      ariaLabel: this.relationActionLabel(relation, index),
-      disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
-      handler: (entity) => this.openRelation(entity, relation)
-    }));
+    return this.relations().map((relation, index) => {
+      const relationLabel = relation.relationLabel;
+      const plainLabel = this.relationActionLabel(relation, index);
+
+      return {
+        icon: 'account_tree',
+        iconClass: 'material-symbol-icon',
+        ...(typeof relationLabel === 'string'
+          ? { label: relationLabel.trim() }
+          : relationLabel
+            ? {
+                labelGuid: relationLabel.labelGuid,
+                primaryDefaultText: relationLabel.primaryDefaultText,
+                secondaryDefaultText: relationLabel.secondaryDefaultText
+              }
+            : {}),
+        ariaLabel: plainLabel,
+        disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
+        handler: (entity) => this.openRelation(entity, relation)
+      };
+    });
   }
 
   private openRelation(entity: ChillEntity, relation: CrudPageComponentConfiguration): void {
     const resolvedRelation = this.resolveRelationConfiguration(relation, entity);
-    const chillType = resolvedRelation.ChillType.trim();
+    const chillType = resolvedRelation.chillType.trim();
     if (!chillType) {
       return;
     }
 
     this.workspace.openCrudTask({
       chillType,
-      queryChillType: resolvedRelation.ChillQuery,
-      viewCode: resolvedRelation.ViewCode,
+      queryChillType: resolvedRelation.chillQuery,
+      viewCode: resolvedRelation.viewCode,
+      displayName: this.resolveRelationLabel(resolvedRelation) || undefined,
       componentConfiguration: resolvedRelation
     });
   }
@@ -1247,18 +1359,30 @@ export class CrudPageComponent implements OnInit {
     entity: ChillEntity
   ): CrudPageComponentConfiguration {
     return {
-      ChillType: configuration.ChillType,
-      ChillQuery: configuration.ChillQuery ?? null,
-      ViewCode: configuration.ViewCode ?? null,
-      DefaultValues: this.resolveConfigRecord(configuration.DefaultValues, entity),
-      FixedQueryValues: this.resolveConfigRecord(configuration.FixedQueryValues, entity),
-      DefaultQueryValues: this.resolveConfigRecord(configuration.DefaultQueryValues, entity),
+      chillType: configuration.chillType,
+      chillQuery: configuration.chillQuery ?? null,
+      viewCode: configuration.viewCode ?? null,
+      relationLabel: configuration.relationLabel ?? null,
+      defaultValues: {
+        ...this.resolveConfigRecord(configuration.defaultValues, entity)
+      },
+      fixedQueryValues: {
+        ...this.resolveConfigRecord(configuration.fixedQueryValues, entity)
+      },
+      defaultQueryValues: {
+        ...this.resolveConfigRecord(configuration.defaultQueryValues, entity)
+      },
       relations: (configuration.relations ?? []).map((relation) => this.resolveRelationConfiguration(relation, entity))
     };
   }
 
   private relationActionLabel(relation: CrudPageComponentConfiguration, index: number): string {
-    const chillType = relation.ChillType.trim();
+    const relationLabel = this.resolveRelationLabel(relation);
+    if (relationLabel) {
+      return relationLabel;
+    }
+
+    const chillType = relation.chillType.trim();
     return chillType
       ? this.chill.T(
           `crud-relation-${index + 1}`,
@@ -1270,6 +1394,23 @@ export class CrudPageComponent implements OnInit {
           'Open related CRUD',
           'Apri CRUD collegata'
         );
+  }
+
+  private resolveRelationLabel(relation: CrudPageComponentConfiguration): string {
+    const relationLabel = relation.relationLabel;
+    if (typeof relationLabel === 'string') {
+      return relationLabel.trim();
+    }
+
+    if (relationLabel && typeof relationLabel === 'object') {
+      return this.chill.T(
+        relationLabel.labelGuid,
+        relationLabel.primaryDefaultText,
+        relationLabel.secondaryDefaultText
+      );
+    }
+
+    return '';
   }
 
   private resolveConfigRecord(
@@ -1301,7 +1442,7 @@ export class CrudPageComponent implements OnInit {
     }
 
     if (!entity) {
-      return null;
+      return value;
     }
 
     if (token.toLowerCase() === 'mock') {

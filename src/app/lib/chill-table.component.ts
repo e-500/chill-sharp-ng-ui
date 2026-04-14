@@ -32,6 +32,10 @@ type TableColumn = ChillPropertySchema & {
 export interface ChillTableRowAction {
   icon?: string;
   iconClass?: string;
+  label?: string;
+  labelGuid?: string | null;
+  primaryDefaultText?: string | null;
+  secondaryDefaultText?: string | null;
   ariaLabel?: string;
   disabled?: (entity: ChillEntity) => boolean;
   handler: (entity: ChillEntity) => void;
@@ -498,6 +502,18 @@ export class ChillTableComponent {
    * Derives a readable row-action label when the host does not provide one.
    */
   rowActionLabel(action: ChillTableRowAction): string {
+    if (action.labelGuid?.trim() && action.primaryDefaultText?.trim() && action.secondaryDefaultText?.trim()) {
+      return this.chill.T(
+        action.labelGuid.trim(),
+        action.primaryDefaultText.trim(),
+        action.secondaryDefaultText.trim()
+      );
+    }
+
+    if (action.label?.trim()) {
+      return action.label.trim();
+    }
+
     if (action.ariaLabel?.trim()) {
       return action.ariaLabel.trim();
     }

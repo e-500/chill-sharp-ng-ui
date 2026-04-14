@@ -1,55 +1,21 @@
 # Prompt queue
 
-## User, Role and Permission managment refactoring OK
+## Workspace task components
 
-Refactor permission-page:
-- Remove link from the "workspace-menu" and put it in the "user-menu" replacing "user profile" link to dialog.
-In the permission-page
-- Create the following links in the workspace-toolbar: users, roles
-- Clicking on a link will opened user-permission and role-permission components in the page.
-Refactor user-permission and role-permission components as follow:
-- Under the title place an input field similar to polymorphic-input in lookup mode to `search and select` the `user` or the `role` (try to reuse, but search is different; don't change polymorphic-input component) 
-- On the right of the select input field place a "Add" button to create a new user or role using a form dialog.
-- When a user is created and dialog closed autoselect the new `user` or `role` in to the `search and select` input field.
-- Once the user or the role is selected in the `search and select` input field:
-  - Show an "Edit" button to edit user detail in a form dialog.
-  - Show the permission-editor as is but without the search and select sidebar-card
+- [Check] Switching between tasks component they are created and destroyed? Or simply hidden/showed?
+- Create a `WorkspaceTaskComponentInterface` (equilize the name with other workspace related names)
+- To allow component to preserve their state when switching between tasks add to `WorkspaceTaskComponentInterface` the `visible` input field. Externally the workspace engine use `[hidden]` to hide the component, but let the component to descide if suppress heavy tasks or components using for example `if(visible) {}`
+- Don't pollute browser URL with complex urls containing all task configuration options and keep it clean using only a `openMenuItems` param array of guids with the list of opened menu-items.
+Refreshing page reopen tasks starting from menu-items with a fresh component state.
+- Add isAllSaved() (or better name) to `WorkspaceTaskComponentInterface` to allow workspace compoents to warn user there is something of unsaved/undone before leaving the page.
 
-## Indrodicing Google fonts icons OK
+## Layout
 
-Introduce Google fonts icons without including in the index.html external links but ebbedding all the necessary files into the project.
-Introduce only icons into crud-page for Add, Edit, Search and Delete buttons in workspace-toolbar.
-Create in `doc\` a google-icons-update.md file with the procedure to update icons to latest version.
+- Update polimorphic-output to render date time making date part and time part unbreakable allowing word warp only with the space between them.
+- MenuItem subitem don't show expand button (`workspace-menu__tree-expander`) on sub items after first element
+- After a MenuItem sub items place the button "Add child element" creating a new menu-item like "Add root element", but presetting parent reference.
+- Selecting a chillentity on lookup field with openLookupDialog() the polimorphic-input closes after blur so dialog can't update the value properly. Suppress on blur hiding while selecting by dialog. On dialog confirm validate then allow component to close.
+- in Crud/Table page make the save button accent color if there are unsaved changes
 
-## Bugfix taskbar elements BETTER BUT NOT PERFECT
-
-- Task switching sometimes miss showing the empty workspace placeholder "nothing shows after click".
-- Using id can be repeated opening the same task type so the select may select the wrong task: use `crypto.randomUUID()` to generate a unique id and move current id value to type (or better name) to be used in the url.
-
-## Specific I18n text not rendered OK
-
-In the workspace-menu the text ({{ chill.T('96C1B2E5-D6CA-4C53-8353-D97D4F8E0B09', 'No menu items are available for the current user.', 'Nessuna voce menu disponibile per l'utente corrente.') }}) is printed on the screen instead of the correct string. All the other text are rendered correctly. Check condition `@else if (menuRoots().length === 0)`
-
-## Automatic and persitent theme choice OK
-
-Select the theme by default using system bright/dark mode.
-Once user select a different theme store it in a variable using localStorage to reopen it using the same settings (before check if already does it)
-
-## Workspace Task abstraction layer OK TEST NEEDED
-
-Create an abstraction layer for workspace tasks in order to have external task components loaded at runtime by name.
-Task source repositories can be binded at runtime using a ENV_VAR containing a list or urls of the source locations.
-Once the app starts read the index from each source in order to allow workspace to init the component.
-- Each component has is own startup configuration stored in `MenuItem` in `ComponentConfigurationJson` with `ComponentName` used to identify uniquely the component across all the component sources.
-- The external component are created using `Module Federation` 
-- CRUD module remains built-in in the main project
-- Export the interfaces to be used for creating external components
-- Write a .md guide (place it in `doc\`) on how to build and publish an external component libs.
-
-## Workspace external components list
-
-Loading sources, build a list to be used in menu edit form to transform componentName in a select input with a complete list of options.
-Add the empty option labeled 'Menu empty node' with '' value.
-If necessary update documentation: "C:\source\personal\chill-sharp-ng-ui\doc\workspace-external-components.md"
-
+## 
 

@@ -431,6 +431,16 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   }
 
   /**
+   * Returns the selected collection lookup entities in storage order.
+   */
+  selectedLookupCollectionEntities(propertyName: string): JsonObject[] {
+    const value = this.fieldValues()[propertyName];
+    return Array.isArray(value)
+      ? value.filter((item): item is JsonObject => this.isJsonObject(item))
+      : [];
+  }
+
+  /**
    * Returns the selected single-lookup entity when one is currently stored in the field.
    */
   selectedLookupEntity(propertyName: string): JsonObject | null {
@@ -585,7 +595,9 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
 
     if (!value.trim()) {
       this.cancelLookupSearch(property.name);
-      this.setFieldValue(property.name, null);
+      if (this.isLookup(property)) {
+        this.setFieldValue(property.name, null);
+      }
       this.lookups.update((current) => ({
         ...current,
         [property.name]: {
@@ -662,9 +674,9 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       component: CrudTaskComponent,
       inputs: {
         componentConfiguration: {
-          ChillType: entityChillType,
-          ChillQuery: queryChillType || null,
-          ViewCode: this.resolveLookupDialogViewCode()
+          chillType: entityChillType,
+          chillQuery: queryChillType || null,
+          viewCode: this.resolveLookupDialogViewCode()
         },
         taskTitle: property.displayName?.trim() || property.name,
         selectionEnabled: true,
@@ -691,6 +703,11 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Stores a single lookup object, updates its display term, and marks the matching selected Guid.
    */
   selectLookupResult(property: ChillPropertySchema, result: JsonObject): void {
+    if (this.isLookupCollection(property)) {
+      this.appendLookupCollectionResult(property, result);
+      return;
+    }
+
     this.setFieldValue(property.name, result);
     const selectedGuid = this.lookupGuid(result);
     const selectedLabel = this.lookupLabel(result);
@@ -715,12 +732,15 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Stores multiple lookup objects and rebuilds the collection summary shown in the input.
    */
   selectLookupResults(property: ChillPropertySchema, results: JsonObject[]): void {
-    this.setFieldValue(property.name, results);
+    const nextResults = this.isLookupCollection(property)
+      ? this.mergeLookupCollectionResults(this.selectedLookupCollectionEntities(property.name), results)
+      : results;
+    this.setFieldValue(property.name, nextResults);
     this.lookups.update((current) => ({
       ...current,
       [property.name]: {
         ...(current[property.name] ?? this.createEmptyLookupState()),
-        term: results.map((result) => this.lookupLabel(result)).filter((label) => label.length > 0).join(', '),
+        term: '',
         isSearching: false,
         error: '',
         results: [],
@@ -804,7 +824,33 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   isLookupResultSelected(propertyName: string, result: JsonObject): boolean {
     const selectedGuid = this.lookups()[propertyName]?.selectedGuid ?? '';
-    return !!selectedGuid && this.lookupGuid(result) === selectedGuid;
+    const resultGuid = this.lookupGuid(result);
+    if (!resultGuid) {
+      return false;
+    }
+
+    if (selectedGuid && resultGuid === selectedGuid) {
+      return true;
+    }
+
+    return this.selectedLookupCollectionEntities(propertyName).some((item) => this.lookupGuid(item) === resultGuid);
+  }
+
+  /**
+   * Removes one selected entity from a lookup collection while preserving the remaining selection order.
+   */
+  removeLookupCollectionEntity(property: ChillPropertySchema, entity: JsonObject): void {
+    if (!this.isLookupCollection(property)) {
+      return;
+    }
+
+    const entityGuid = this.lookupGuid(entity);
+    const currentEntities = this.selectedLookupCollectionEntities(property.name);
+    const nextEntities = entityGuid
+      ? currentEntities.filter((item) => this.lookupGuid(item) !== entityGuid)
+      : currentEntities.filter((item) => item !== entity);
+    this.setFieldValue(property.name, nextEntities);
+    this.validateField(property);
   }
 
   /**
@@ -824,7 +870,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   private searchLookup(property: ChillPropertySchema, rawSearchTerm: string): void {
     const lookup = this.lookups()[property.name] ?? this.createEmptyLookupState();
     const searchTerm = rawSearchTerm.trim();
-    const targetChillType = property.referenceChillType?.trim() ?? '';
+    const targetChillType = this.resolveLookupEntityChillType(property);
     const requestSequence = (this.lookupRequestSequence.get(property.name) ?? 0) + 1;
     this.lookupRequestSequence.set(property.name, requestSequence);
 
@@ -917,9 +963,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       const selectedLabel = this.isJsonObject(value) ? this.lookupLabel(value) : '';
       const selectedShortLabel = this.isJsonObject(value) ? this.lookupShortLabel(value) : '';
       nextState[property.name] = {
-        term: this.isLookupCollection(property)
-          ? this.lookupCollectionSummaryFromValue(value)
-          : selectedLabel,
+        term: this.isLookupCollection(property) ? '' : selectedLabel,
         isSearching: false,
         error: '',
         results: [],
@@ -1464,8 +1508,11 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   private resolveLookupEntityChillType(property: ChillPropertySchema): string {
     return property.referenceChillType?.trim()
+      || property.referenceChillTypeQuery?.trim()
       || this.metadataString(property, 'ChillEntityTypeName')
       || this.metadataString(property, 'chillEntityTypeName')
+      || this.metadataString(property, 'referenceChillTypeQuery')
+      || this.metadataString(property, 'ReferenceChillTypeQuery')
       || '';
   }
 
@@ -1483,6 +1530,11 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
 
     if (!entityChillType) {
       return '';
+    }
+
+    // Some schemas expose only the entity Chill type and use that same type for querying.
+    if (property.referenceChillType?.trim() || this.metadataString(property, 'ChillEntityTypeName') || this.metadataString(property, 'chillEntityTypeName')) {
+      return entityChillType;
     }
 
     const entityTypeName = entityChillType.split('.').pop()?.trim() ?? '';
@@ -1754,7 +1806,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       [property.name]: {
         ...(current[property.name] ?? this.createEmptyLookupState()),
         term: this.isLookupCollection(property)
-          ? this.lookupCollectionSummaryFromValue(value)
+          ? (current[property.name]?.term ?? '')
           : this.isJsonObject(value) ? this.lookupLabel(value) : (current[property.name]?.term ?? ''),
         selectedGuid: this.isJsonObject(value) ? this.lookupGuid(value) : '',
         selectedLabel: this.isJsonObject(value) ? this.lookupLabel(value) : '',
@@ -1770,6 +1822,53 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
     return Array.isArray(value)
       ? value.filter((item): item is JsonObject => this.isJsonObject(item)).map((item) => this.lookupLabel(item)).filter((item) => item.length > 0).join(', ')
       : '';
+  }
+
+  /**
+   * Appends a newly selected lookup entity to a collection and resets the live search slot.
+   */
+  private appendLookupCollectionResult(property: ChillPropertySchema, result: JsonObject): void {
+    const nextResults = this.mergeLookupCollectionResults(this.selectedLookupCollectionEntities(property.name), [result]);
+    this.setFieldValue(property.name, nextResults);
+    this.lookups.update((current) => ({
+      ...current,
+      [property.name]: {
+        ...(current[property.name] ?? this.createEmptyLookupState()),
+        term: '',
+        isSearching: false,
+        error: '',
+        results: [],
+        selectedGuid: ''
+      }
+    }));
+    this.validateField(property);
+  }
+
+  /**
+   * Merges collection lookup selections without duplicating the same entity Guid.
+   */
+  private mergeLookupCollectionResults(existing: JsonObject[], incoming: JsonObject[]): JsonObject[] {
+    const merged = [...existing];
+    const seenGuids = new Set(existing.map((item) => this.lookupGuid(item)).filter((guid) => guid.length > 0));
+
+    for (const item of incoming) {
+      const guid = this.lookupGuid(item);
+      if (guid) {
+        if (seenGuids.has(guid)) {
+          continue;
+        }
+
+        seenGuids.add(guid);
+        merged.push(item);
+        continue;
+      }
+
+      if (!merged.includes(item)) {
+        merged.push(item);
+      }
+    }
+
+    return merged;
   }
 
   /**

@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
-import type { ChillEntity, ChillEntityChangeNotification, ChillMetadataRecord, ChillPropertySchema, ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, type ChillEntity, type ChillEntityChangeNotification, type ChillMetadataRecord, type ChillOrdering, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
@@ -60,6 +60,11 @@ export interface ChillTableValidationFocus {
   propertyName: string;
 }
 
+export interface ChillTableSortChangeEvent {
+  propertyName: string;
+  direction: 'ASC' | 'DESC' | null;
+}
+
 interface ActiveCellEditState {
   entityKey: string;
   propertyName: string;
@@ -100,10 +105,12 @@ export class ChillTableComponent {
   readonly enableInlineEditing = input(false);
   readonly validationFocus = input<ChillTableValidationFocus | null>(null);
   readonly showSchemaHeader = input(true);
+  readonly ordering = input<ChillOrdering | null>(null);
   // #endregion
 
   // #region Outputs
   readonly cellEditCommit = output<ChillTableCellEditCommitEvent>();
+  readonly sortChange = output<ChillTableSortChangeEvent>();
   // #endregion
 
   // #region State References
@@ -555,6 +562,60 @@ export class ChillTableComponent {
       default:
         return this.chill.T('6455D4FC-D267-4AA1-83C9-749D511838CB', 'Row action', 'Azione riga');
     }
+  }
+
+  toggleColumnSort(column: TableColumn): void {
+    if (this.isEditLayoutMode() || !this.canSortColumn(column)) {
+      return;
+    }
+
+    const propertyName = column.name.trim();
+    if (!propertyName) {
+      return;
+    }
+
+    const activeOrdering = this.readActiveOrdering();
+    if (!activeOrdering || activeOrdering.propertyName !== propertyName) {
+      this.sortChange.emit({
+        propertyName,
+        direction: 'ASC'
+      });
+      return;
+    }
+
+    if (activeOrdering.direction === 'ASC') {
+      this.sortChange.emit({
+        propertyName,
+        direction: 'DESC'
+      });
+      return;
+    }
+
+    this.sortChange.emit({
+      propertyName,
+      direction: null
+    });
+  }
+
+  sortDirectionFor(column: TableColumn): 'ASC' | 'DESC' | null {
+    const activeOrdering = this.readActiveOrdering();
+    return activeOrdering?.propertyName === column.name.trim()
+      ? (activeOrdering.direction === 'DESC' ? 'DESC' : 'ASC')
+      : null;
+  }
+
+  canSortColumn(column: TableColumn): boolean {
+    return (column.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) !== CHILL_PROPERTY_TYPE.ChillEntityCollection;
+  }
+
+  private readActiveOrdering(): ChillOrdering | null {
+    const ordering = this.ordering();
+    return ordering?.propertyName?.trim()
+      ? {
+          propertyName: ordering.propertyName.trim(),
+          direction: ordering.direction === 'DESC' ? 'DESC' : 'ASC'
+        }
+      : null;
   }
 
   /**

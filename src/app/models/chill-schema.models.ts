@@ -39,6 +39,7 @@ export interface ChillSchema {
   chillType?: string;
   chillViewCode?: string;
   displayName?: string;
+  handleAttachments?: boolean;
   queryRelatedChillType?: string;
   metadata?: ChillMetadataRecord;
   properties: ChillPropertySchema[];
@@ -52,6 +53,11 @@ export interface ChillSchemaListItem {
   chillViewCode?: string;
   module?: string;
   relatedChillType?: string | null;
+}
+
+export interface ChillOrdering extends JsonObject {
+  propertyName: string;
+  direction: 'ASC' | 'DESC';
 }
 
 export type ChillEntityChangeAction = 'CREATED' | 'UPDATED' | 'DELETED';
@@ -73,6 +79,7 @@ export type ChillQuery = JsonObject & {
   chillType?: string;
   properties?: Record<string, JsonValue>;
   resultProperties?: JsonValue[];
+  ordering?: ChillOrdering | null;
   chillState?: ChillEntityState;
 };
 

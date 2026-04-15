@@ -91,6 +91,7 @@ export class EntityOptionsDialogComponent {
 
   readonly form: EntityOptionsFormGroup = new FormGroup<Record<string, FormControl<JsonValue>>>({
     checksumEnabled: new FormControl<JsonValue>(false, { nonNullable: true }),
+    handleAttachments: new FormControl<JsonValue>(false, { nonNullable: true }),
     labelFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
     shortLabelFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
     fullTextContentFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
@@ -101,6 +102,13 @@ export class EntityOptionsDialogComponent {
     {
       name: 'checksumEnabled',
       displayName: this.chill.T('A479967A-677D-4F6E-A979-4597AE47FA97', 'Checksum enabled', 'Checksum abilitato'),
+      propertyType: CHILL_PROPERTY_TYPE.Boolean,
+      isNullable: false,
+      metadata: {} as ChillMetadataRecord
+    },
+    {
+      name: 'handleAttachments',
+      displayName: this.chill.T('64A3253C-1767-4384-A27A-D2A13FDC1634', 'Handle attachments', 'Gestisci allegati'),
       propertyType: CHILL_PROPERTY_TYPE.Boolean,
       isNullable: false,
       metadata: {} as ChillMetadataRecord
@@ -168,6 +176,7 @@ export class EntityOptionsDialogComponent {
     const payload: ChillDtoEntityOptions = {
       chillType,
       checksumEnabled: this.readBoolean('checksumEnabled'),
+      handleAttachments: this.readBoolean('handleAttachments'),
       labelFormatString: this.readOptionalString('labelFormatString'),
       shortLabelFormatString: this.readOptionalString('shortLabelFormatString'),
       fullTextContentFormatString: this.readOptionalString('fullTextContentFormatString'),
@@ -184,6 +193,7 @@ export class EntityOptionsDialogComponent {
       const entityOptions = await firstValueFrom(this.chill.getEntityOptions(chillType));
       this.entityOptions.set(entityOptions);
       this.form.controls['checksumEnabled'].setValue(entityOptions.checksumEnabled);
+      this.form.controls['handleAttachments'].setValue(entityOptions.handleAttachments);
       this.form.controls['labelFormatString'].setValue(entityOptions.labelFormatString ?? '');
       this.form.controls['shortLabelFormatString'].setValue(entityOptions.shortLabelFormatString ?? '');
       this.form.controls['fullTextContentFormatString'].setValue(entityOptions.fullTextContentFormatString ?? '');

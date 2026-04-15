@@ -28,10 +28,12 @@
           [entities]="pagedResults()"
           [selectionColumn]="selectionColumn()"
           [rowActions]="activeRowActions()"
-          [enableInlineEditing]="true"
+          [ordering]="queryModel()?.ordering ?? null"
+          [enableInlineEditing]="!isInlineEditDisabled()"
           [showSchemaHeader]="showTableHeader()"
           [validationFocus]="validationFocus()"
-          (cellEditCommit)="handleInlineCellEdit($event)" />
+          (cellEditCommit)="handleInlineCellEdit($event)"
+          (sortChange)="applyOrdering($event)" />
 
         @if (results().length > pageSize) {
           <footer class="pagination">

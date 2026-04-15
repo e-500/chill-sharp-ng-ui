@@ -55,7 +55,10 @@
                 (dragstart)="beginDrag(column.name)"
                 (dragover)="allowDrop($event)"
                 (drop)="dropColumn(column.name)"
-                (dragend)="endDrag()">
+                (dragend)="endDrag()"
+                [class.is-sortable]="!isEditLayoutMode() && canSortColumn(column)"
+                [class.is-sorted]="sortDirectionFor(column) !== null"
+                (click)="!isEditLayoutMode() && canSortColumn(column) && toggleColumnSort(column)">
                 @if (isEditLayoutMode()) {
                   <label class="column-editor">
                     <input
@@ -78,7 +81,16 @@
                     </button>
                   </label>
                 } @else {
-                  {{ column.displayName || column.name }}
+                  <span>{{ column.displayName || column.name }}</span>
+                  @if (canSortColumn(column)) {
+                    <span class="column-sort-indicator" aria-hidden="true">
+                      @switch (sortDirectionFor(column)) {
+                        @case ('ASC') { ↑ }
+                        @case ('DESC') { ↓ }
+                        @default { ↕ }
+                      }
+                    </span>
+                  }
                 }
               </th>
             }

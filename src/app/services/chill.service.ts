@@ -3,6 +3,8 @@ import { AsyncValidatorFn, FormControl, FormGroup } from '@angular/forms';
 import {
   ChillSharpClientError,
   ChillSharpNgClient,
+  type ChillAttachmentUploadFile,
+  type ChillAttachmentUploadOptions,
   type AuthPermissionRuleItem as ChillSharpAuthPermissionRuleItem,
   type AuthRoleDetailsResponse,
   type ChillDtoMenuItem,
@@ -288,7 +290,7 @@ export class ChillService {
 
   getSchema(chillType: string, chillViewCode: string, cultureName?: string) {
     return this.chill.getSchema(chillType, chillViewCode, this.resolveCultureName(cultureName)).pipe(
-      map((response) => response as ChillSchema | null),
+      map((response) => this.normalizeSchema(response as ChillSchema | null)),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -299,6 +301,7 @@ export class ChillService {
       chillType: schema.chillType ?? '',
       chillViewCode: schema.chillViewCode ?? '',
       displayName: schema.displayName ?? '',
+      handleAttachments: schema.handleAttachments === true,
       queryRelatedChillType: schema.queryRelatedChillType ?? null,
       metadata: this.serializeMetadataRecord(schema.metadata),
       properties: (schema.properties ?? []).map((property) => ({
@@ -327,7 +330,7 @@ export class ChillService {
         metadata: this.serializeMetadataRecord(property.metadata)
       }))
     }).pipe(
-      map((response) => response as ChillSchema | null),
+      map((response) => this.normalizeSchema(response as ChillSchema | null)),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -881,6 +884,19 @@ export class ChillService {
   chunk(operations: JsonObject[]) {
     return this.chill.chunk(operations).pipe(
       map((response) => response as JsonObject[]),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  uploadAttachment(targetEntity: JsonObject, file: ChillAttachmentUploadFile, options: ChillAttachmentUploadOptions = {}) {
+    return this.chill.uploadAttachment(targetEntity, file, options).pipe(
+      map((response) => response as JsonObject[]),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  downloadAttachment(attachmentOrGuid: JsonObject | string) {
+    return this.chill.downloadAttachment(attachmentOrGuid).pipe(
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -2121,6 +2137,7 @@ export class ChillService {
     return {
       chillType: response.chillType?.trim() ?? '',
       checksumEnabled: !!response.checksumEnabled,
+      handleAttachments: !!response.handleAttachments,
       labelFormatString: response.labelFormatString?.trim() || null,
       shortLabelFormatString: response.shortLabelFormatString?.trim() || null,
       fullTextContentFormatString: response.fullTextContentFormatString?.trim() || null,
@@ -2132,11 +2149,69 @@ export class ChillService {
     return {
       chillType: entityOptions.chillType?.trim() ?? '',
       checksumEnabled: !!entityOptions.checksumEnabled,
+      handleAttachments: !!entityOptions.handleAttachments,
       labelFormatString: entityOptions.labelFormatString?.trim() || null,
       shortLabelFormatString: entityOptions.shortLabelFormatString?.trim() || null,
       fullTextContentFormatString: entityOptions.fullTextContentFormatString?.trim() || null,
       changeLogEnabled: !!entityOptions.changeLogEnabled
     };
+  }
+
+  private normalizeSchema(response: ChillSchema | null): ChillSchema | null {
+    if (!response || !this.isJsonObject(response)) {
+      return response;
+    }
+
+    return {
+      ...response,
+      chillType: this.readJsonString(response, 'ChillType') ?? '',
+      chillViewCode: this.readJsonString(response, 'ChillViewCode') ?? '',
+      displayName: this.readJsonString(response, 'DisplayName') ?? '',
+      handleAttachments: this.readJsonBoolean(response, 'HandleAttachments'),
+      queryRelatedChillType: this.readJsonString(response, 'QueryRelatedChillType') ?? undefined,
+      metadata: this.normalizeMetadataRecord(response['metadata'] ?? response['Metadata']),
+      properties: this.normalizeSchemaProperties(response['properties'] ?? response['Properties'])
+    };
+  }
+
+  private normalizeSchemaProperties(value: unknown): ChillPropertySchema[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .filter((property): property is ChillPropertySchema & JsonObject => this.isJsonObject(property))
+      .map((property) => ({
+        ...property,
+        name: this.readJsonString(property, 'Name') ?? '',
+        displayName: this.readJsonString(property, 'DisplayName') ?? property.name ?? '',
+        mcpDescription: this.readJsonString(property, 'McpDescription') ?? property.mcpDescription ?? '',
+        metadata: this.normalizeMetadataRecord(property['metadata'] ?? property['Metadata'])
+      }));
+  }
+
+  private normalizeMetadataRecord(value: unknown): ChillMetadataRecord {
+    if (!this.isJsonObject(value)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => {
+        if (typeof entryValue === 'string') {
+          return [key, entryValue];
+        }
+
+        if (typeof entryValue === 'number' || typeof entryValue === 'boolean') {
+          return [key, String(entryValue)];
+        }
+
+        if (entryValue === null) {
+          return [key, ''];
+        }
+
+        return [key, entryValue as JsonValue];
+      })
+    );
   }
 
   private toAuthPermissionRuleItem(

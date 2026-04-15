@@ -36,6 +36,11 @@ export class CrudTaskComponent implements WorkspaceTaskComponentInterface, OnDes
       chillType: '',
       chillQuery: null,
       viewCode: 'default',
+      disableAdd: false,
+      disableCreate: false,
+      disableEdit: false,
+      disableInlineEdit: false,
+      disableDelete: false,
       relationLabel: {
         labelGuid: "",
         primaryDefaultText: "",
@@ -92,7 +97,18 @@ export class CrudTaskComponent implements WorkspaceTaskComponentInterface, OnDes
           action: () => page.openSearchDialog(),
           disabled: !page.canOpenSearchDialog()
         },
-        {
+        ...(page.isAttachmentCrud() ? [{
+          id: 'crud-add-attachment',
+          labelGuid: 'D31B58D6-32F2-443B-AD18-7BFA76AF2FB6',
+          primaryDefaultText: 'Add attachment',
+          secondaryDefaultText: 'Aggiungi allegato',
+          ariaLabel: this.chill.T('D31B58D6-32F2-443B-AD18-7BFA76AF2FB6', 'Add attachment', 'Aggiungi allegato'),
+          icon: 'upload_file',
+          iconClass: 'material-symbol-icon',
+          action: () => void page.openAttachmentUploadDialog(),
+          disabled: !page.canOpenAttachmentUploadDialog() || page.isSaving()
+        }] : []),
+        ...(page.isAddDisabled() ? [] : [{
           id: 'crud-add',
           labelGuid: '23A5536E-8A94-4469-977C-D3BB57E5E621',
           primaryDefaultText: 'Add',
@@ -102,7 +118,7 @@ export class CrudTaskComponent implements WorkspaceTaskComponentInterface, OnDes
           iconClass: 'material-symbol-icon',
           action: () => page.add(),
           disabled: !page.canAddEntity() || page.isSaving()
-        },
+        }]),
         {
           id: 'crud-save-draft',
           labelGuid: 'B8076F7C-34A3-4C28-B4FC-F7D673C0D088',

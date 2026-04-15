@@ -6,7 +6,7 @@ import type { ChillValidationError } from 'chill-sharp-ts-client';
 import { firstValueFrom } from 'rxjs';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../lib/chill-form.component';
-import { ChillTableComponent, type ChillTableCellEditCommitEvent, type ChillTableRowAction, type ChillTableSelectionColumn, type ChillTableValidationFocus } from '../../lib/chill-table.component';
+import { ChillTableComponent, type ChillTableCellEditCommitEvent, type ChillTableRowAction, type ChillTableSelectionColumn, type ChillTableSortChangeEvent, type ChillTableValidationFocus } from '../../lib/chill-table.component';
 import { CHILL_PROPERTY_TYPE, ChillEntityStatus, ChillState, type ChillEntity, type ChillEntityChangeNotification, type ChillFormSubmitEvent, type ChillQuery, type ChillSchema, type ChillSchemaListItem } from '../../models/chill-schema.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
@@ -15,6 +15,8 @@ import { WorkspaceService } from '../../services/workspace.service';
 const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
 const ENTITY_NOTIFICATION_IGNORE_WINDOW_MS = 1000;
+const ATTACHMENT_ENTITY_CHILL_TYPE = 'ChillSharp.Attachment.Model.Attachment';
+const ATTACHMENT_QUERY_CHILL_TYPE = 'ChillSharp.Attachment.Model.AttachmentQuery';
 
 export interface I18nText {
   labelGuid: string;
@@ -26,6 +28,11 @@ export class CrudPageComponentConfiguration {
   chillType = '';
   chillQuery?: string | null;
   viewCode?: string | null;
+  disableAdd = false;
+  disableCreate = false;
+  disableEdit = false;
+  disableInlineEdit = false;
+  disableDelete = false;
   relationLabel?: string | I18nText | null;
   defaultValues?: Record<string, JsonValue> | null;
   fixedQueryValues?: Record<string, JsonValue> | null;
@@ -115,20 +122,22 @@ export class CrudPageComponent implements OnInit {
     return this.results().slice(start, start + this.pageSize);
   });
   readonly rowActions = computed<ChillTableRowAction[]>(() => [
-    {
+    ...(this.isEditDisabled() ? [] : [{
       icon: 'edit',
       iconClass: 'material-symbol-icon',
       ariaLabel: this.chill.T('E64B6037-B83A-406A-B5D6-CB5AA6E42FC6', 'Edit row', 'Modifica riga'),
-      disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
-      handler: (entity) => this.openEntityDialog(entity)
-    },
-    {
+      disabled: (entity: ChillEntity) => this.isSaving() || this.isDeletedEntity(entity),
+      handler: (entity: ChillEntity) => this.openEntityDialog(entity)
+    }]),
+    ...this.createAttachmentDownloadRowActions(),
+    ...(this.isDeleteDisabled() ? [] : [{
       icon: 'delete',
       iconClass: 'material-symbol-icon',
       ariaLabel: this.chill.T('704B4EC7-C971-48C7-9439-E08C2F590992', 'Delete row', 'Elimina riga'),
-      disabled: (entity) => this.isSaving() || this.isDeletedEntity(entity),
-      handler: (entity) => this.markEntityDeleted(entity)
-    },
+      disabled: (entity: ChillEntity) => this.isSaving() || this.isDeletedEntity(entity),
+      handler: (entity: ChillEntity) => this.markEntityDeleted(entity)
+    }]),
+    ...this.createAttachmentRowActions(),
     ...this.createRelationRowActions()
   ]);
   readonly activeRowActions = computed<ChillTableRowAction[] | null>(() => this.selectionEnabled() ? null : this.rowActions());
@@ -203,23 +212,28 @@ export class CrudPageComponent implements OnInit {
     }
 
     const query = this.normalizeQuery(event.value as ChillQuery);
-    this.isSearching.set(true);
-    this.errorMessage.set('');
     this.queryModel.set(query);
+    this.executeQuery(query, true);
+  }
 
-    this.chill.query(query).subscribe({
-      next: (response) => {
-        this.results.set(this.mergeWithDraftEntities(this.extractEntities(response)));
-        this.currentPage.set(1);
-        this.isSearching.set(false);
-      },
-      error: (error: unknown) => {
-        this.results.set(this.pendingEntities());
-        this.currentPage.set(1);
-        this.errorMessage.set(this.chill.formatError(error));
-        this.isSearching.set(false);
-      }
+  applyOrdering(event: ChillTableSortChangeEvent): void {
+    const currentQuery = this.queryModel();
+    if (!currentQuery) {
+      return;
+    }
+
+    const nextQuery = this.normalizeQuery({
+      ...currentQuery,
+      ordering: event.direction
+        ? {
+            propertyName: event.propertyName,
+            direction: event.direction
+          }
+        : null
     });
+
+    this.queryModel.set(nextQuery);
+    this.executeQuery(nextQuery, true);
   }
 
   /**
@@ -263,6 +277,31 @@ export class CrudPageComponent implements OnInit {
    */
   canAddEntity(): boolean {
     return !!this.resultSchema() && !this.isSaving() && !this.isLoadingSchema();
+  }
+
+  isAddDisabled(): boolean {
+    return this.normalizedConfiguration().disableAdd === true || this.normalizedConfiguration().disableCreate === true;
+  }
+
+  isEditDisabled(): boolean {
+    return this.normalizedConfiguration().disableEdit === true;
+  }
+
+  isInlineEditDisabled(): boolean {
+    return this.normalizedConfiguration().disableInlineEdit === true;
+  }
+
+  isDeleteDisabled(): boolean {
+    return this.normalizedConfiguration().disableDelete === true;
+  }
+
+  isAttachmentCrud(): boolean {
+    return this.resultSchema()?.chillType?.trim() === ATTACHMENT_ENTITY_CHILL_TYPE;
+  }
+
+  canOpenAttachmentUploadDialog(): boolean {
+    const target = this.readAttachmentTargetInfo();
+    return this.isAttachmentCrud() && !!target.attachToChillType && !!target.attachToGuid;
   }
 
   /**
@@ -638,6 +677,7 @@ export class CrudPageComponent implements OnInit {
 
   private normalizeQuery(query: ChillQuery): ChillQuery {
     const resultSchema = this.resultSchema();
+    const ordering = query.ordering;
     return {
       ...query,
       chillType: query.chillType?.trim() || this.configuredQueryChillType() || this.querySchema()?.chillType?.trim() || this.selectedQueryType(),
@@ -646,6 +686,12 @@ export class CrudPageComponent implements OnInit {
         ...this.defaultQueryValues(),
         ...this.fixedQueryValues()
       },
+      ordering: ordering?.propertyName?.trim()
+        ? {
+            propertyName: ordering.propertyName.trim(),
+            direction: ordering.direction === 'DESC' ? 'DESC' : 'ASC'
+          }
+        : null,
       resultProperties: resultSchema?.properties?.map((property) => ({ PropertyName: property.name })) ?? []
     };
   }
@@ -757,14 +803,22 @@ export class CrudPageComponent implements OnInit {
       return;
     }
 
+    this.executeQuery(this.normalizeQuery(query), false);
+  }
+
+  private executeQuery(query: ChillQuery, preservePendingEntitiesOnError: boolean): void {
     this.isSearching.set(true);
-    this.chill.query(this.normalizeQuery(query)).subscribe({
+    this.errorMessage.set('');
+    this.chill.query(query).subscribe({
       next: (response) => {
         this.results.set(this.mergeWithDraftEntities(this.extractEntities(response)));
         this.currentPage.set(1);
         this.isSearching.set(false);
       },
       error: (error: unknown) => {
+        if (preservePendingEntitiesOnError) {
+          this.results.set(this.pendingEntities());
+        }
         this.errorMessage.set(this.chill.formatError(error));
         this.currentPage.set(1);
         this.isSearching.set(false);
@@ -822,6 +876,35 @@ export class CrudPageComponent implements OnInit {
   private readEntityKey(entity: ChillEntity): string {
     return this.readStringValue(entity['guid'])
       || this.readStringValue(entity['Guid']);
+  }
+
+  async openAttachmentUploadDialog(): Promise<void> {
+    const target = this.readAttachmentTargetInfo();
+    if (!target.attachToChillType || !target.attachToGuid) {
+      return;
+    }
+
+    const { AttachmentUploadDialogComponent } = await import('./attachment-upload-dialog.component');
+    const result = await this.dialog.openDialog<JsonObject | null>({
+      title: this.chill.T('D31B58D6-32F2-443B-AD18-7BFA76AF2FB6', 'Add attachment', 'Aggiungi allegato'),
+      component: AttachmentUploadDialogComponent,
+      okLabel: this.chill.T('D31B58D6-32F2-443B-AD18-7BFA76AF2FB6', 'Add attachment', 'Aggiungi allegato'),
+      inputs: {
+        attachToChillType: target.attachToChillType,
+        attachToGuid: target.attachToGuid
+      }
+    });
+
+    if (result.status === 'confirmed') {
+      this.refreshResults();
+    }
+  }
+
+  private readEntityChillType(entity: ChillEntity): string {
+    return this.readStringValue(entity['chillType'])
+      || this.readStringValue(entity['ChillType'])
+      || this.resultSchema()?.chillType?.trim()
+      || '';
   }
 
   private withCrudState(entity: ChillEntity, state: Partial<ChillState>): ChillEntity {
@@ -1251,6 +1334,11 @@ export class CrudPageComponent implements OnInit {
     normalizedConfiguration.chillType = this.readConfigString(configuration['chillType']);
     normalizedConfiguration.chillQuery = this.readConfigString(configuration['chillQuery']) || null;
     normalizedConfiguration.viewCode = this.readConfigString(configuration['viewCode']) || null;
+    normalizedConfiguration.disableAdd = this.readConfigBoolean(configuration['disableAdd']);
+    normalizedConfiguration.disableCreate = this.readConfigBoolean(configuration['disableCreate']);
+    normalizedConfiguration.disableEdit = this.readConfigBoolean(configuration['disableEdit']);
+    normalizedConfiguration.disableInlineEdit = this.readConfigBoolean(configuration['disableInlineEdit']);
+    normalizedConfiguration.disableDelete = this.readConfigBoolean(configuration['disableDelete']);
     normalizedConfiguration.relationLabel = this.readRelationLabel(configuration['relationLabel']);
     normalizedConfiguration.defaultValues = this.readConfigRecord(configuration['defaultValues']);
     normalizedConfiguration.fixedQueryValues = this.readConfigRecord(configuration['fixedQueryValues']);
@@ -1263,6 +1351,10 @@ export class CrudPageComponent implements OnInit {
     return typeof value === 'string'
       ? value.trim()
       : '';
+  }
+
+  private readConfigBoolean(value: unknown): boolean {
+    return value === true;
   }
 
   private readConfigRecord(value: unknown): Record<string, JsonValue> {
@@ -1338,6 +1430,43 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
+  private createAttachmentRowActions(): ChillTableRowAction[] {
+    if (this.resultSchema()?.handleAttachments !== true || this.isAttachmentCrud()) {
+      return [];
+    }
+
+    return [{
+      icon: 'attach_file',
+      iconClass: 'material-symbol-icon',
+      labelGuid: '7A673274-5786-4E58-BA33-65D06BF6B9F3',
+      primaryDefaultText: 'Attachments',
+      secondaryDefaultText: 'Allegati',
+      ariaLabel: this.chill.T('7A673274-5786-4E58-BA33-65D06BF6B9F3', 'Attachments', 'Allegati'),
+      disabled: (entity) => this.isSaving()
+        || this.isDeletedEntity(entity)
+        || this.isNewEntity(entity)
+        || !this.canOpenAttachmentCrud(entity),
+      handler: (entity) => this.openAttachmentCrud(entity)
+    }];
+  }
+
+  private createAttachmentDownloadRowActions(): ChillTableRowAction[] {
+    if (!this.isAttachmentCrud()) {
+      return [];
+    }
+
+    return [{
+      icon: 'download',
+      iconClass: 'material-symbol-icon',
+      labelGuid: '3E0E4E83-A2FE-4C08-B389-0C3B26A0CCFF',
+      primaryDefaultText: 'Download',
+      secondaryDefaultText: 'Scarica',
+      ariaLabel: this.chill.T('3E0E4E83-A2FE-4C08-B389-0C3B26A0CCFF', 'Download', 'Scarica'),
+      disabled: (entity: ChillEntity) => this.isSaving() || this.isDeletedEntity(entity) || !this.readEntityKey(entity),
+      handler: (entity: ChillEntity) => void this.downloadAttachment(entity)
+    }];
+  }
+
   private openRelation(entity: ChillEntity, relation: CrudPageComponentConfiguration): void {
     const resolvedRelation = this.resolveRelationConfiguration(relation, entity);
     const chillType = resolvedRelation.chillType.trim();
@@ -1354,6 +1483,47 @@ export class CrudPageComponent implements OnInit {
     });
   }
 
+  private canOpenAttachmentCrud(entity: ChillEntity): boolean {
+    return !!this.readEntityKey(entity) && !!this.readEntityChillType(entity);
+  }
+
+  private openAttachmentCrud(entity: ChillEntity): void {
+    const attachToGuid = this.readEntityKey(entity);
+    const attachToChillType = this.readEntityChillType(entity);
+    if (!attachToGuid || !attachToChillType) {
+      return;
+    }
+
+    const attachmentConfiguration: CrudPageComponentConfiguration = {
+      chillType: ATTACHMENT_ENTITY_CHILL_TYPE,
+      chillQuery: ATTACHMENT_QUERY_CHILL_TYPE,
+      disableAdd: false,
+      disableCreate: true,
+      disableEdit: false,
+      disableInlineEdit: false,
+      disableDelete: false,
+      fixedQueryValues: {
+        AttachToChillType: attachToChillType,
+        AttachToGuid: attachToGuid
+      },
+      defaultQueryValues: {
+        AttachToChillType: attachToChillType,
+        AttachToGuid: attachToGuid
+      },
+      defaultValues: {
+        AttachToChillType: attachToChillType,
+        AttachToGuid: attachToGuid
+      }
+    };
+
+    this.workspace.openCrudTask({
+      chillType: ATTACHMENT_ENTITY_CHILL_TYPE,
+      queryChillType: ATTACHMENT_QUERY_CHILL_TYPE,
+      displayName: this.chill.T('7A673274-5786-4E58-BA33-65D06BF6B9F3', 'Attachments', 'Allegati'),
+      componentConfiguration: attachmentConfiguration
+    });
+  }
+
   private resolveRelationConfiguration(
     configuration: CrudPageComponentConfiguration,
     entity: ChillEntity
@@ -1362,6 +1532,11 @@ export class CrudPageComponent implements OnInit {
       chillType: configuration.chillType,
       chillQuery: configuration.chillQuery ?? null,
       viewCode: configuration.viewCode ?? null,
+      disableAdd: configuration.disableAdd === true,
+      disableCreate: configuration.disableCreate === true,
+      disableEdit: configuration.disableEdit === true,
+      disableInlineEdit: configuration.disableInlineEdit === true,
+      disableDelete: configuration.disableDelete === true,
       relationLabel: configuration.relationLabel ?? null,
       defaultValues: {
         ...this.resolveConfigRecord(configuration.defaultValues, entity)
@@ -1426,6 +1601,30 @@ export class CrudPageComponent implements OnInit {
     );
   }
 
+  private readAttachmentTargetInfo(): { attachToChillType: string; attachToGuid: string } {
+    const fixedQueryValues = this.fixedQueryValues();
+    const defaultQueryValues = this.defaultQueryValues();
+    const queryProperties = this.queryModel()?.properties ?? {};
+
+    const attachToChillType = this.readStringValue(
+      fixedQueryValues['AttachToChillType']
+      ?? defaultQueryValues['AttachToChillType']
+      ?? queryProperties['AttachToChillType']
+      ?? queryProperties['attachToChillType']
+    );
+    const attachToGuid = this.readStringValue(
+      fixedQueryValues['AttachToGuid']
+      ?? defaultQueryValues['AttachToGuid']
+      ?? queryProperties['AttachToGuid']
+      ?? queryProperties['attachToGuid']
+    );
+
+    return {
+      attachToChillType,
+      attachToGuid
+    };
+  }
+
   private resolveConfigValue(value: JsonValue, entity?: ChillEntity | null): JsonValue {
     if (typeof value !== 'string') {
       return value;
@@ -1450,6 +1649,38 @@ export class CrudPageComponent implements OnInit {
     }
 
     return this.readEntityPropertyValue(entity, token) ?? null;
+  }
+
+  private async downloadAttachment(entity: ChillEntity): Promise<void> {
+    const attachmentGuid = this.readEntityKey(entity);
+    if (!attachmentGuid) {
+      return;
+    }
+
+    try {
+      const blob = await firstValueFrom(this.chill.downloadAttachment(attachmentGuid));
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = this.readAttachmentFileName(entity);
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      this.errorMessage.set(this.chill.formatError(error));
+    }
+  }
+
+  private readAttachmentFileName(entity: ChillEntity): string {
+    const originalFilename = this.readStringValue(this.readEntityPropertyValue(entity, 'OriginalFilename'));
+    if (originalFilename) {
+      return originalFilename;
+    }
+
+    const title = this.readStringValue(this.readEntityPropertyValue(entity, 'Title'));
+    return title || `${this.readEntityKey(entity) || 'attachment'}.bin`;
   }
 
   private createEntityMock(entity: ChillEntity): ChillEntity {

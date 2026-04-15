@@ -1,0 +1,157 @@
+<section class="schema-property-dialog">
+  <p class="schema-property-dialog__lede">
+    {{ chill.T(
+      'FF4665A2-D898-4CC5-B911-B90F3B44AC25',
+      'Edit the selected schema property and save the updated behavior.',
+      'Modifica la proprietà di schema selezionata e salva il comportamento aggiornato.'
+    ) }}
+  </p>
+
+  @if (schemaTypeLabel()) {
+    <p class="schema-property-dialog__context">
+      {{ chill.T('C797A0B9-9AB2-4E71-84DE-677416293548', 'Schema type', 'Tipo schema') }}:
+      <strong>{{ schemaTypeLabel() }}</strong>
+    </p>
+  }
+
+  @if (validationMessages().length > 0) {
+    <div class="schema-property-dialog__errors">
+      @for (message of validationMessages(); track message) {
+        <p>{{ message }}</p>
+      }
+    </div>
+  }
+
+  <div class="schema-property-dialog__grid">
+    <label class="schema-property-dialog__field">
+      <span>{{ chill.T('57D9358A-8052-460F-8C0C-5B93B572E73A', 'Name', 'Nome') }}</span>
+      <input type="text" [ngModel]="draft().name" (ngModelChange)="updateText('name', $event)" name="schema-property-name" />
+    </label>
+
+    <label class="schema-property-dialog__field">
+      <span>{{ chill.T('A276C7C0-E297-41EC-88D8-80C151BCA646', 'Display name', 'Nome visualizzato') }}</span>
+      <input type="text" [ngModel]="draft().displayName" (ngModelChange)="updateText('displayName', $event)" name="schema-property-display-name" />
+    </label>
+
+    <label class="schema-property-dialog__field schema-property-dialog__field--full">
+      <span>{{ chill.T('5265F0B1-B0BE-448E-88CB-80C99BF6AB92', 'MCP description', 'Descrizione MCP') }}</span>
+      <textarea rows="3" [ngModel]="draft().mcpDescription" (ngModelChange)="updateText('mcpDescription', $event)" name="schema-property-mcp-description"></textarea>
+    </label>
+
+    <label class="schema-property-dialog__field">
+      <span>{{ chill.T('A1803D67-C40D-41AF-BFD2-8F9B0E34C48B', 'Property type', 'Tipo proprietà') }}</span>
+      <select [ngModel]="draft().propertyType" (ngModelChange)="updatePropertyType($event)" name="schema-property-type">
+        @for (option of propertyTypeOptions; track option.value) {
+          <option [ngValue]="option.value">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="schema-property-dialog__field schema-property-dialog__field--toggle">
+      <span>{{ chill.T('749AB7D9-6F87-488B-90A7-EB2CB0D9BA52', 'Nullable', 'Nullabile') }}</span>
+      <input type="checkbox" [ngModel]="draft().isNullable" (ngModelChange)="updateBoolean('isNullable', $event)" name="schema-property-nullable" />
+    </label>
+
+    <label class="schema-property-dialog__field schema-property-dialog__field--toggle">
+      <span>{{ chill.T('7C94BA39-3A2B-4D04-9551-E4E7FB698D5D', 'Read only', 'Sola lettura') }}</span>
+      <input type="checkbox" [ngModel]="draft().isReadOnly" (ngModelChange)="updateBoolean('isReadOnly', $event)" name="schema-property-readonly" />
+    </label>
+
+    @if (showLengthSettings()) {
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('97CC1ABF-E541-4B39-91B3-1F907B3B73E4', 'Min length', 'Lunghezza minima') }}</span>
+        <input type="text" [ngModel]="draft().minLength" (ngModelChange)="updateText('minLength', $event)" name="schema-property-min-length" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('0D6433DA-7D03-469C-B175-872252D12B12', 'Max length', 'Lunghezza massima') }}</span>
+        <input type="text" [ngModel]="draft().maxLength" (ngModelChange)="updateText('maxLength', $event)" name="schema-property-max-length" />
+      </label>
+    }
+
+    @if (showRegexPattern()) {
+      <label class="schema-property-dialog__field schema-property-dialog__field--full">
+        <span>{{ chill.T('375A5A93-8BDE-4731-91A4-CF0F2A6D52B5', 'Regex pattern', 'Pattern regex') }}</span>
+        <input type="text" [ngModel]="draft().regexPattern" (ngModelChange)="updateText('regexPattern', $event)" name="schema-property-regex-pattern" />
+      </label>
+    }
+
+    @if (showIntegerRange()) {
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('30BAA302-7E62-49B7-96F8-BE5A7E3A4D28', 'Integer min value', 'Valore intero minimo') }}</span>
+        <input type="text" [ngModel]="draft().integerMinValue" (ngModelChange)="updateText('integerMinValue', $event)" name="schema-property-integer-min" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('9DEFC702-E6D3-40D1-B8A8-B677A38AB707', 'Integer max value', 'Valore intero massimo') }}</span>
+        <input type="text" [ngModel]="draft().integerMaxValue" (ngModelChange)="updateText('integerMaxValue', $event)" name="schema-property-integer-max" />
+      </label>
+    }
+
+    @if (showDecimalSettings()) {
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('7D7A019B-B605-4B80-8AA2-BBEF519EAE72', 'Decimal min value', 'Valore decimale minimo') }}</span>
+        <input type="text" [ngModel]="draft().decimalMinValue" (ngModelChange)="updateText('decimalMinValue', $event)" name="schema-property-decimal-min" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('6B3A021A-4E64-48C5-9EF6-3043E414D83E', 'Decimal max value', 'Valore decimale massimo') }}</span>
+        <input type="text" [ngModel]="draft().decimalMaxValue" (ngModelChange)="updateText('decimalMaxValue', $event)" name="schema-property-decimal-max" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('8A948B20-50A2-4E3B-BF6A-DB13D9A4A4A5', 'Decimal places', 'Cifre decimali') }}</span>
+        <input type="text" [ngModel]="draft().decimalPlaces" (ngModelChange)="updateText('decimalPlaces', $event)" name="schema-property-decimal-places" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('B5F90B96-E2CF-4688-8CB1-1F22A4F6BCA0', 'Precision', 'Precisione') }}</span>
+        <input type="text" [ngModel]="draft().precision" (ngModelChange)="updateText('precision', $event)" name="schema-property-precision" />
+      </label>
+
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('65D01B52-5D8B-4540-8B76-5D155B8A50EA', 'Scale', 'Scala') }}</span>
+        <input type="text" [ngModel]="draft().scale" (ngModelChange)="updateText('scale', $event)" name="schema-property-scale" />
+      </label>
+    }
+
+    @if (showDateFormat()) {
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('9AB02B9F-6516-42D1-A8A8-9F5A977F31BB', 'Date format', 'Formato data') }}</span>
+        <input type="text" list="schema-property-date-format-options" [ngModel]="draft().dateFormat" (ngModelChange)="updateText('dateFormat', $event)" name="schema-property-date-format" />
+        <datalist id="schema-property-date-format-options">
+          @for (option of dateFormatOptions; track option[0]) {
+            <option [value]="option[0]">{{ option[1] }}</option>
+          }
+        </datalist>
+      </label>
+    }
+
+    @if (showCustomFormat()) {
+      <label class="schema-property-dialog__field">
+        <span>{{ chill.T('D7A9229B-2EFC-417D-B8E0-88A6C1B38106', 'Custom format', 'Formato personalizzato') }}</span>
+        <input type="text" [ngModel]="draft().customFormat" (ngModelChange)="updateText('customFormat', $event)" name="schema-property-custom-format" />
+      </label>
+    }
+
+    @if (showEnumValues()) {
+      <label class="schema-property-dialog__field schema-property-dialog__field--full">
+        <span>{{ chill.T('5C131694-1FE7-4B91-861E-C331E8636409', 'Enum values', 'Valori enum') }}</span>
+        <textarea rows="6" [ngModel]="draft().enumValues" (ngModelChange)="updateText('enumValues', $event)" name="schema-property-enum-values" [placeholder]="enumValuesPlaceholder()"></textarea>
+      </label>
+    }
+  </div>
+
+  <div class="schema-property-dialog__metadata">
+    <div class="schema-property-dialog__metadata-header">
+      <h3>{{ chill.T('01D8D2BD-F9B7-49F8-90EC-E96CFAB15811', 'Metadata', 'Metadata') }}</h3>
+      <p>{{ chill.T('ED433939-FE09-4B8D-92DB-67480D13F350', 'Dedicated fields override matching metadata keys when you save.', 'I campi dedicati sovrascrivono le chiavi metadata corrispondenti al salvataggio.') }}</p>
+    </div>
+
+    <app-chill-json-input
+      [value]="draft().metadataJson"
+      [invalid]="metadataJsonInvalid()"
+      [placeholder]="metadataPlaceholder()"
+      (valueChange)="updateText('metadataJson', $event)"></app-chill-json-input>
+  </div>
+</section>

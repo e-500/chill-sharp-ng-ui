@@ -12,13 +12,26 @@ export type ChillEntityState = JsonObject & {
 export interface ChillPropertySchema {
   name: string;
   displayName?: string;
+  mcpDescription?: string;
   propertyType?: number;
   isNullable: boolean;
+  isReadOnly?: boolean;
   chillType?: string | null;
   referenceChillType?: string | null;
   referenceChillTypeQuery?: string | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  integerMinValue?: number | null;
+  integerMaxValue?: number | null;
+  decimalMinValue?: number | null;
+  decimalMaxValue?: number | null;
+  decimalPlaces?: number | null;
+  precision?: number | null;
+  scale?: number | null;
   dateFormat?: string;
   customFormat?: string;
+  regexPattern?: string;
+  enumValues?: string[] | null;
   metadata?: ChillMetadataRecord;
 }
 

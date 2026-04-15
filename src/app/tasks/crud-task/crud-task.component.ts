@@ -1,7 +1,7 @@
 import { Component, OnDestroy, effect, inject, input, viewChild } from '@angular/core';
 import { CrudPageComponent, type CrudPageComponentConfiguration } from '../../pages/crud/crud-page.component';
 import type { ChillEntity } from '../../models/chill-schema.models';
-import type { WorkspaceTaskConfiguration } from '../../models/workspace-task.models';
+import type { WorkspaceTaskComponentInterface, WorkspaceTaskConfiguration } from '../../models/workspace-task.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
 import { WorkspaceToolbarService } from '../../services/workspace-toolbar.service';
@@ -30,7 +30,7 @@ import { WorkspaceToolbarService } from '../../services/workspace-toolbar.servic
     }
   `
 })
-export class CrudTaskComponent implements OnDestroy {
+export class CrudTaskComponent implements WorkspaceTaskComponentInterface, OnDestroy {
   static getComponentConfigurationJsonExample(): WorkspaceTaskConfiguration | null {
     return {
       chillType: '',
@@ -59,6 +59,7 @@ export class CrudTaskComponent implements OnDestroy {
   readonly taskTitle = input('');
   readonly taskDescription = input('');
   readonly toolbarScope = input('workspace');
+  readonly visible = input(true);
   private readonly page = viewChild(CrudPageComponent);
 
   resolvedComponentConfiguration(): CrudPageComponentConfiguration | null {
@@ -74,7 +75,7 @@ export class CrudTaskComponent implements OnDestroy {
     effect(() => {
       const page = this.page();
       const toolbarScope = this.toolbarScope();
-      if (!page) {
+      if (!page || !this.visible()) {
         this.toolbar.clearButtons(toolbarScope);
         return;
       }
@@ -110,6 +111,7 @@ export class CrudTaskComponent implements OnDestroy {
           ariaLabel: this.chill.T('B8076F7C-34A3-4C28-B4FC-F7D673C0D088', 'Save', 'Salva'),
           icon: 'save',
           iconClass: 'material-symbol-icon',
+          accent: page.hasPendingEntities(),
           action: () => void page.savePendingEntities(),
           disabled: !page.hasPendingEntities() || page.isSaving()
         }
@@ -130,6 +132,15 @@ export class CrudTaskComponent implements OnDestroy {
     return this.selectionEnabled()
       ? (this.page()?.canConfirmSelection() ?? false)
       : true;
+  }
+
+  isAllSaved(): boolean {
+    const page = this.page();
+    if (!page) {
+      return true;
+    }
+
+    return !page.isSaving() && !page.hasPendingEntities();
   }
 
   ngOnDestroy(): void {

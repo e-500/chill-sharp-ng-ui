@@ -1,4 +1,5 @@
 export type {
+  WorkspaceTaskComponentInterface,
   WorkspaceTaskComponent,
   WorkspaceTaskComponentType,
   WorkspaceTaskConfiguration,

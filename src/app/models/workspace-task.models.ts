@@ -1,9 +1,13 @@
-import type { Type } from '@angular/core';
+import type { InputSignal, Type } from '@angular/core';
 
-export interface WorkspaceTaskComponent<TResult = unknown> {
+export interface WorkspaceTaskComponentInterface<TResult = unknown> {
+  visible: InputSignal<boolean>;
+  isAllSaved?(): boolean | Promise<boolean>;
   dialogResult?(): TResult | Promise<TResult>;
   canDialogSubmit?(): boolean;
 }
+
+export type WorkspaceTaskComponent<TResult = unknown> = WorkspaceTaskComponentInterface<TResult>;
 
 export type WorkspaceTaskConfiguration = Record<string, unknown>;
 

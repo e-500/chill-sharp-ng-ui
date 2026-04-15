@@ -51,6 +51,7 @@
               <button
                 type="button"
                 class="lookup-dialog"
+                (mousedown)="beginLookupDialogSelection(property.name)"
                 (click)="openLookupDialog(property)"
                 [disabled]="isPropertyReadOnly(property.name)"
                 [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">
@@ -134,6 +135,7 @@
                 <button
                   type="button"
                   class="lookup-dialog"
+                  (mousedown)="beginLookupDialogSelection(property.name)"
                   (click)="openLookupDialog(property)"
                   [disabled]="isPropertyReadOnly(property.name)"
                   [attr.aria-label]="chill.T('B6D48459-73D4-4234-977E-8D79E510A20D', 'Open entity picker', 'Apri selettore entita')">

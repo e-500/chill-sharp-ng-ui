@@ -70,6 +70,7 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
 
   readonly item = input<ChillMenuItem | null>(null);
   readonly parent = input<ChillMenuItem | null>(null);
+  readonly visible = input(true);
 
   readonly isValid = signal(true);
   readonly selectedComponentName = signal('');

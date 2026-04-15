@@ -11,6 +11,7 @@ import {
   type GetTextRequest,
   type JsonObject,
   type JsonValue,
+  type ChillDtoEntityOptions,
   type SetAuthRoleRequest,
   type SetAuthUserRequest
 } from 'chill-sharp-ng-client';
@@ -72,6 +73,7 @@ const CHILL_PROPERTY_TYPE = {
   Boolean: 70,
   String: 80,
   Text: 81,
+  Select: 90,
   Json: 99,
   ChillEntity: 1000,
   ChillEntityCollection: 1010,
@@ -303,10 +305,25 @@ export class ChillService {
         ...property,
         name: property.name,
         displayName: property.displayName ?? property.name,
+        mcpDescription: property.mcpDescription ?? '',
         propertyType: (property.propertyType ?? 0) as never,
         chillType: property.chillType ?? null,
         referenceChillType: property.referenceChillType ?? null,
         referenceChillTypeQuery: property.referenceChillTypeQuery ?? null,
+        isReadOnly: property.isReadOnly ?? false,
+        minLength: property.minLength ?? null,
+        maxLength: property.maxLength ?? null,
+        integerMinValue: property.integerMinValue ?? null,
+        integerMaxValue: property.integerMaxValue ?? null,
+        decimalMinValue: property.decimalMinValue ?? null,
+        decimalMaxValue: property.decimalMaxValue ?? null,
+        decimalPlaces: property.decimalPlaces ?? null,
+        precision: property.precision ?? null,
+        scale: property.scale ?? null,
+        dateFormat: property.dateFormat ?? '',
+        customFormat: property.customFormat ?? '',
+        regexPattern: property.regexPattern ?? '',
+        enumValues: property.enumValues ?? null,
         metadata: this.serializeMetadataRecord(property.metadata)
       }))
     }).pipe(
@@ -871,6 +888,20 @@ export class ChillService {
   getMenu(parentGuid?: string | null) {
     return this.chill.getMenu(parentGuid).pipe(
       map((response) => (response ?? []).map((item) => this.normalizeMenuItem(item))),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  getEntityOptions(chillType: string) {
+    return this.chill.getEntityOptions(chillType).pipe(
+      map((response) => this.normalizeEntityOptions(response)),
+      catchError((error) => this.rethrowFriendlyError(error))
+    );
+  }
+
+  setEntityOptions(entityOptions: ChillDtoEntityOptions) {
+    return this.chill.setEntityOptions(this.toEntityOptionsDto(entityOptions)).pipe(
+      map((response) => this.normalizeEntityOptions(response)),
       catchError((error) => this.rethrowFriendlyError(error))
     );
   }
@@ -1466,6 +1497,7 @@ export class ChillService {
         return this.parseBooleanValue(normalized);
       case CHILL_PROPERTY_TYPE.String:
       case CHILL_PROPERTY_TYPE.Text:
+      case CHILL_PROPERTY_TYPE.Select:
       case CHILL_PROPERTY_TYPE.Json:
         return normalized;
       case CHILL_PROPERTY_TYPE.ChillEntity:
@@ -1483,6 +1515,7 @@ export class ChillService {
     switch (propertyType) {
       case CHILL_PROPERTY_TYPE.String:
       case CHILL_PROPERTY_TYPE.Text:
+      case CHILL_PROPERTY_TYPE.Select:
       case CHILL_PROPERTY_TYPE.Json:
       case CHILL_PROPERTY_TYPE.Time:
       case CHILL_PROPERTY_TYPE.Duration:
@@ -2081,6 +2114,28 @@ export class ChillService {
       componentName: menuItem.componentName?.trim() ?? '',
       componentConfigurationJson: menuItem.componentConfigurationJson?.trim() || null,
       menuHierarchy: menuItem.menuHierarchy?.trim() ?? ''
+    };
+  }
+
+  private normalizeEntityOptions(response: ChillDtoEntityOptions): ChillDtoEntityOptions {
+    return {
+      chillType: response.chillType?.trim() ?? '',
+      checksumEnabled: !!response.checksumEnabled,
+      labelFormatString: response.labelFormatString?.trim() || null,
+      shortLabelFormatString: response.shortLabelFormatString?.trim() || null,
+      fullTextContentFormatString: response.fullTextContentFormatString?.trim() || null,
+      changeLogEnabled: !!response.changeLogEnabled
+    };
+  }
+
+  private toEntityOptionsDto(entityOptions: ChillDtoEntityOptions): ChillDtoEntityOptions {
+    return {
+      chillType: entityOptions.chillType?.trim() ?? '',
+      checksumEnabled: !!entityOptions.checksumEnabled,
+      labelFormatString: entityOptions.labelFormatString?.trim() || null,
+      shortLabelFormatString: entityOptions.shortLabelFormatString?.trim() || null,
+      fullTextContentFormatString: entityOptions.fullTextContentFormatString?.trim() || null,
+      changeLogEnabled: !!entityOptions.changeLogEnabled
     };
   }
 

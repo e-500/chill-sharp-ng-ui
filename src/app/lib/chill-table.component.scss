@@ -42,7 +42,7 @@
   position: relative;
   overflow-x: auto;
   overflow-y: visible;
-  border-radius: 1.25rem;
+  border-radius: 0.5rem;
   border: 1px solid var(--border-color);
   background: var(--surface-2);
   box-shadow: var(--shadow);
@@ -54,9 +54,15 @@
   min-width: 36rem;
 }
 
-.chill-table th,
+.chill-table th {
+  padding: 0.5rem 0.4rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-color);
+}
+
 .chill-table td {
-  padding: 0.65rem 1rem;
+  padding: 0.3rem 0.4rem;
   text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--border-color);
@@ -147,6 +153,19 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.column-settings-button {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-0) 94%, transparent);
+  color: inherit;
+  cursor: pointer;
 }
 
 .column-name-input {

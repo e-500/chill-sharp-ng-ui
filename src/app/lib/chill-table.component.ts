@@ -67,6 +67,7 @@ interface ActiveCellEditState {
   form: FormGroup<Record<string, FormControl<JsonValue>>>;
   originalValue: JsonValue | null;
   isValid: boolean;
+  isLookupDialogOpen: boolean;
   isCommitting: boolean;
 }
 
@@ -114,6 +115,7 @@ export class ChillTableComponent {
   readonly activeCellEdit = signal<ActiveCellEditState | null>(null);
   readonly activeRowActionMenu = signal<ActiveRowActionMenuState | null>(null);
   readonly displayedEntities = signal<ChillEntity[]>([]);
+  readonly schemaRefreshTick = signal(0);
   private readonly entityNotificationSubscriptions = new Map<string, Subscription>();
   private subscribedNotificationChillType = '';
   // #endregion
@@ -209,6 +211,7 @@ export class ChillTableComponent {
    * Merges schema properties with persisted layout preferences and preserves the saved column order.
    */
   readonly columns = computed<TableColumn[]>(() => {
+    this.schemaRefreshTick();
     const schema = this.schema();
     const properties = schema?.properties ?? [];
     const propertyMap = new Map(properties.map((property) => [property.name, property]));
@@ -316,6 +319,32 @@ export class ChillTableComponent {
     this.layoutState.update((current) => current.map((item) => item.name === columnName
       ? { ...item, hidden }
       : item));
+  }
+
+  openPropertySettings(property: ChillPropertySchema): void {
+    const schema = this.schema();
+    if (!schema || !this.dialog) {
+      return;
+    }
+
+    void (async () => {
+      const { SchemaPropertyDialogComponent } = await import('./schema-property-dialog.component');
+      const result = await this.dialog!.openDialog<ChillPropertySchema>({
+        title: property.displayName?.trim() || property.name,
+        component: SchemaPropertyDialogComponent,
+        okLabel: this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Save', 'Salva'),
+        inputs: {
+          schema,
+          property
+        }
+      });
+
+      if (result.status !== 'confirmed' || !result.value) {
+        return;
+      }
+
+      this.savePropertySchema(schema, property.name, result.value);
+    })();
   }
 
   /**
@@ -607,6 +636,7 @@ export class ChillTableComponent {
       form: this.chill.prepareForm(schema, entity),
       originalValue: this.readPropertyValue(entity, propertyName) ?? null,
       isValid: true,
+      isLookupDialogOpen: false,
       isCommitting: false
     });
   }
@@ -657,6 +687,30 @@ export class ChillTableComponent {
   }
 
   /**
+   * Keeps inline editing alive while a lookup picker dialog owns the focus outside the table cell.
+   */
+  handleLookupDialogOpenChange(isOpen: boolean): void {
+    const activeCellEdit = this.activeCellEdit();
+    if (!activeCellEdit) {
+      return;
+    }
+
+    this.activeCellEdit.set({
+      ...activeCellEdit,
+      isLookupDialogOpen: isOpen
+    });
+
+    if (isOpen) {
+      return;
+    }
+
+    const activeControl = activeCellEdit.form.controls[activeCellEdit.propertyName];
+    if (activeControl?.dirty) {
+      this.commitCellEdit();
+    }
+  }
+
+  /**
    * Commits the edit only when focus leaves the entire editor, not when it moves within the editor.
    */
   handleCellFocusOut(event: FocusEvent): void {
@@ -667,6 +721,10 @@ export class ChillTableComponent {
 
     const relatedTarget = event.relatedTarget;
     if (relatedTarget instanceof Node && currentTarget.contains(relatedTarget)) {
+      return;
+    }
+
+    if (this.activeCellEdit()?.isLookupDialogOpen) {
       return;
     }
 
@@ -1184,6 +1242,39 @@ export class ChillTableComponent {
       genericErrors: null,
       errorMessage: null,
       ignoreNotificationsUntil: null
+    });
+  }
+
+  private savePropertySchema(schema: ChillSchema, originalPropertyName: string, property: ChillPropertySchema): void {
+    const updatedSchema: ChillSchema = {
+      ...schema,
+      properties: (schema.properties ?? []).map((candidate) => candidate.name === originalPropertyName
+        ? property
+        : candidate)
+    };
+
+    this.isSavingLayout.set(true);
+    this.layoutError.set('');
+
+    this.chill.setSchema(updatedSchema).subscribe({
+      next: (savedSchema) => {
+        const effectiveSchema = savedSchema ?? updatedSchema;
+        const targetSchema = this.schema();
+        if (targetSchema) {
+          targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
+          targetSchema.properties = [...(effectiveSchema.properties ?? [])];
+          (targetSchema as unknown as JsonObject)['metadata'] = targetSchema.metadata as unknown as JsonValue;
+          (targetSchema as unknown as JsonObject)['properties'] = targetSchema.properties as unknown as JsonValue;
+        }
+        this.activeCellEdit.set(null);
+        this.layoutState.set(this.readLayoutState(effectiveSchema));
+        this.schemaRefreshTick.update((current) => current + 1);
+        this.isSavingLayout.set(false);
+      },
+      error: (error: unknown) => {
+        this.layoutError.set(this.chill.formatError(error));
+        this.isSavingLayout.set(false);
+      }
     });
   }
 

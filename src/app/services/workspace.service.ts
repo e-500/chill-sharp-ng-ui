@@ -1,13 +1,17 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { ParamMap, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import type { CrudPageComponentConfiguration } from '../pages/crud/crud-page.component';
 import type { ChillMenuItem } from '../models/chill-menu.models';
-import type { WorkspaceTaskComponentType, WorkspaceTaskConfiguration } from '../models/workspace-task.models';
+import type { WorkspaceTaskComponent, WorkspaceTaskComponentType, WorkspaceTaskConfiguration } from '../models/workspace-task.models';
+import { ChillService } from './chill.service';
+import { WorkspaceDialogService } from './workspace-dialog.service';
 import { WorkspaceLayoutService } from './workspace-layout.service';
 import { WorkspaceTaskDefinition, WorkspaceTaskRegistryService } from './workspace-task-registry.service';
 
 const WORKSPACE_THEME_STORAGE_KEY = 'chill-sharp-ng-ui.workspace-theme';
+const ACTIVE_MENU_ITEM_QUERY_PARAM = 'activeMenuItem';
 
 export type WorkspaceTheme = 'bright' | 'dark' | 'soft';
 
@@ -22,6 +26,8 @@ export interface WorkspaceTaskInstance {
   title: string;
   description: string;
   component: WorkspaceTaskComponentType;
+  toolbarScope: string;
+  menuItemGuid?: string | null;
   inputs?: Record<string, unknown>;
   route: WorkspaceTaskRoute;
 }
@@ -47,6 +53,8 @@ export interface OpenWorkspaceTaskRequest {
 export class WorkspaceService {
   private readonly document = inject(DOCUMENT);
   private readonly router = inject(Router);
+  private readonly chill = inject(ChillService);
+  private readonly dialog = inject(WorkspaceDialogService);
   private readonly layout = inject(WorkspaceLayoutService);
   private readonly taskRegistry = inject(WorkspaceTaskRegistryService);
   private readonly destroyRef = inject(DestroyRef);
@@ -54,6 +62,7 @@ export class WorkspaceService {
   private readonly drawerOpenState = signal(false);
   private readonly activeTaskIdState = signal<string | null>(null);
   private readonly openTaskInstancesState = signal<WorkspaceTaskInstance[]>([]);
+  private taskComponentResolver: ((taskId: string) => WorkspaceTaskComponent | null) | null = null;
   private readonly storedThemePreference = this.readStoredThemePreference();
   private readonly hasExplicitThemePreferenceState = signal(this.storedThemePreference !== null);
   private readonly themeState = signal<WorkspaceTheme>(this.storedThemePreference ?? this.readSystemThemePreference());
@@ -77,8 +86,45 @@ export class WorkspaceService {
   }
 
   async activateTaskFromRoute(taskType: string | null, queryParams: ParamMap): Promise<void> {
+    const activeMenuItemGuid = this.readActiveMenuItemGuid(queryParams);
+    if (activeMenuItemGuid) {
+      const currentActiveMenuItemGuid = this.activeTask()?.menuItemGuid?.trim() ?? '';
+      if (currentActiveMenuItemGuid === activeMenuItemGuid) {
+        this.drawerOpenState.set(false);
+        return;
+      }
+
+      const existingTask = this.findTaskByMenuItemGuid(activeMenuItemGuid);
+      if (existingTask) {
+        this.activeTaskIdState.set(existingTask.id);
+        this.drawerOpenState.set(false);
+        return;
+      }
+
+      const restoredTask = await this.restoreMenuTaskFromRoute(activeMenuItemGuid);
+      if (!restoredTask) {
+        if (this.openTaskInstancesState().length === 0) {
+          this.activeTaskIdState.set(null);
+        }
+        this.drawerOpenState.set(false);
+        return;
+      }
+
+      if (this.openTaskInstancesState().length === 0) {
+        this.openTaskInstancesState.set([restoredTask]);
+      } else {
+        this.openTaskInstancesState.update((tasks) => [...tasks, restoredTask]);
+      }
+
+      this.activeTaskIdState.set(restoredTask.id);
+      this.drawerOpenState.set(false);
+      return;
+    }
+
     if (!taskType) {
-      this.activeTaskIdState.set(null);
+      if (this.openTaskInstancesState().length === 0) {
+        this.activeTaskIdState.set(null);
+      }
       return;
     }
 
@@ -134,12 +180,6 @@ export class WorkspaceService {
       return;
     }
 
-    const existingTask = this.findTaskByRoute(task.route);
-    if (existingTask) {
-      this.activateTask(existingTask.id);
-      return;
-    }
-
     this.openTaskInstance(task);
   }
 
@@ -159,40 +199,30 @@ export class WorkspaceService {
   }
 
   async openMenuItem(item: ChillMenuItem): Promise<void> {
-    const componentName = this.normalizeComponentName(item.componentName);
-    const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
+    const task = await this.createMenuTaskInstance(item);
+    if (!task) {
+      return;
+    }
 
-    await this.openWorkspaceTask({
-      componentName,
-      title: item.title,
-      description: item.description,
-      configuration
-    });
+    this.openTaskInstance(task);
   }
 
   isMenuItemActive(item: ChillMenuItem): boolean {
-    const activeTask = this.activeTask();
-    if (!activeTask) {
-      return false;
-    }
-
-    const componentName = this.normalizeComponentName(item.componentName);
-    const configuration = this.parseMenuConfiguration(item.componentConfigurationJson);
-
-    const expectedRoute = this.createDefaultRoute(
-      componentName,
-      item.title,
-      item.description,
-      configuration
-    );
-
-    return this.isSameTaskRoute(activeTask.route, expectedRoute);
+    return this.activeTask()?.menuItemGuid === item.guid;
   }
 
-  activateTask(taskInstanceId: string): void {
+  async activateTask(taskInstanceId: string): Promise<void> {
     const task = this.openTaskInstancesState().find((candidate) => candidate.id === taskInstanceId) ?? null;
     if (!task) {
       return;
+    }
+
+    const currentActiveTaskId = this.activeTaskIdState();
+    if (currentActiveTaskId && currentActiveTaskId !== task.id) {
+      const canLeaveCurrentTask = await this.confirmTaskCanBeLeft(currentActiveTaskId);
+      if (!canLeaveCurrentTask) {
+        return;
+      }
     }
 
     this.activeTaskIdState.set(task.id);
@@ -200,7 +230,12 @@ export class WorkspaceService {
     this.navigateToTask(task);
   }
 
-  closeTask(taskInstanceId: string): void {
+  async closeTask(taskInstanceId: string): Promise<void> {
+    const canCloseTask = await this.confirmTaskCanBeLeft(taskInstanceId);
+    if (!canCloseTask) {
+      return;
+    }
+
     let nextActiveTaskId: string | null = this.activeTaskIdState();
 
     this.openTaskInstancesState.update((tasks) => {
@@ -239,10 +274,38 @@ export class WorkspaceService {
     this.layout.toggleLayoutEditingEnabled();
   }
 
-  reset(): void {
+  async reset(): Promise<boolean> {
+    const canReset = await this.confirmAllTasksCanBeClosed();
+    if (!canReset) {
+      return false;
+    }
+
     this.drawerOpenState.set(false);
     this.activeTaskIdState.set(null);
     this.openTaskInstancesState.set([]);
+    return true;
+  }
+
+  registerTaskComponentResolver(resolver: ((taskId: string) => WorkspaceTaskComponent | null) | null): void {
+    this.taskComponentResolver = resolver;
+  }
+
+  canUnloadWorkspace(): boolean {
+    const activeTaskId = this.activeTaskIdState();
+    if (!activeTaskId) {
+      return true;
+    }
+
+    const component = this.taskComponentResolver?.(activeTaskId) ?? null;
+    if (!component?.isAllSaved) {
+      return true;
+    }
+
+    try {
+      return component.isAllSaved() === true;
+    } catch {
+      return false;
+    }
   }
 
   private openTaskInstance(task: WorkspaceTaskInstance, navigate = true): void {
@@ -258,8 +321,8 @@ export class WorkspaceService {
   }
 
   private navigateToTask(task: WorkspaceTaskInstance): void {
-    void this.router.navigate(['/workspace', task.route.taskType], {
-      queryParams: task.route.queryParams ?? {}
+    void this.router.navigate(['/workspace'], {
+      queryParams: this.buildWorkspaceQueryParams(task)
     });
   }
 
@@ -288,24 +351,52 @@ export class WorkspaceService {
       return null;
     }
 
+    const taskId = crypto.randomUUID();
     const title = titleOverride?.trim() || taskDefinition.title;
     const description = descriptionOverride?.trim() || taskDefinition.description;
     const normalizedConfiguration = this.normalizeConfiguration(configuration);
+    const toolbarScope = `workspace-task-${taskId}`;
 
     return {
-      id: crypto.randomUUID(),
+      id: taskId,
       taskType: taskDefinition.componentName,
       title,
       description,
       component,
+      toolbarScope,
+      menuItemGuid: null,
       inputs: taskDefinition.kind === 'remote' || taskDefinition.usesTaskConfigurationInputs
         ? {
             componentConfiguration: normalizedConfiguration ?? {},
             taskTitle: title,
-            taskDescription: description
+            taskDescription: description,
+            toolbarScope
           }
         : undefined,
       route: this.createDefaultRoute(taskDefinition.componentName, title, description, normalizedConfiguration)
+    };
+  }
+
+  private async createMenuTaskInstance(item: ChillMenuItem): Promise<WorkspaceTaskInstance | null> {
+    const componentName = this.normalizeComponentName(item.componentName);
+    const taskDefinition = this.getTaskDefinition(componentName);
+    if (!taskDefinition) {
+      return null;
+    }
+
+    const task = await this.createStaticTaskInstance(
+      taskDefinition,
+      item.title,
+      item.description,
+      this.parseMenuConfiguration(item.componentConfigurationJson)
+    );
+    if (!task) {
+      return null;
+    }
+
+    return {
+      ...task,
+      menuItemGuid: item.guid?.trim() || null
     };
   }
 
@@ -315,6 +406,15 @@ export class WorkspaceService {
 
   private findTaskByRoute(route: WorkspaceTaskRoute): WorkspaceTaskInstance | null {
     return this.openTaskInstancesState().find((task) => this.isSameTaskRoute(task.route, route)) ?? null;
+  }
+
+  private findTaskByMenuItemGuid(menuItemGuid: string): WorkspaceTaskInstance | null {
+    const normalizedMenuItemGuid = menuItemGuid.trim();
+    if (!normalizedMenuItemGuid) {
+      return null;
+    }
+
+    return this.openTaskInstancesState().find((task) => task.menuItemGuid === normalizedMenuItemGuid) ?? null;
   }
 
   private isSameTaskRoute(left: WorkspaceTaskRoute, right: WorkspaceTaskRoute): boolean {
@@ -399,6 +499,125 @@ export class WorkspaceService {
     };
   }
 
+  private buildWorkspaceQueryParams(activeTask: WorkspaceTaskInstance | null): Record<string, string | string[]> {
+    const activeMenuItem = activeTask?.menuItemGuid?.trim() ?? '';
+    return activeMenuItem
+      ? { [ACTIVE_MENU_ITEM_QUERY_PARAM]: activeMenuItem }
+      : {};
+  }
+
+  private readActiveMenuItemGuid(queryParams: ParamMap): string {
+    return queryParams.get(ACTIVE_MENU_ITEM_QUERY_PARAM)?.trim() ?? '';
+  }
+
+  private findActiveTaskIdForMenuItemGuid(activeMenuItemGuid: string): string | null {
+    if (!activeMenuItemGuid) {
+      return null;
+    }
+
+    return this.findTaskByMenuItemGuid(activeMenuItemGuid)?.id ?? null;
+  }
+
+  private findTaskIdByMenuItemGuid(tasks: WorkspaceTaskInstance[], menuItemGuid: string): string | null {
+    if (!menuItemGuid) {
+      return null;
+    }
+
+    return tasks.find((task) => task.menuItemGuid === menuItemGuid)?.id ?? null;
+  }
+
+  private async restoreMenuTaskFromRoute(activeMenuItemGuid: string): Promise<WorkspaceTaskInstance | null> {
+    const menuItems = await this.loadMenuItemsByGuids([activeMenuItemGuid]);
+    const menuItem = menuItems.get(activeMenuItemGuid);
+    if (!menuItem) {
+      return null;
+    }
+
+    return this.createMenuTaskInstance(menuItem);
+  }
+
+  private async loadMenuItemsByGuids(targetGuids: string[]): Promise<Map<string, ChillMenuItem>> {
+    const remainingGuids = new Set(targetGuids.map((guid) => guid.trim()).filter((guid) => guid.length > 0));
+    const resolvedMenuItems = new Map<string, ChillMenuItem>();
+    const parentQueue: Array<string | null> = [null];
+    const visitedParents = new Set<string>();
+
+    while (parentQueue.length > 0 && remainingGuids.size > 0) {
+      const parentGuid = parentQueue.shift() ?? null;
+      const parentKey = parentGuid ?? '__root__';
+      if (visitedParents.has(parentKey)) {
+        continue;
+      }
+
+      visitedParents.add(parentKey);
+
+      let items: ChillMenuItem[] = [];
+      try {
+        items = await firstValueFrom(this.chill.getMenu(parentGuid));
+      } catch {
+        continue;
+      }
+
+      for (const item of items) {
+        const itemGuid = item.guid?.trim() ?? '';
+        if (itemGuid) {
+          parentQueue.push(itemGuid);
+        }
+
+        if (!itemGuid || !remainingGuids.has(itemGuid)) {
+          continue;
+        }
+
+        resolvedMenuItems.set(itemGuid, item);
+        remainingGuids.delete(itemGuid);
+      }
+    }
+
+    return resolvedMenuItems;
+  }
+
+  private async confirmAllTasksCanBeClosed(): Promise<boolean> {
+    const taskIds = this.openTaskInstancesState().map((task) => task.id);
+    for (const taskId of taskIds) {
+      const canLeaveTask = await this.confirmTaskCanBeLeft(taskId);
+      if (!canLeaveTask) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private async confirmTaskCanBeLeft(taskId: string): Promise<boolean> {
+    const component = this.taskComponentResolver?.(taskId) ?? null;
+    if (!component?.isAllSaved) {
+      return true;
+    }
+
+    let isAllSaved = true;
+    try {
+      isAllSaved = await component.isAllSaved();
+    } catch {
+      isAllSaved = false;
+    }
+
+    if (isAllSaved) {
+      return true;
+    }
+
+    const taskTitle = this.openTaskInstancesState().find((task) => task.id === taskId)?.title
+      || this.chill.T('68E40F26-CE4E-4FD1-9D2A-505B495D1608', 'this task', 'questa attivita');
+
+    return this.dialog.confirmYesNo(
+      this.chill.T('C215A6B1-F772-478D-8FB2-8A7A495F694E', 'Unsaved changes', 'Modifiche non salvate'),
+      this.chill.T(
+        '05105AA0-B849-4020-8018-03C97CB92605',
+        `There is unsaved or unfinished work in ${taskTitle}. Do you want to leave it anyway?`,
+        `Ci sono modifiche non salvate o attivita non completate in ${taskTitle}. Vuoi comunque uscire?`
+      )
+    );
+  }
+
   private normalizeComponentName(value: string): string {
     return value.trim().toLowerCase();
   }
@@ -464,9 +683,9 @@ export class WorkspaceService {
 
     return {
       ...configuration,
-      ChillType: chillType,
-      ViewCode: viewCode,
-      ...(queryChillType ? { ChillQuery: queryChillType } : {})
+      chillType,
+      viewCode,
+      ...(queryChillType ? { chillQuery: queryChillType } : {})
     };
   }
 

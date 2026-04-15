@@ -1,5 +1,5 @@
 import { CommonModule, NgComponentOutlet } from '@angular/common';
-import { Component, ElementRef, HostListener, OnInit, inject, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, computed, inject, viewChild, viewChildren } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { combineLatest } from 'rxjs';
 import { ChillService } from '../services/chill.service';
@@ -11,11 +11,119 @@ import { WorkspaceToolbarService } from '../services/workspace-toolbar.service';
 import { WorkspaceDialogHostComponent } from '../workspace/workspace-dialog-host.component';
 import { WorkspaceMenuComponent } from '../workspace/workspace-menu.component';
 import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.component';
+import type { WorkspaceTaskComponent, WorkspaceTaskComponentType } from '../models/workspace-task.models';
+import type { WorkspaceTaskInstance } from '../services/workspace.service';
 
 @Component({
   selector: 'app-workspace-page',
   standalone: true,
   imports: [CommonModule, NgComponentOutlet, WorkspaceTaskbarComponent, WorkspaceMenuComponent, WorkspaceDialogHostComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
+  styles: `
+    .workspace-topbar {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .workspace-topbar__left {
+      grid-column: 1;
+    }
+
+    .workspace-topbar__center {
+      grid-column: 2;
+      min-width: 0;
+    }
+
+    .workspace-topbar__controls {
+      grid-column: 4;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }
+
+    .workspace-toolbar-actions {
+      grid-column: 3;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      min-width: 0;
+    }
+
+    .workspace-task-host,
+    .workspace-task-pane {
+      display: block;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .workspace-task-pane[hidden] {
+      display: none !important;
+    }
+
+    .workspace-toolbar-button--accent {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: var(--surface-0);
+    }
+
+    .workspace-toolbar-button--accent:disabled {
+      border-color: var(--border-color);
+      background: var(--surface-0);
+      color: var(--text-main);
+    }
+
+    .workspace-toolbar-button__text {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    @media (max-width: 720px) {
+      .workspace-topbar {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        row-gap: 0.6rem;
+      }
+
+      .workspace-topbar__left {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .workspace-topbar__center {
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+      }
+
+      .workspace-topbar__controls {
+        grid-column: 3;
+        grid-row: 1;
+      }
+
+      .workspace-toolbar-actions {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-content: flex-start;
+      }
+
+      .workspace-toolbar-button--has-icon {
+        min-width: 2.75rem;
+        justify-content: center;
+        padding-inline: 0.75rem;
+      }
+
+      .workspace-toolbar-button--has-icon .workspace-toolbar-button__text {
+        display: none;
+      }
+
+      .theme-menu__label {
+        display: none;
+      }
+    }
+  `,
   template: `
     <section class="workspace-shell">
       <header class="workspace-topbar">
@@ -34,35 +142,39 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
 
         <app-workspace-taskbar class="workspace-topbar__center" />
 
-        <div class="workspace-topbar__right">
-          @if (toolbar.buttons().length > 0) {
-            <div class="workspace-toolbar-actions">
-              @for (button of toolbar.buttons(); track button.id) {
-                <button
-                  type="button"
-                  class="workspace-toolbar-button"
-                  (click)="button.action()"
-                  [disabled]="button.disabled"
-                  [attr.aria-label]="button.ariaLabel || button.label || button.primaryDefaultText">
-                  @if (button.icon) {
-                    <span
-                      class="workspace-toolbar-button__icon"
-                      [class.material-symbol-icon]="button.iconClass === 'material-symbol-icon'"
-                      aria-hidden="true">{{ button.icon }}</span>
-                  }
-                  @if (button.labelGuid && button.primaryDefaultText && button.secondaryDefaultText) {
+        @if (activeToolbarButtons().length > 0) {
+          <div class="workspace-toolbar-actions">
+            @for (button of activeToolbarButtons(); track button.id) {
+              <button
+                type="button"
+                class="workspace-toolbar-button"
+                [class.workspace-toolbar-button--accent]="button.accent"
+                [class.workspace-toolbar-button--has-icon]="!!button.icon"
+                (click)="button.action()"
+                [disabled]="button.disabled"
+                [attr.aria-label]="button.ariaLabel || button.label || button.primaryDefaultText">
+                @if (button.icon) {
+                  <span
+                    class="workspace-toolbar-button__icon"
+                    [class.material-symbol-icon]="button.iconClass === 'material-symbol-icon'"
+                    aria-hidden="true">{{ button.icon }}</span>
+                }
+                @if (button.labelGuid && button.primaryDefaultText && button.secondaryDefaultText) {
+                  <span class="workspace-toolbar-button__text">
                     <app-chill-i18n-button-label
                       [labelGuid]="button.labelGuid"
                       [primaryDefaultText]="button.primaryDefaultText"
                       [secondaryDefaultText]="button.secondaryDefaultText" />
-                  } @else {
-                    <span>{{ button.label }}</span>
-                  }
-                </button>
-              }
-            </div>
-          }
+                  </span>
+                } @else {
+                  <span class="workspace-toolbar-button__text">{{ button.label }}</span>
+                }
+              </button>
+            }
+          </div>
+        }
 
+        <div class="workspace-topbar__controls">
           <details class="theme-menu" #themeMenu>
             <summary
               class="theme-menu__summary"
@@ -118,10 +230,12 @@ import { WorkspaceTaskbarComponent } from '../workspace/workspace-taskbar.compon
         </aside>
 
         <main class="workspace-content">
-          @if (workspace.activeTask(); as task) {
+          @if (workspace.openTasks().length > 0) {
             <div class="workspace-task-host">
-              @for (activeTask of [task]; track activeTask.id) {
-                <ng-container *ngComponentOutlet="activeTask.component; inputs: activeTask.inputs ?? {}" />
+              @for (task of workspace.openTasks(); track task.id) {
+                <div class="workspace-task-pane" [hidden]="!isTaskVisible(task.id)">
+                  <ng-container *ngComponentOutlet="task.component; inputs: taskInputs(task)" />
+                </div>
               }
             </div>
           } @else {
@@ -164,10 +278,15 @@ export class WorkspacePageComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly themeMenu = viewChild<ElementRef<HTMLDetailsElement>>('themeMenu');
   private readonly userMenu = viewChild<ElementRef<HTMLDetailsElement>>('userMenu');
+  private readonly taskOutlets = viewChildren(NgComponentOutlet);
 
   readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft'];
+  readonly activeToolbarButtons = computed(() =>
+    this.toolbar.buttons(this.workspace.activeTask()?.toolbarScope ?? 'workspace')
+  );
 
   ngOnInit(): void {
+    this.workspace.registerTaskComponentResolver((taskId) => this.resolveTaskComponent(taskId));
     combineLatest([this.route.paramMap, this.route.queryParamMap]).subscribe(([paramMap, queryParamMap]: [ParamMap, ParamMap]) => {
       void this.workspace.activateTaskFromRoute(paramMap.get('taskId'), queryParamMap);
     });
@@ -201,6 +320,16 @@ export class WorkspacePageComponent implements OnInit {
     }
   }
 
+  @HostListener('window:beforeunload', ['$event'])
+  handleBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.workspace.canUnloadWorkspace()) {
+      return;
+    }
+
+    event.preventDefault();
+    event.returnValue = '';
+  }
+
   userInitial(): string {
     const userName = this.chill.userName().trim();
     return userName ? userName[0].toUpperCase() : 'U';
@@ -222,14 +351,13 @@ export class WorkspacePageComponent implements OnInit {
   goToChangePassword(): void {
     this.closeUserMenu();
     this.workspace.closeDrawer();
-    void this.router.navigateByUrl('/reset-password');
+    void this.navigateAway('/reset-password');
   }
 
   logout(): void {
     this.closeUserMenu();
     this.chill.logout();
-    this.workspace.reset();
-    void this.router.navigateByUrl('/login');
+    void this.logoutAndReset();
   }
 
   private closeUserMenu(): void {
@@ -237,5 +365,70 @@ export class WorkspacePageComponent implements OnInit {
     if (userMenu) {
       userMenu.open = false;
     }
+  }
+
+  isTaskVisible(taskId: string): boolean {
+    return this.workspace.activeTask()?.id === taskId;
+  }
+
+  taskInputs(task: WorkspaceTaskInstance): Record<string, unknown> {
+    const inputs = { ...(task.inputs ?? {}) };
+    if (this.supportsInput(task.component, 'visible')) {
+      inputs['visible'] = this.isTaskVisible(task.id);
+    }
+
+    if (this.supportsInput(task.component, 'toolbarScope')) {
+      inputs['toolbarScope'] = task.toolbarScope;
+    }
+
+    return inputs;
+  }
+
+  private supportsInput(component: WorkspaceTaskComponentType, inputName: string): boolean {
+    const definition = (component as WorkspaceTaskComponentType & {
+      ɵcmp?: { inputs?: Record<string, string> };
+    }).ɵcmp;
+
+    if (!definition?.inputs) {
+      return false;
+    }
+
+    return Object.prototype.hasOwnProperty.call(definition.inputs, inputName);
+  }
+
+  private resolveTaskComponent(taskId: string): WorkspaceTaskComponent | null {
+    const taskIndex = this.workspace.openTasks().findIndex((task) => task.id === taskId);
+    if (taskIndex < 0) {
+      return null;
+    }
+
+    const outlet = this.taskOutlets()[taskIndex];
+    const componentInstance = (outlet as NgComponentOutlet & { componentInstance?: unknown }).componentInstance;
+    return this.isWorkspaceTaskComponent(componentInstance)
+      ? componentInstance
+      : null;
+  }
+
+  private isWorkspaceTaskComponent(value: unknown): value is WorkspaceTaskComponent {
+    return !!value && typeof value === 'object';
+  }
+
+  private async navigateAway(url: string): Promise<void> {
+    const reset = await this.workspace.reset();
+    if (!reset) {
+      return;
+    }
+
+    void this.router.navigateByUrl(url);
+  }
+
+  private async logoutAndReset(): Promise<void> {
+    const reset = await this.workspace.reset();
+    if (!reset) {
+      return;
+    }
+
+    this.chill.logout();
+    void this.router.navigateByUrl('/login');
   }
 }

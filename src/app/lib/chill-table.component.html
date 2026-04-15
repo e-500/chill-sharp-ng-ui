@@ -69,6 +69,13 @@
                       [ngModel]="column.displayName"
                       (ngModelChange)="updateColumnDisplayName(column.name, $event)"
                       [name]="'displayName-' + column.name" />
+                    <button
+                      type="button"
+                      class="column-settings-button"
+                      (click)="openPropertySettings(column)"
+                      [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
+                      <span class="material-symbol-icon">tune</span>
+                    </button>
                   </label>
                 } @else {
                   {{ column.displayName || column.name }}
@@ -153,7 +160,8 @@
                           [showLabels]="false"
                           [externalErrors]="rowFieldErrors(entity)"
                           (valueChange)="handleCellValueChange($event)"
-                          (validityChange)="handleCellValidityChange($event)" />
+                          (validityChange)="handleCellValidityChange($event)"
+                          (lookupDialogOpenChange)="handleLookupDialogOpenChange($event)" />
                       </div>
                     } @else {
                       <app-chill-polymorphic-output

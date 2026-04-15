@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, input, signal } from '@angular/core';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import { ChillI18nLabelComponent } from '../../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../../lib/chill-form.component';
 import { ChillTableComponent } from '../../../lib/chill-table.component';
 import type { ChillEntity, ChillFormSubmitEvent, ChillQuery, ChillSchema, ChillSchemaListItem } from '../../../models/chill-schema.models';
+import type { WorkspaceTaskComponentInterface } from '../../../models/workspace-task.models';
 import { ChillService } from '../../../services/chill.service';
 
 const EVENT_QUERY_NAME = 'EventQuery';
@@ -18,12 +19,13 @@ const DEFAULT_VIEW_CODE = 'default';
   templateUrl: './event-viewer.component.html',
   styleUrl: './event-viewer.component.scss'
 })
-export class EventViewerComponent implements OnInit {
+export class EventViewerComponent implements WorkspaceTaskComponentInterface, OnInit {
   static getComponentConfigurationJsonExample(): Record<string, never> {
     return {};
   }
 
   readonly chill = inject(ChillService);
+  readonly visible = input(true);
 
   readonly isLoadingSchema = signal(true);
   readonly isSearching = signal(false);

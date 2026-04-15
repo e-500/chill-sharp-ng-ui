@@ -85,6 +85,11 @@
                   }
                 </span>
                 <div class="span-controls">
+                  @if (item.kind === 'property') {
+                    <button type="button" (click)="openPropertySettings(item.property)" [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
+                      <span class="material-symbol-icon">tune</span>
+                    </button>
+                  }
                   <button type="button" (click)="decreaseSpan(item.id)">-</button>
                   <span>{{ item.span }}</span>
                   <button type="button" (click)="increaseSpan(item.id)">+</button>

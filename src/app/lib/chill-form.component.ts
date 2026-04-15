@@ -80,6 +80,7 @@ export class ChillFormComponent implements OnDestroy {
   readonly isSavingLayout = signal(false);
   readonly layoutError = signal('');
   readonly dragPropertyName = signal('');
+  readonly schemaRefreshTick = signal(0);
   readonly layoutState = signal<FormLayoutState>({
     columnCount: DEFAULT_FORM_COLUMN_COUNT,
     items: []
@@ -91,7 +92,10 @@ export class ChillFormComponent implements OnDestroy {
   readonly mode = computed<'entity' | 'query'>(() => this.query() ? 'query' : 'entity');
   readonly source = computed<ChillEntity | ChillQuery | null>(() => this.query() ?? this.entity());
   readonly hasCustomSubmitHandler = computed(() => !!this.onSubmit());
-  readonly properties = computed(() => this.schema()?.properties ?? []);
+  readonly properties = computed(() => {
+    this.schemaRefreshTick();
+    return this.schema()?.properties ?? [];
+  });
   readonly layoutItems = computed<ResolvedFormLayoutItem[]>(() => {
     const propertyMap = new Map(this.properties().map((property) => [property.name, property]));
     const layout = this.layoutState();
@@ -178,6 +182,7 @@ export class ChillFormComponent implements OnDestroy {
 
   constructor() {
     effect(() => {
+      this.schemaRefreshTick();
       const schema = this.schema();
       const source = this.source();
       const nextForm = schema
@@ -455,6 +460,32 @@ export class ChillFormComponent implements OnDestroy {
     queueMicrotask(() => {
       void this.runAutocomplete();
     });
+  }
+
+  openPropertySettings(property: ChillPropertySchema): void {
+    const schema = this.schema();
+    if (!schema || !this.dialog) {
+      return;
+    }
+
+    void (async () => {
+      const { SchemaPropertyDialogComponent } = await import('./schema-property-dialog.component');
+      const result = await this.dialog!.openDialog<ChillPropertySchema>({
+        title: property.displayName?.trim() || property.name,
+        component: SchemaPropertyDialogComponent,
+        okLabel: this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Save', 'Salva'),
+        inputs: {
+          schema,
+          property
+        }
+      });
+
+      if (result.status !== 'confirmed' || !result.value) {
+        return;
+      }
+
+      this.savePropertySchema(schema, property.name, result.value);
+    })();
   }
 
   ngOnDestroy(): void {
@@ -832,6 +863,39 @@ export class ChillFormComponent implements OnDestroy {
         this.layoutState.set(this.readLayoutState(effectiveSchema));
         this.isSavingLayout.set(false);
         this.isEditMode.set(false);
+      },
+      error: (error: unknown) => {
+        this.layoutError.set(this.chill.formatError(error));
+        this.isSavingLayout.set(false);
+      }
+    });
+  }
+
+  private savePropertySchema(schema: ChillSchema, originalPropertyName: string, property: ChillPropertySchema): void {
+    const updatedSchema: ChillSchema = {
+      ...schema,
+      properties: (schema.properties ?? []).map((candidate) => candidate.name === originalPropertyName
+        ? property
+        : candidate)
+    };
+
+    this.isSavingLayout.set(true);
+    this.layoutError.set('');
+
+    this.chill.setSchema(updatedSchema).subscribe({
+      next: (savedSchema) => {
+        const effectiveSchema = savedSchema ?? updatedSchema;
+        const targetSchema = this.schema();
+        if (targetSchema) {
+          targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
+          targetSchema.properties = [...(effectiveSchema.properties ?? [])];
+          (targetSchema as unknown as JsonObject)['Metadata'] = targetSchema.metadata as unknown as JsonValue;
+          (targetSchema as unknown as JsonObject)['Properties'] = targetSchema.properties as unknown as JsonValue;
+        }
+        this.propertyValidity.set(this.createInitialPropertyValidity(effectiveSchema));
+        this.layoutState.set(this.readLayoutState(effectiveSchema));
+        this.schemaRefreshTick.update((current) => current + 1);
+        this.isSavingLayout.set(false);
       },
       error: (error: unknown) => {
         this.layoutError.set(this.chill.formatError(error));

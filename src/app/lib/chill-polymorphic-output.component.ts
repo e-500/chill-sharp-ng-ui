@@ -27,7 +27,18 @@ const CHILL_PROPERTY_TYPE = {
   imports: [CommonModule],
   template: `
     <span class="polymorphic-output" [title]="titleText()">
-      {{ displayText() }}
+      @if (spacedDisplayParts(); as parts) {
+        <span class="polymorphic-output__spaced-parts">
+          @for (part of parts; track $index; let isFirst = $first) {
+            @if (!isFirst) {
+              <span class="polymorphic-output__spaced-parts-separator"> </span>
+            }
+            <span class="polymorphic-output__spaced-parts-part">{{ part }}</span>
+          }
+        </span>
+      } @else {
+        {{ displayText() }}
+      }
     </span>
   `,
   styles: `
@@ -40,6 +51,14 @@ const CHILL_PROPERTY_TYPE = {
       display: block;
       min-width: 0;
       overflow-wrap: anywhere;
+    }
+
+    .polymorphic-output__spaced-parts {
+      display: inline;
+    }
+
+    .polymorphic-output__spaced-parts-part {
+      white-space: nowrap;
     }
   `
 })
@@ -65,6 +84,7 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     this.schema()?.properties.find((candidate) => candidate.name === this.propertyName()) ?? null
   );
   readonly value = computed(() => this.readPropertyValue(this.source(), this.propertyName()));
+  readonly spacedDisplayParts = computed(() => this.buildSpacedDisplayParts(this.value(), this.property()));
   readonly displayText = computed(() => this.formatValue(this.value(), this.property(), false));
   readonly titleText = computed(() => this.formatValue(this.value(), this.property(), true));
   // #endregion
@@ -178,6 +198,31 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
     return this.chill.formatDisplayDateTime(value);
   }
 
+  private buildSpacedDisplayParts(
+    value: JsonValue | undefined,
+    property: ChillPropertySchema | null
+  ): string[] | null {
+    if (!property || !this.shouldRenderAsSpacedParts(property)) {
+      return null;
+    }
+
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const formattedValue = this.formatValue(value, property, false);
+    if (!formattedValue) {
+      return null;
+    }
+
+    const parts = formattedValue.trim().split(/\s+/);
+    if (parts.length < 1) {
+      return null;
+    }
+
+    return parts;
+  }
+
   private formatTime(value: JsonValue): string {
     if (typeof value !== 'string' || !value.trim()) {
       return '';
@@ -266,6 +311,12 @@ export class ChillPolymorphicOutputComponent implements OnInit, OnDestroy {
   private shouldPreferShortLabel(): boolean {
     const hostWidth = this.hostWidth();
     return hostWidth !== null && hostWidth < 140;
+  }
+
+  private shouldRenderAsSpacedParts(property: ChillPropertySchema): boolean {
+    return property.propertyType === CHILL_PROPERTY_TYPE.Date
+      || property.propertyType === CHILL_PROPERTY_TYPE.Time
+      || property.propertyType === CHILL_PROPERTY_TYPE.DateTime;
   }
 
   // #endregion

@@ -9,6 +9,7 @@ export interface WorkspaceToolbarButton {
   ariaLabel?: string;
   icon?: string | null;
   iconClass?: string | null;
+  accent?: boolean;
   action: () => void;
   disabled?: boolean;
 }

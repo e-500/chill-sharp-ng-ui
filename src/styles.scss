@@ -661,6 +661,7 @@ a {
 
 .workspace-main {
   height: calc(100vh - var(--workspace-topbar-height) - 2rem);
+  min-height: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0;
@@ -669,6 +670,7 @@ a {
 
 .workspace-drawer {
   width: 0;
+  min-height: 0;
   overflow: hidden;
   transition: width 180ms ease;
 }
@@ -680,6 +682,7 @@ a {
 
 .workspace-menu {
   height: 100%;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.25rem;
   border-radius: 1.5rem;
@@ -857,6 +860,11 @@ a {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
 }
 
+.workspace-menu__tree-body {
+  min-width: 0;
+  display: grid;
+}
+
 .workspace-menu__tree-expander,
 .workspace-menu__tree-action,
 .workspace-menu__tree-trigger {
@@ -906,6 +914,15 @@ a {
   color: var(--text-muted);
 }
 
+.workspace-menu__tree-meta {
+  min-width: 0;
+  padding: 0 0.95rem 0.85rem;
+}
+
+.workspace-menu__tree-meta span {
+  color: var(--text-muted);
+}
+
 .workspace-menu__tree-trigger:disabled {
   cursor: default;
 }
@@ -929,6 +946,10 @@ a {
   gap: 0.45rem;
   justify-content: flex-start;
   padding-left: 0.1rem;
+}
+
+.workspace-menu__tree-actions--inline {
+  padding: 0 0.95rem 0.85rem;
 }
 
 .workspace-menu__tree-action {
@@ -956,6 +977,7 @@ a {
 
 .workspace-content {
   height: 100%;
+  min-height: 0;
   min-width: 0;
   padding: 1rem;
   border-radius: 1.5rem;
@@ -1143,6 +1165,10 @@ a {
 
   .workspace-menu__tree-actions {
     justify-content: stretch;
+  }
+
+  .workspace-menu__tree-actions--inline {
+    padding-top: 0;
   }
 
   .workspace-menu__tree-action {

@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import type { AuthRole, AuthUser } from '../../models/chill-auth.models';
+import type { WorkspaceTaskComponentInterface } from '../../models/workspace-task.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceToolbarService } from '../../services/workspace-toolbar.service';
 import { RolePermissionComponent } from './role-permission.component';
@@ -16,13 +17,15 @@ type PermissionSection = 'users' | 'roles';
   templateUrl: './permissions-page.component.html',
   styleUrl: './permissions-page.component.scss'
 })
-export class PermissionsPageComponent implements OnInit, OnDestroy {
+export class PermissionsPageComponent implements WorkspaceTaskComponentInterface, OnInit, OnDestroy {
   static getComponentConfigurationJsonExample(): Record<string, never> {
     return {};
   }
 
   readonly chill = inject(ChillService);
   readonly toolbar = inject(WorkspaceToolbarService);
+  readonly visible = input(true);
+  readonly toolbarScope = input('workspace');
 
   readonly isLoading = signal(true);
   readonly errorMessage = signal('');
@@ -44,8 +47,9 @@ export class PermissionsPageComponent implements OnInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      if (!this.canManagePermissions()) {
-        this.toolbar.clearButtons('workspace');
+      const toolbarScope = this.toolbarScope();
+      if (!this.visible() || !this.canManagePermissions()) {
+        this.toolbar.clearButtons(toolbarScope);
         return;
       }
 
@@ -69,7 +73,7 @@ export class PermissionsPageComponent implements OnInit, OnDestroy {
           action: () => this.setActiveSection('roles'),
           disabled: activeSection === 'roles'
         }
-      ], 'workspace');
+      ], toolbarScope);
     });
   }
 
@@ -78,7 +82,7 @@ export class PermissionsPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.toolbar.clearButtons('workspace');
+    this.toolbar.clearButtons(this.toolbarScope());
   }
 
   setActiveSection(section: PermissionSection): void {

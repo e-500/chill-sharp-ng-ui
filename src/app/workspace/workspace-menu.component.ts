@@ -31,6 +31,13 @@ interface WorkspaceMenuNode {
   selector: 'app-workspace-menu',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  styles: `
+    :host {
+      display: block;
+      height: 100%;
+      min-height: 0;
+    }
+  `,
   template: `
     <div class="workspace-menu">
       <div class="workspace-menu__header">
@@ -71,60 +78,71 @@ interface WorkspaceMenuNode {
         }
       </section>
 
-      <section class="workspace-menu__crud-launcher">
-        <div class="workspace-menu__section-heading">
-          <strong>Open CRUD task</strong>
-          <span>Select a module and type, then confirm the view code.</span>
-        </div>
+      @if (layout.isLayoutEditingEnabled()) {
+        <section class="workspace-menu__crud-launcher">
+          <div class="workspace-menu__section-heading">
+            <strong>Open CRUD task</strong>
+            <span>Select a module and type, then confirm the view code.</span>
+          </div>
 
-        @if (schemaLoadError()) {
-          <p class="workspace-menu__status error">{{ schemaLoadError() }}</p>
-        } @else if (isLoadingSchemas()) {
-          <p class="workspace-menu__status">Loading CRUD types...</p>
-        }
+          @if (schemaLoadError()) {
+            <p class="workspace-menu__status error">{{ schemaLoadError() }}</p>
+          } @else if (isLoadingSchemas()) {
+            <p class="workspace-menu__status">Loading CRUD types...</p>
+          }
 
-        <label class="workspace-menu__field">
-          <span>Module</span>
-          <select
-            [ngModel]="selectedModule()"
-            (ngModelChange)="selectModule($event)"
-            [disabled]="isLoadingSchemas() || moduleOptions().length === 0">
-            @for (module of moduleOptions(); track module) {
-              <option [value]="module">{{ module }}</option>
-            }
-          </select>
-        </label>
+          <label class="workspace-menu__field">
+            <span>Module</span>
+            <select
+              [ngModel]="selectedModule()"
+              (ngModelChange)="selectModule($event)"
+              [disabled]="isLoadingSchemas() || moduleOptions().length === 0">
+              @for (module of moduleOptions(); track module) {
+                <option [value]="module">{{ module }}</option>
+              }
+            </select>
+          </label>
 
-        <label class="workspace-menu__field">
-          <span>Type</span>
-          <select
-            [ngModel]="selectedChillType()"
-            (ngModelChange)="selectedChillType.set($event)"
-            [disabled]="isLoadingSchemas() || filteredCrudTypes().length === 0">
-            @for (schema of filteredCrudTypes(); track schema.chillType) {
-              <option [value]="schema.chillType">{{ schema.displayName }} ({{ schema.chillType }})</option>
-            }
-          </select>
-        </label>
+          <label class="workspace-menu__field">
+            <span>Type</span>
+            <select
+              [ngModel]="selectedChillType()"
+              (ngModelChange)="selectedChillType.set($event)"
+              [disabled]="isLoadingSchemas() || filteredCrudTypes().length === 0">
+              @for (schema of filteredCrudTypes(); track schema.chillType) {
+                <option [value]="schema.chillType">{{ schema.displayName }} ({{ schema.chillType }})</option>
+              }
+            </select>
+          </label>
 
-        <label class="workspace-menu__field">
-          <span>View code</span>
-          <input
-            type="text"
-            [ngModel]="viewCode()"
-            (ngModelChange)="viewCode.set(normalizeViewCode($event))"
-            placeholder="default" />
-        </label>
+          <label class="workspace-menu__field">
+            <span>View code</span>
+            <input
+              type="text"
+              [ngModel]="viewCode()"
+              (ngModelChange)="viewCode.set(normalizeViewCode($event))"
+              placeholder="default" />
+          </label>
 
-        <button
-          type="button"
-          class="workspace-menu__item workspace-menu__item--launch"
-          (click)="openCrudTask()"
-          [disabled]="!selectedCrudSchema()">
-          <strong>Open CRUD</strong>
-          <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to create a CRUD task.' }}</span>
-        </button>
-      </section>
+          <button
+            type="button"
+            class="workspace-menu__item workspace-menu__item--launch"
+            (click)="openCrudTask()"
+            [disabled]="!selectedCrudSchema()">
+            <strong>Open CRUD</strong>
+            <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to create a CRUD task.' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="workspace-menu__item workspace-menu__item--launch"
+            (click)="openEntityOptionsDialog()"
+            [disabled]="!selectedCrudSchema()">
+            <strong>Set entity options</strong>
+            <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to edit its entity options.' }}</span>
+          </button>
+        </section>
+      }
 
       <!-- <nav class="workspace-menu__list">
         @for (task of quickTasks(); track task.componentName) {
@@ -180,23 +198,54 @@ interface WorkspaceMenuNode {
               (dragover)="allowMenuDrop($event); hoverMenuItem(node)"
               (drop)="dropMenuItemAsChild(node, $event)"
               (dragleave)="leaveMenuItem(node, $event)">
-              <button
-                type="button"
-                class="workspace-menu__tree-trigger"
-                [disabled]="node.item.componentName === null || node.item.componentName === ''"
-                (click)="openMenuItem(node.item)">
-                <span class="workspace-menu__tree-label">
-                  <strong>{{ node.item.title }}</strong>
-                  @if (node.isExpanded)
-                  {
+              <div class="workspace-menu__tree-body">
+                <button
+                  type="button"
+                  class="workspace-menu__tree-trigger"
+                  [disabled]="node.item.componentName === null || node.item.componentName === ''"
+                  (click)="openMenuItem(node.item)">
+                  <span class="workspace-menu__tree-label">
+                    <strong>{{ node.item.title }}</strong>
+                  </span>
+                </button>
+
+                @if (layout.isLayoutEditingEnabled()) {
+                  <div class="workspace-menu__tree-actions workspace-menu__tree-actions--inline">
+                    <button
+                      type="button"
+                      class="workspace-menu__tree-action"
+                      [attr.aria-label]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
+                      [title]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
+                      (click)="createMenuItem(node.item)">
+                      <span class="material-symbol-icon" aria-hidden="true">add</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="workspace-menu__tree-action"
+                      [attr.aria-label]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
+                      [title]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
+                      (click)="editMenuItem(node.item)">
+                      <span class="material-symbol-icon" aria-hidden="true">edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="workspace-menu__tree-action"
+                      [attr.aria-label]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
+                      [title]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
+                      (click)="deleteMenuItem(node.item)">
+                      <span class="material-symbol-icon" aria-hidden="true">delete</span>
+                    </button>
+                  </div>
+                } @else if (node.isExpanded) {
+                  <div class="workspace-menu__tree-meta">
                     @if (node.item.description) {
                       <span>{{ node.item.description }}</span>
                     } @else {
                       <span>{{ node.item.componentName }}</span>
                     }
-                  }
-                </span>
-              </button>
+                  </div>
+                }
+              </div>
 
               @if(node.isLoadingChildren || node.hasChildren)
               {
@@ -221,35 +270,6 @@ interface WorkspaceMenuNode {
                 </button>
               }
             </div>
-
-            @if (layout.isLayoutEditingEnabled()) {
-              <div class="workspace-menu__tree-actions">
-                <button
-                  type="button"
-                  class="workspace-menu__tree-action"
-                  [attr.aria-label]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
-                  [title]="chill.T('918FE5BA-CF28-4A7E-BDD8-E9546CC53A67', 'Add child', 'Aggiungi figlio')"
-                  (click)="createMenuItem(node.item)">
-                  <span class="material-symbol-icon" aria-hidden="true">add</span>
-                </button>
-                <button
-                  type="button"
-                  class="workspace-menu__tree-action"
-                  [attr.aria-label]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
-                  [title]="chill.T('6E9A69C0-C4A1-433A-97BC-9E8D1CBD2B53', 'Edit', 'Modifica')"
-                  (click)="editMenuItem(node.item)">
-                  <span class="material-symbol-icon" aria-hidden="true">edit</span>
-                </button>
-                <button
-                  type="button"
-                  class="workspace-menu__tree-action"
-                  [attr.aria-label]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
-                  [title]="chill.T('0D13D4B2-4D2B-4D17-9A89-C30979DA24D5', 'Delete', 'Elimina')"
-                  (click)="deleteMenuItem(node.item)">
-                  <span class="material-symbol-icon" aria-hidden="true">delete</span>
-                </button>
-              </div>
-            }
           </div>
 
           @if (node.childrenError) {
@@ -319,6 +339,24 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       queryChillType: schema.queryChillType,
       viewCode: this.normalizeViewCode(this.viewCode()),
       displayName: schema.displayName
+    });
+  }
+
+  async openEntityOptionsDialog(): Promise<void> {
+    const schema = this.selectedCrudSchema();
+    if (!schema) {
+      return;
+    }
+
+    const { EntityOptionsDialogComponent } = await import('./entity-options-dialog.component');
+    await this.dialog.openDialog<unknown>({
+      title: `${schema.displayName || schema.chillType} entity options`,
+      component: EntityOptionsDialogComponent,
+      inputs: {
+        chillType: schema.chillType,
+        displayName: schema.displayName
+      },
+      okLabel: this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Save', 'Salva')
     });
   }
 
@@ -600,6 +638,7 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
         isLoadingChildren: false,
         hasChildren: childNodes.length > 0
       })));
+      await Promise.all(childNodes.map((child) => this.preloadNodeChildren(child)));
     } catch (error) {
       this.menuRoots.update((roots) => this.updateNodeCollection(roots, node.item.guid, (current) => ({
         ...current,

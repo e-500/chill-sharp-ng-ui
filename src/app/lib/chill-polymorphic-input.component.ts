@@ -55,6 +55,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly valueChange = output<Record<string, JsonValue>>();
   readonly validityChange = output<boolean>();
   readonly fieldBlur = output<Record<string, JsonValue>>();
+  readonly lookupDialogOpenChange = output<boolean>();
   // #endregion
 
   // #region State
@@ -62,6 +63,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly draftTextValues = signal<DraftTextMap>({});
   readonly errors = signal<ErrorMap>({});
   readonly lookups = signal<Record<string, LookupState>>({});
+  readonly lookupDialogSelectionState = signal<Record<string, boolean>>({});
   readonly lookupOverlayPositions: ConnectedPosition[] = [
     {
       originX: 'start',
@@ -91,6 +93,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   private readonly lookupSearchTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly lookupRequestSequence = new Map<string, number>();
   private controlSubscriptions = new Subscription();
+  private isDestroyed = false;
   // #endregion
 
   // #region Computed Properties
@@ -205,6 +208,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Clears control subscriptions and pending lookup timers when the component is destroyed.
    */
   ngOnDestroy(): void {
+    this.isDestroyed = true;
     this.controlSubscriptions.unsubscribe();
     for (const timer of this.lookupSearchTimers.values()) {
       clearTimeout(timer);
@@ -626,23 +630,12 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Emits blur immediately and clears the popup list after a short delay so click selection can still complete.
    */
   handleLookupBlur(propertyName: string): void {
-    this.notifyFieldBlur(propertyName);
-    window.setTimeout(() => {
-      this.lookups.update((current) => {
-        const lookup = current[propertyName];
-        if (!lookup) {
-          return current;
-        }
+    if (this.lookupDialogSelectionState()[propertyName]) {
+      return;
+    }
 
-        return {
-          ...current,
-          [propertyName]: {
-            ...lookup,
-            results: []
-          }
-        };
-      });
-    }, 120);
+    this.notifyFieldBlur(propertyName);
+    window.setTimeout(() => this.closeLookupResults(propertyName), 120);
   }
 
   /**
@@ -652,14 +645,28 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
     this.notifyFieldBlur(propertyName);
   }
 
+  beginLookupDialogSelection(propertyName: string): void {
+    const wasAnyLookupDialogOpen = this.isAnyLookupDialogOpen();
+    this.lookupDialogSelectionState.update((current) => ({
+      ...current,
+      [propertyName]: true
+    }));
+    if (!wasAnyLookupDialogOpen) {
+      this.lookupDialogOpenChange.emit(true);
+    }
+  }
+
   /**
    * Opens the CRUD picker dialog for entity lookups and maps the confirmed selection back into the field.
    */
   async openLookupDialog(property: ChillPropertySchema): Promise<void> {
+    this.beginLookupDialogSelection(property.name);
+
     const entityChillType = this.resolveLookupEntityChillType(property);
     const queryChillType = this.resolveLookupQueryChillType(property, entityChillType);
     if (!entityChillType && !queryChillType) {
       this.setLookupError(property.name, this.chill.T('7E0D5F0F-CDA4-4F49-8E02-A7E0E854B65A', 'Lookup schema is unavailable.', 'Lo schema di ricerca non è disponibile.'));
+      this.endLookupDialogSelection(property.name);
       return;
     }
 
@@ -687,16 +694,27 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       }
     });
 
-    if (result.status !== 'confirmed' || !result.value) {
-      return;
-    }
+    try {
+      if (this.isDestroyed) {
+        return;
+      }
 
-    if (Array.isArray(result.value)) {
-      this.selectLookupResults(property, result.value);
-      return;
-    }
+      if (result.status !== 'confirmed' || !result.value) {
+        return;
+      }
 
-    this.selectLookupResult(property, result.value);
+      if (Array.isArray(result.value)) {
+        this.selectLookupResults(property, result.value);
+      } else {
+        this.selectLookupResult(property, result.value);
+      }
+
+      this.validateField(property);
+      this.notifyFieldBlur(property.name);
+    } finally {
+      this.closeLookupResults(property.name);
+      this.endLookupDialogSelection(property.name);
+    }
   }
 
   /**
@@ -760,6 +778,24 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       [property.name]: this.createEmptyLookupState()
     }));
     this.validateField(property);
+  }
+
+  private endLookupDialogSelection(propertyName: string): void {
+    this.lookupDialogSelectionState.update((current) => {
+      if (!(propertyName in current)) {
+        return current;
+      }
+
+      const { [propertyName]: _removed, ...rest } = current;
+      return rest;
+    });
+    if (!this.isAnyLookupDialogOpen() && !this.isDestroyed) {
+      this.lookupDialogOpenChange.emit(false);
+    }
+  }
+
+  private isAnyLookupDialogOpen(): boolean {
+    return Object.keys(this.lookupDialogSelectionState()).length > 0;
   }
 
   /**
@@ -1776,6 +1812,10 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Emits only the blurred field and its latest cached value to match the parent component contract.
    */
   private notifyFieldBlur(propertyName: string): void {
+    if (this.isDestroyed) {
+      return;
+    }
+
     this.fieldBlur.emit({
       [propertyName]: this.fieldValues()[propertyName]
     });
@@ -1786,7 +1826,12 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    */
   private setFieldValue(propertyName: string, value: JsonValue): void {
     const control = this.control(propertyName);
+    const valueChanged = !Object.is(control?.value ?? null, value ?? null);
     control?.setValue(value);
+    if (control && valueChanged) {
+      control.markAsDirty();
+      control.markAsTouched();
+    }
     this.fieldValues.update((current) => ({
       ...current,
       [propertyName]: value
@@ -1936,6 +1981,23 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       && left.selectedShortLabel === right.selectedShortLabel
       && left.results.length === right.results.length
       && left.results.every((item, index) => item === right.results[index]);
+  }
+
+  private closeLookupResults(propertyName: string): void {
+    this.lookups.update((current) => {
+      const lookup = current[propertyName];
+      if (!lookup) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [propertyName]: {
+          ...lookup,
+          results: []
+        }
+      };
+    });
   }
 
   // #endregion

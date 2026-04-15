@@ -1,0 +1,108 @@
+:host {
+  display: block;
+}
+
+.schema-property-dialog {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.schema-property-dialog__lede,
+.schema-property-dialog__context,
+.schema-property-dialog__metadata-header p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.schema-property-dialog__context strong {
+  color: var(--text-main);
+}
+
+.schema-property-dialog__errors {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border-color));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+  color: var(--danger);
+}
+
+.schema-property-dialog__errors p,
+.schema-property-dialog__metadata-header h3 {
+  margin: 0;
+}
+
+.schema-property-dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.schema-property-dialog__field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.schema-property-dialog__field--full {
+  grid-column: 1 / -1;
+}
+
+.schema-property-dialog__field--toggle {
+  align-content: end;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.schema-property-dialog__field span,
+.schema-property-dialog__metadata-header h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.schema-property-dialog__field input,
+.schema-property-dialog__field select,
+.schema-property-dialog__field textarea {
+  width: 100%;
+  min-height: 2.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.8rem;
+  background: var(--surface-0);
+  color: var(--text-main);
+  font: inherit;
+}
+
+.schema-property-dialog__field textarea {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.schema-property-dialog__field--toggle input {
+  width: 1.05rem;
+  height: 1.05rem;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.schema-property-dialog__metadata {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.schema-property-dialog__metadata-header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  .schema-property-dialog__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schema-property-dialog__field--full {
+    grid-column: auto;
+  }
+}

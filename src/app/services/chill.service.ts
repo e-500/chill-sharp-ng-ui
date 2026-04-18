@@ -282,7 +282,16 @@ export class ChillService {
   }
 
   test() {
-    return this.chill.test().pipe(
+    const testUrl = this.buildApiUrl('test');
+
+    return from(globalThis.fetch(testUrl)).pipe(
+      switchMap((response) => {
+        if (!response.ok) {
+          return throwError(() => new Error(`Unexpected error executing GET ${testUrl}: ${response.status} ${response.statusText}`.trim()));
+        }
+
+        return from(response.text());
+      }),
       map((response) => response.trim()),
       catchError((error) => this.rethrowFriendlyError(error))
     );
@@ -2464,7 +2473,7 @@ export class ChillService {
       this.logDetailedError('version()', error);
     }
 
-    this.chill.test().subscribe({
+    this.test().subscribe({
       next: (response: string) => {
         console.log('[ChillService] test() success', {
           response: response.trim()
@@ -2474,6 +2483,16 @@ export class ChillService {
         this.logDetailedError('test()', error);
       }
     });
+  }
+
+  private buildApiUrl(relativeUrl: string): string {
+    const normalizedBaseUrl = CHILL_BASE_URL.trim().replace(/\/+$/, '');
+    const chillSuffix = '/chill';
+    const apiBaseUrl = normalizedBaseUrl.toLowerCase().endsWith(chillSuffix)
+      ? normalizedBaseUrl.slice(0, -chillSuffix.length)
+      : normalizedBaseUrl;
+
+    return `${apiBaseUrl}/${relativeUrl.replace(/^\/+/, '')}`;
   }
 
   private serializeMetadataRecord(metadata: ChillMetadataRecord | undefined): Record<string, string> {

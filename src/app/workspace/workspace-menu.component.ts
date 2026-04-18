@@ -136,6 +136,15 @@ interface WorkspaceMenuNode {
           <button
             type="button"
             class="workspace-menu__item workspace-menu__item--launch"
+            (click)="addCrudTaskToMenu()"
+            [disabled]="!selectedCrudSchema()">
+            <strong>Add to menu</strong>
+            <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to add it to the application menu.' }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="workspace-menu__item workspace-menu__item--launch"
             (click)="openEntityOptionsDialog()"
             [disabled]="!selectedCrudSchema()">
             <strong>Set entity options</strong>
@@ -340,6 +349,36 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       viewCode: this.normalizeViewCode(this.viewCode()),
       displayName: schema.displayName
     });
+  }
+
+  async addCrudTaskToMenu(): Promise<void> {
+    const schema = this.selectedCrudSchema();
+    if (!schema) {
+      return;
+    }
+
+    const viewCode = this.normalizeViewCode(this.viewCode());
+    const configuration: Record<string, string> = {
+      chillType: schema.chillType,
+      viewCode
+    };
+    const queryChillType = schema.queryChillType.trim();
+    if (queryChillType) {
+      configuration['chillQuery'] = queryChillType;
+    }
+
+    const savedItem = await firstValueFrom(this.chill.setMenu({
+      guid: crypto.randomUUID(),
+      positionNo: this.menuRoots().length + 1,
+      title: schema.displayName || schema.chillType,
+      description: `CRUD task for ${schema.chillType}`,
+      parent: null,
+      componentName: 'crud',
+      componentConfigurationJson: JSON.stringify(configuration, null, 2),
+      menuHierarchy: schema.module
+    }));
+
+    await this.refreshMenuBranch(savedItem.parent?.guid ?? null);
   }
 
   async openEntityOptionsDialog(): Promise<void> {

@@ -1,0 +1,20 @@
+{
+  "name": "chill-sharp-ng-client",
+  "version": "1.0.85",
+  "description": "Angular client helpers for generic ChillSharp services",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@angular/core": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "rxjs": "^7.8.0",
+    "chill-sharp-ts-client": "^1.0.85"
+  }
+}

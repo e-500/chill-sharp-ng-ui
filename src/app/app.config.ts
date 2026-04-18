@@ -50,25 +50,11 @@ async function authAwareFetch(input: RequestInfo | URL, init?: RequestInit): Pro
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  let effectiveMethod = method;
-
-  if (shouldRewriteI18nBodyRequest(requestUrl, method, init?.body)) {
-    effectiveMethod = 'POST';
-  }
-
   return globalThis.fetch(input, {
     ...init,
-    method: effectiveMethod,
+    method,
     headers
   });
-}
-
-function shouldRewriteI18nBodyRequest(url: string, method: string, body: BodyInit | null | undefined): boolean {
-  if (method !== 'GET' || body == null) {
-    return false;
-  }
-
-  return url.includes('/api/chill-i18n/get-text') || url.includes('/api/chill-i18n/get-multiple-text');
 }
 
 function readStoredAccessToken(): string {

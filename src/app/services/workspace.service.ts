@@ -59,7 +59,7 @@ export class WorkspaceService {
   private readonly taskRegistry = inject(WorkspaceTaskRegistryService);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly drawerOpenState = signal(false);
+  private readonly drawerOpenState = signal(true);
   private readonly activeTaskIdState = signal<string | null>(null);
   private readonly openTaskInstancesState = signal<WorkspaceTaskInstance[]>([]);
   private taskComponentResolver: ((taskId: string) => WorkspaceTaskComponent | null) | null = null;
@@ -105,8 +105,10 @@ export class WorkspaceService {
       if (!restoredTask) {
         if (this.openTaskInstancesState().length === 0) {
           this.activeTaskIdState.set(null);
+          this.drawerOpenState.set(true);
+        } else {
+          this.drawerOpenState.set(false);
         }
-        this.drawerOpenState.set(false);
         return;
       }
 
@@ -124,6 +126,7 @@ export class WorkspaceService {
     if (!taskType) {
       if (this.openTaskInstancesState().length === 0) {
         this.activeTaskIdState.set(null);
+        this.drawerOpenState.set(true);
       }
       return;
     }
@@ -253,14 +256,25 @@ export class WorkspaceService {
       return;
     }
 
+    this.drawerOpenState.set(true);
     void this.router.navigate(['/workspace']);
   }
 
   toggleDrawer(): void {
+    if (this.openTaskInstancesState().length === 0) {
+      this.drawerOpenState.set(true);
+      return;
+    }
+
     this.drawerOpenState.update((isOpen) => !isOpen);
   }
 
   closeDrawer(): void {
+    if (this.openTaskInstancesState().length === 0) {
+      this.drawerOpenState.set(true);
+      return;
+    }
+
     this.drawerOpenState.set(false);
   }
 
@@ -280,9 +294,9 @@ export class WorkspaceService {
       return false;
     }
 
-    this.drawerOpenState.set(false);
     this.activeTaskIdState.set(null);
     this.openTaskInstancesState.set([]);
+    this.drawerOpenState.set(true);
     return true;
   }
 

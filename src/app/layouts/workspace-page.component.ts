@@ -1,5 +1,5 @@
 import { CommonModule, NgComponentOutlet } from '@angular/common';
-import { Component, ElementRef, HostListener, OnInit, computed, inject, viewChild, viewChildren } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal, viewChild, viewChildren } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { combineLatest } from 'rxjs';
 import { ChillService } from '../services/chill.service';
@@ -203,6 +203,13 @@ import type { WorkspaceTaskInstance } from '../services/workspace.service';
 
             <div class="user-menu__panel">
               <p class="user-menu__name">{{ chill.userName() || chill.T('B0311DA4-F864-4E15-93A4-894D177F7017', 'current user', 'utente corrente') }}</p>
+              <button
+                type="button"
+                (click)="copyAuthToken()"
+                [disabled]="!chill.session()?.accessToken"
+                [attr.aria-label]="authTokenCopyLabel()">
+                {{ authTokenCopyLabel() }}
+              </button>
               <button type="button" (click)="openPermissionsTask()">
                 <app-chill-i18n-button-label [labelGuid]="'830A6D96-0332-4B08-8EC7-B850702B4337'" [primaryDefaultText]="'Permissions'" [secondaryDefaultText]="'Permessi'" />
               </button>
@@ -269,7 +276,7 @@ import type { WorkspaceTaskInstance } from '../services/workspace.service';
     </section>
   `
 })
-export class WorkspacePageComponent implements OnInit {
+export class WorkspacePageComponent implements OnInit, OnDestroy {
   readonly chill = inject(ChillService);
   readonly workspace = inject(WorkspaceService);
   readonly dialog = inject(WorkspaceDialogService);
@@ -279,17 +286,36 @@ export class WorkspacePageComponent implements OnInit {
   private readonly themeMenu = viewChild<ElementRef<HTMLDetailsElement>>('themeMenu');
   private readonly userMenu = viewChild<ElementRef<HTMLDetailsElement>>('userMenu');
   private readonly taskOutlets = viewChildren(NgComponentOutlet);
+  private tokenClockHandle: ReturnType<typeof globalThis.setInterval> | null = null;
 
   readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft'];
+  readonly nowMs = signal(Date.now());
   readonly activeToolbarButtons = computed(() =>
     this.toolbar.buttons(this.workspace.activeTask()?.toolbarScope ?? 'workspace')
   );
+  readonly authTokenCopyLabel = computed(() => {
+    this.nowMs();
+    const hoursLabel = this.authTokenRemainingHoursLabel();
+    const baseText = this.chill.T('59083B57-F07E-4F5F-AF93-1B67F2A717B5', 'Copy auth token', 'Copia token auth');
+    return hoursLabel ? `${baseText} (${hoursLabel})` : baseText;
+  });
 
   ngOnInit(): void {
+    this.tokenClockHandle = globalThis.setInterval(() => {
+      this.nowMs.set(Date.now());
+    }, 60000);
+
     this.workspace.registerTaskComponentResolver((taskId) => this.resolveTaskComponent(taskId));
     combineLatest([this.route.paramMap, this.route.queryParamMap]).subscribe(([paramMap, queryParamMap]: [ParamMap, ParamMap]) => {
       void this.workspace.activateTaskFromRoute(paramMap.get('taskId'), queryParamMap);
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.tokenClockHandle) {
+      globalThis.clearInterval(this.tokenClockHandle);
+      this.tokenClockHandle = null;
+    }
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -348,6 +374,15 @@ export class WorkspacePageComponent implements OnInit {
     void this.workspace.openTask('permissions');
   }
 
+  async copyAuthToken(): Promise<void> {
+    const token = this.chill.session()?.accessToken ?? '';
+    if (!token) {
+      return;
+    }
+
+    await this.writeClipboardText(token);
+  }
+
   goToChangePassword(): void {
     this.closeUserMenu();
     this.workspace.closeDrawer();
@@ -364,6 +399,52 @@ export class WorkspacePageComponent implements OnInit {
     const userMenu = this.userMenu()?.nativeElement;
     if (userMenu) {
       userMenu.open = false;
+    }
+  }
+
+  private authTokenRemainingHoursLabel(): string {
+    const expiresUtc = this.chill.session()?.accessTokenExpiresUtc?.trim() ?? '';
+    if (!expiresUtc) {
+      return '';
+    }
+
+    const expiresMs = Date.parse(expiresUtc);
+    if (!Number.isFinite(expiresMs)) {
+      return '';
+    }
+
+    const remainingMs = expiresMs - this.nowMs();
+    if (remainingMs <= 0) {
+      return this.chill.T('8B5933DD-3500-4EEC-B28E-038CA7C2DF3D', 'expired', 'scaduto');
+    }
+
+    const remainingHours = remainingMs / 3_600_000;
+    const formattedHours = remainingHours >= 10
+      ? Math.floor(remainingHours).toString()
+      : Math.max(0.1, Math.floor(remainingHours * 10) / 10).toLocaleString(undefined, {
+          maximumFractionDigits: 1
+        });
+    return this.chill.T('53A9DE67-EDAF-4B43-AC07-EEC3F6F5F98F', `${formattedHours} h left`, `${formattedHours} h rimanenti`);
+  }
+
+  private async writeClipboardText(text: string): Promise<void> {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
     }
   }
 

@@ -1,7 +1,7 @@
 import { CommonModule, NgComponentOutlet } from '@angular/common';
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, computed, inject, signal, viewChild, viewChildren } from '@angular/core';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
-import { combineLatest } from 'rxjs';
+import { combineLatest, firstValueFrom } from 'rxjs';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
@@ -210,6 +210,16 @@ import type { WorkspaceTaskInstance } from '../services/workspace.service';
                 [attr.aria-label]="authTokenCopyLabel()">
                 {{ authTokenCopyLabel() }}
               </button>
+              <button
+                type="button"
+                (click)="renewAuthToken()"
+                [disabled]="isRenewingToken() || !chill.session()?.refreshToken">
+                @if (isRenewingToken()) {
+                  {{ chill.T('3606439C-1C2C-45D4-BAC9-2F0C2AB1E783', 'Renewing token...', 'Rinnovo token...') }}
+                } @else {
+                  {{ chill.T('B9C91C98-E52E-49DA-A3BC-6593F38BB93D', 'Renew token', 'Rinnova token') }}
+                }
+              </button>
               <button type="button" (click)="openPermissionsTask()">
                 <app-chill-i18n-button-label [labelGuid]="'830A6D96-0332-4B08-8EC7-B850702B4337'" [primaryDefaultText]="'Permissions'" [secondaryDefaultText]="'Permessi'" />
               </button>
@@ -290,6 +300,7 @@ export class WorkspacePageComponent implements OnInit, OnDestroy {
 
   readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft'];
   readonly nowMs = signal(Date.now());
+  readonly isRenewingToken = signal(false);
   readonly activeToolbarButtons = computed(() =>
     this.toolbar.buttons(this.workspace.activeTask()?.toolbarScope ?? 'workspace')
   );
@@ -381,6 +392,20 @@ export class WorkspacePageComponent implements OnInit, OnDestroy {
     }
 
     await this.writeClipboardText(token);
+  }
+
+  async renewAuthToken(): Promise<void> {
+    if (this.isRenewingToken() || !this.chill.session()?.refreshToken) {
+      return;
+    }
+
+    this.isRenewingToken.set(true);
+    try {
+      await firstValueFrom(this.chill.refreshSession());
+      this.nowMs.set(Date.now());
+    } finally {
+      this.isRenewingToken.set(false);
+    }
   }
 
   goToChangePassword(): void {

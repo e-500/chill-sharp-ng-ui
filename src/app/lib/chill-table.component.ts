@@ -13,20 +13,30 @@ import { ChillPolymorphicInputComponent } from './chill-polymorphic-input.compon
 import { ChillPolymorphicOutputComponent } from './chill-polymorphic-output.component';
 
 const TABLE_LAYOUT_METADATA_KEY = 'chill-table-component';
+const TABLE_COLUMN_WIDTH_METADATA_KEY = 'widthProportion';
+const TABLE_COLUMN_WIDTH_OPTIONS = [0.25, 0.5, 1, 2, 3, 4, 5] as const;
 
 interface ColumnLayoutState {
   name: string;
   displayName: string;
   hidden: boolean;
+  widthProportion: number;
 }
 
 interface PersistedTableLayout {
-  columns: ColumnLayoutState[];
+  columns: PersistedColumnLayoutState[];
+}
+
+interface PersistedColumnLayoutState {
+  name: string;
+  displayName: string;
+  hidden: boolean;
 }
 
 type TableColumn = ChillPropertySchema & {
   hidden: boolean;
   displayName: string;
+  widthProportion: number;
 };
 
 export interface ChillTableRowAction {
@@ -107,6 +117,8 @@ export class ChillTableComponent {
   readonly showSchemaHeader = input(true);
   readonly ordering = input<ChillOrdering | null>(null);
   // #endregion
+
+  readonly columnWidthOptions = TABLE_COLUMN_WIDTH_OPTIONS;
 
   // #region Outputs
   readonly cellEditCommit = output<ChillTableCellEditCommitEvent>();
@@ -239,7 +251,8 @@ export class ChillTableComponent {
         return {
           ...property,
           displayName: layout?.displayName?.trim() || property.displayName || property.name,
-          hidden: layout?.hidden ?? false
+          hidden: layout?.hidden ?? false,
+          widthProportion: layout?.widthProportion ?? this.readPropertyWidthProportion(property)
         };
       })
       .filter((column): column is TableColumn => column !== null);
@@ -328,6 +341,43 @@ export class ChillTableComponent {
       : item));
   }
 
+  updateColumnWidthProportion(columnName: string, direction: -1 | 1): void {
+    this.layoutState.update((current) => current.map((item) => {
+      if (item.name !== columnName) {
+        return item;
+      }
+
+      const currentIndex = this.findColumnWidthOptionIndex(item.widthProportion);
+      const nextIndex = Math.max(0, Math.min(this.columnWidthOptions.length - 1, currentIndex + direction));
+      return {
+        ...item,
+        widthProportion: this.columnWidthOptions[nextIndex]
+      };
+    }));
+  }
+
+  canDecreaseColumnWidth(column: TableColumn): boolean {
+    return this.findColumnWidthOptionIndex(column.widthProportion) > 0;
+  }
+
+  canIncreaseColumnWidth(column: TableColumn): boolean {
+    return this.findColumnWidthOptionIndex(column.widthProportion) < this.columnWidthOptions.length - 1;
+  }
+
+  columnWidthLabel(column: TableColumn): string {
+    return `${this.normalizeColumnWidthProportion(column.widthProportion)}x`;
+  }
+
+  columnWidthPercent(column: TableColumn): number {
+    const visibleWidthTotal = this.visibleColumns()
+      .reduce((total, item) => total + this.normalizeColumnWidthProportion(item.widthProportion), 0);
+    if (visibleWidthTotal <= 0) {
+      return 0;
+    }
+
+    return this.normalizeColumnWidthProportion(column.widthProportion) / visibleWidthTotal * 100;
+  }
+
   openPropertySettings(property: ChillPropertySchema): void {
     const schema = this.schema();
     if (!schema || !this.dialog) {
@@ -380,8 +430,13 @@ export class ChillTableComponent {
   /**
    * Records which column is being dragged during layout editing.
    */
-  beginDrag(columnName: string): void {
+  beginDrag(event: DragEvent, columnName: string): void {
     if (!this.isEditLayoutMode()) {
+      return;
+    }
+
+    if (this.isColumnEditorControl(event.target)) {
+      event.preventDefault();
       return;
     }
 
@@ -604,6 +659,10 @@ export class ChillTableComponent {
       : null;
   }
 
+  isColumnEditing(column: TableColumn): boolean {
+    return this.activeCellEdit()?.propertyName === column.name;
+  }
+
   canSortColumn(column: TableColumn): boolean {
     return (column.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) !== CHILL_PROPERTY_TYPE.ChillEntityCollection;
   }
@@ -616,6 +675,11 @@ export class ChillTableComponent {
           direction: ordering.direction === 'DESC' ? 'DESC' : 'ASC'
         }
       : null;
+  }
+
+  private isColumnEditorControl(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && !!target.closest('input, button, select, textarea');
   }
 
   /**
@@ -1060,11 +1124,16 @@ export class ChillTableComponent {
     const normalizedLayoutState = this.normalizeLayoutForSave(this.layoutState());
     const metadata = this.readSchemaMetadata(schema);
     metadata[TABLE_LAYOUT_METADATA_KEY] = JSON.stringify({
-      columns: normalizedLayoutState
+      columns: normalizedLayoutState.map((column) => ({
+        name: column.name,
+        displayName: column.displayName,
+        hidden: column.hidden
+      }))
     } satisfies PersistedTableLayout);
 
     const updatedSchema: ChillSchema = {
       ...schema,
+      properties: this.applyPropertyWidthProportions(schema, normalizedLayoutState),
       metadata
     };
 
@@ -1077,7 +1146,9 @@ export class ChillTableComponent {
         const targetSchema = this.schema();
         if (targetSchema) {
           targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
+          targetSchema.properties = [...(effectiveSchema.properties ?? [])];
           (targetSchema as unknown as JsonObject)['metadata'] = targetSchema.metadata as unknown as JsonValue;
+          (targetSchema as unknown as JsonObject)['properties'] = targetSchema.properties as unknown as JsonValue;
         }
         this.layoutState.set(normalizedLayoutState);
         this.layoutState.set(this.readLayoutState(effectiveSchema));
@@ -1099,7 +1170,8 @@ export class ChillTableComponent {
     const defaultLayout = properties.map((property) => ({
       name: property.name,
       displayName: property.displayName || property.name,
-      hidden: false
+      hidden: false,
+      widthProportion: this.readPropertyWidthProportion(property)
     }));
 
     const metadata = this.readSchemaMetadata(schema);
@@ -1113,7 +1185,7 @@ export class ChillTableComponent {
       const parsedLayout = JSON.parse(rawLayout) as Partial<PersistedTableLayout>;
       const savedColumns = Array.isArray(parsedLayout.columns)
         ? parsedLayout.columns
-            .filter((item): item is ColumnLayoutState => typeof item?.name === 'string')
+            .filter((item): item is PersistedColumnLayoutState => typeof item?.name === 'string')
             .map((item) => ({
               name: item.name.trim(),
               displayName: typeof item.displayName === 'string' ? item.displayName : '',
@@ -1122,7 +1194,12 @@ export class ChillTableComponent {
             .filter((item) => item.name.length > 0)
         : [];
 
-      return defaultLayout.map((column) => savedColumns.find((item) => item.name === column.name) ?? column)
+      return defaultLayout.map((column) => {
+        const savedColumn = savedColumns.find((item) => item.name === column.name);
+        return savedColumn
+          ? { ...column, ...savedColumn }
+          : column;
+      })
         .sort((left, right) => {
           const leftIndex = savedColumns.findIndex((item) => item.name === left.name);
           const rightIndex = savedColumns.findIndex((item) => item.name === right.name);
@@ -1141,7 +1218,57 @@ export class ChillTableComponent {
   private normalizeLayoutForSave(layoutState: ColumnLayoutState[]): ColumnLayoutState[] {
     const visibleColumns = layoutState.filter((column) => !column.hidden);
     const hiddenColumns = layoutState.filter((column) => column.hidden);
-    return [...visibleColumns, ...hiddenColumns];
+    return [...visibleColumns, ...hiddenColumns].map((column) => ({
+      ...column,
+      widthProportion: this.normalizeColumnWidthProportion(column.widthProportion)
+    }));
+  }
+
+  private applyPropertyWidthProportions(schema: ChillSchema, layoutState: ColumnLayoutState[]): ChillPropertySchema[] {
+    const widthsByPropertyName = new Map(layoutState.map((column) => [
+      column.name,
+      this.normalizeColumnWidthProportion(column.widthProportion)
+    ]));
+
+    return (schema.properties ?? []).map((property) => {
+      const widthProportion = widthsByPropertyName.get(property.name);
+      if (!widthProportion) {
+        return property;
+      }
+
+      return {
+        ...property,
+        metadata: {
+          ...(property.metadata ?? {}),
+          [TABLE_COLUMN_WIDTH_METADATA_KEY]: widthProportion
+        }
+      };
+    });
+  }
+
+  private readPropertyWidthProportion(property: ChillPropertySchema): number {
+    return this.normalizeColumnWidthProportion(property.metadata?.[TABLE_COLUMN_WIDTH_METADATA_KEY]);
+  }
+
+  private normalizeColumnWidthProportion(value: unknown): number {
+    const numericValue = typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseFloat(value)
+        : 1;
+    if (!Number.isFinite(numericValue)) {
+      return 1;
+    }
+
+    return this.columnWidthOptions.reduce((closest, option) =>
+      Math.abs(option - numericValue) < Math.abs(closest - numericValue) ? option : closest
+    , 1);
+  }
+
+  private findColumnWidthOptionIndex(value: unknown): number {
+    const normalizedValue = this.normalizeColumnWidthProportion(value);
+    const index = this.columnWidthOptions.findIndex((option) => option === normalizedValue);
+    return index >= 0 ? index : this.columnWidthOptions.indexOf(1);
   }
 
   /**

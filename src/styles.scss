@@ -28,6 +28,7 @@
   --accent: #2f7f79;
   --accent-strong: #204e57;
   --accent-soft: rgba(47, 127, 121, 0.14);
+  --link-color: var(--accent-strong);
   --border-color: rgba(24, 49, 59, 0.14);
   --shadow: 0 24px 60px rgba(32, 78, 87, 0.12);
   --shadow-soft: 0 12px 30px rgba(32, 78, 87, 0.08);
@@ -53,6 +54,7 @@
   --accent: #7fd8cb;
   --accent-strong: #b1f0e6;
   --accent-soft: rgba(127, 216, 203, 0.12);
+  --link-color: var(--accent-strong);
   --border-color: rgba(237, 246, 245, 0.12);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
   --shadow-soft: 0 12px 30px rgba(0, 0, 0, 0.22);
@@ -78,6 +80,7 @@
   --accent: #b16a7e;
   --accent-strong: #6769a9;
   --accent-soft: rgba(177, 106, 126, 0.18);
+  --link-color: var(--accent-strong);
   --border-color: rgba(64, 61, 83, 0.16);
   --shadow: 0 24px 60px rgba(73, 77, 126, 0.18);
   --shadow-soft: 0 12px 30px rgba(73, 77, 126, 0.12);
@@ -88,6 +91,32 @@
   --workspace-backdrop:
     radial-gradient(circle at top left, rgba(177, 106, 126, 0.16), transparent 28%),
     radial-gradient(circle at top right, rgba(103, 105, 169, 0.14), transparent 24%),
+    linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+}
+
+:root[data-theme='cini'] {
+  --bg-top: #f5f5f5;
+  --bg-bottom: #e7f1f3;
+  --surface-0: #ffffff;
+  --surface-1: rgba(255, 255, 255, 0.88);
+  --surface-2: rgba(245, 245, 245, 0.86);
+  --surface-3: rgba(237, 246, 248, 0.94);
+  --text-main: #16333a;
+  --text-muted: #5b747a;
+  --accent: #00667c;
+  --accent-strong: #4d99a9;
+  --accent-soft: rgba(0, 102, 124, 0.14);
+  --link-color: #89b1bc;
+  --border-color: rgba(0, 102, 124, 0.16);
+  --shadow: 0 24px 60px rgba(0, 102, 124, 0.13);
+  --shadow-soft: 0 12px 30px rgba(0, 102, 124, 0.09);
+  --danger: #a43f2e;
+  --danger-bg: #fae5df;
+  --success: #275846;
+  --success-bg: #e1f1e8;
+  --workspace-backdrop:
+    radial-gradient(circle at top left, rgba(0, 102, 124, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(137, 177, 188, 0.18), transparent 24%),
     linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
 }
 
@@ -152,6 +181,10 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+a {
+  color: var(--link-color);
 }
 
 button,
@@ -386,10 +419,6 @@ a {
   flex-wrap: wrap;
   gap: 1rem;
   margin-top: 1.5rem;
-}
-
-.auth-links a {
-  color: var(--accent-strong);
 }
 
 .token-panel {

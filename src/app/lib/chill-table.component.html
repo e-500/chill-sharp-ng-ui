@@ -38,8 +38,23 @@
   @if (visibleColumns().length === 0) {
     <div class="empty-state">{{ chill.T('3D7ABF07-6E0C-4F99-A0C8-C936C44322C6', 'No schema properties available.', 'Nessuna proprietà di schema disponibile.') }}</div>
   } @else {
-    <div class="table-wrap">
-      <table class="chill-table" [class.has-selection-column]="hasSelectionColumn()">
+    <div class="table-wrap" [class.is-edit-layout-mode]="isEditLayoutMode()">
+      <table
+        class="chill-table"
+        [class.has-selection-column]="hasSelectionColumn()"
+        [class.is-edit-layout-mode]="isEditLayoutMode()"
+        [class.has-inline-cell-edit]="activeCellEdit() !== null">
+        <colgroup>
+          @if (hasSelectionColumn()) {
+            <col class="selection-column" />
+          }
+          @if (hasActionColumn()) {
+            <col class="action-column" />
+          }
+          @for (column of visibleColumns(); track column.name) {
+            <col class="data-column" [style.width.%]="isColumnEditing(column) ? null : columnWidthPercent(column)" />
+          }
+        </colgroup>
         <thead>
           <tr>
             @if (hasSelectionColumn()) {
@@ -52,7 +67,7 @@
               <th
                 scope="col"
                 [draggable]="isEditLayoutMode()"
-                (dragstart)="beginDrag(column.name)"
+                (dragstart)="beginDrag($event, column.name)"
                 (dragover)="allowDrop($event)"
                 (drop)="dropColumn(column.name)"
                 (dragend)="endDrag()"
@@ -60,26 +75,50 @@
                 [class.is-sorted]="sortDirectionFor(column) !== null"
                 (click)="!isEditLayoutMode() && canSortColumn(column) && toggleColumnSort(column)">
                 @if (isEditLayoutMode()) {
-                  <label class="column-editor">
-                    <input
-                      type="checkbox"
-                      [ngModel]="!column.hidden"
-                      (ngModelChange)="updateColumnHidden(column.name, !$event)"
-                      [name]="'hidden-' + column.name" />
-                    <input
-                      type="text"
-                      class="column-name-input"
-                      [ngModel]="column.displayName"
-                      (ngModelChange)="updateColumnDisplayName(column.name, $event)"
-                      [name]="'displayName-' + column.name" />
-                    <button
-                      type="button"
-                      class="column-settings-button"
-                      (click)="openPropertySettings(column)"
-                      [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
-                      <span class="material-symbol-icon">tune</span>
-                    </button>
-                  </label>
+                  <div class="column-editor" (click)="$event.stopPropagation()">
+                    <div class="column-editor__title-row">
+                      <input
+                        type="text"
+                        class="column-name-input"
+                        [ngModel]="column.displayName"
+                        (ngModelChange)="updateColumnDisplayName(column.name, $event)"
+                        [name]="'displayName-' + column.name" />
+                      <input
+                        type="checkbox"
+                        [checked]="!column.hidden"
+                        (change)="updateColumnHidden(column.name, !$any($event.target).checked)"
+                        [name]="'hidden-' + column.name"
+                        [attr.aria-label]="chill.T('C6610992-9D61-4EBA-8D13-92F34521AB64', 'Show column', 'Mostra colonna')" />
+                    </div>
+                    <div class="column-editor__settings-row">
+                      <button
+                        type="button"
+                        class="column-icon-button"
+                        (click)="openPropertySettings(column)"
+                        [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
+                        <span class="material-symbol-icon">tune</span>
+                      </button>
+                      <div class="column-width-controls" [attr.aria-label]="chill.T('53796BE9-AF5C-487D-9B26-468C1B75FE54', 'Column width proportion', 'Proporzione larghezza colonna')">
+                        <button
+                          type="button"
+                          class="column-icon-button"
+                          (click)="updateColumnWidthProportion(column.name, -1)"
+                          [disabled]="!canDecreaseColumnWidth(column)"
+                          [attr.aria-label]="chill.T('8C3198E8-F1CA-4B1B-A91B-A02B48FF9219', 'Decrease column width', 'Riduci larghezza colonna')">
+                          <span class="material-symbol-icon" aria-hidden="true">remove</span>
+                        </button>
+                        <span class="column-width-value">{{ columnWidthLabel(column) }}</span>
+                        <button
+                          type="button"
+                          class="column-icon-button"
+                          (click)="updateColumnWidthProportion(column.name, 1)"
+                          [disabled]="!canIncreaseColumnWidth(column)"
+                          [attr.aria-label]="chill.T('30EA851D-40AB-4AD2-A4C8-D2E77C5162BB', 'Increase column width', 'Aumenta larghezza colonna')">
+                          <span class="material-symbol-icon" aria-hidden="true">add</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 } @else {
                   <span>{{ column.displayName || column.name }}</span>
                   @if (canSortColumn(column)) {
@@ -160,6 +199,7 @@
                 @for (column of visibleColumns(); track column.name) {
                   <td
                     class="data-cell"
+                    [style.width.%]="isColumnEditing(column) ? null : columnWidthPercent(column)"
                     [class.is-editing]="isCellEditing(entity, column)"
                     (dblclick)="activateCellEdit(entity, column)"
                     (focusout)="handleCellFocusOut($event)">

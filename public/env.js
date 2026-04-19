@@ -1,7 +1,7 @@
 (function () {
   const DEBUG_CHILLSHARP_ENV = {
     uiUrl: 'http://localhost:6202',
-    apiUrl: 'https://cini-atlas.chillsharp.dev/api'
+    apiUrl: 'https://localhost:51147/api'
   };
 
   function readEnvValue(value, fallback) {

@@ -109,7 +109,7 @@ export class LoginPageComponent implements OnInit {
           ));
           return;
         }
-        void this.router.navigate(['/workspace', 'event-viewer']);
+        void this.router.navigate(['/workspace']);
       },
       error: (error: unknown) => {
         this.isSubmitting.set(false);

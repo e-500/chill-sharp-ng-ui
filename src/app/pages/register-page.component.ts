@@ -125,7 +125,7 @@ export class RegisterPageComponent {
         this.isSubmitting.set(false);
         this.successMessage.set(this.chill.T('C91817F6-2CA4-461E-9D2B-EAD56F4B79BF', 'Account created and authenticated successfully.', 'Account creato e autenticato correttamente.'));
         setTimeout(() => {
-          void this.router.navigate(['/workspace', 'event-viewer']);
+          void this.router.navigate(['/workspace']);
         }, 700);
       },
       error: (error: unknown) => {

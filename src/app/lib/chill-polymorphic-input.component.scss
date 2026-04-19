@@ -149,6 +149,7 @@
   display: grid;
   gap: 0.45rem;
   width: var(--lookup-overlay-width, 100%);
+  min-width: 14rem;
   max-width: calc(100vw - 16px);
   max-height: 400px;
   overflow-y: auto;

@@ -148,7 +148,7 @@ export class ChillFormComponent implements OnDestroy {
       return false;
     }
 
-    if (this.isAutocompleting() || this.isSubmitting()) {
+    if ((this.shouldAutocompleteOnBlur() && this.isAutocompleting()) || this.isSubmitting()) {
       return false;
     }
 
@@ -238,7 +238,9 @@ export class ChillFormComponent implements OnDestroy {
     }
 
     this.internalSubmitError.set('');
-    await this.flushPendingAutocomplete();
+    if (this.shouldAutocompleteOnBlur()) {
+      await this.flushPendingAutocomplete();
+    }
 
     if (form.pending || form.invalid || this.hasInvalidPropertyState()) {
       return;
@@ -457,6 +459,10 @@ export class ChillFormComponent implements OnDestroy {
 
   handlePropertyBlur(value: Record<string, JsonValue>): void {
     this.updateFields(value);
+    if (!this.shouldAutocompleteOnBlur()) {
+      return;
+    }
+
     queueMicrotask(() => {
       void this.runAutocomplete();
     });
@@ -545,7 +551,7 @@ export class ChillFormComponent implements OnDestroy {
 
   private async runAutocomplete(): Promise<void> {
     const schema = this.schema();
-    if (!schema || this.isEditMode()) {
+    if (!schema || this.isEditMode() || !this.shouldAutocompleteOnBlur()) {
       return;
     }
 
@@ -727,6 +733,10 @@ export class ChillFormComponent implements OnDestroy {
   }
 
   private shouldValidateOnSubmit(): boolean {
+    return this.mode() === 'entity';
+  }
+
+  private shouldAutocompleteOnBlur(): boolean {
     return this.mode() === 'entity';
   }
 

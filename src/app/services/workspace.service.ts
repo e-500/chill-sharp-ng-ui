@@ -13,7 +13,7 @@ import { WorkspaceTaskDefinition, WorkspaceTaskRegistryService } from './workspa
 const WORKSPACE_THEME_STORAGE_KEY = 'chill-sharp-ng-ui.workspace-theme';
 const ACTIVE_MENU_ITEM_QUERY_PARAM = 'activeMenuItem';
 
-export type WorkspaceTheme = 'bright' | 'dark' | 'soft';
+export type WorkspaceTheme = 'bright' | 'dark' | 'soft' | 'cini';
 
 interface WorkspaceTaskRoute {
   taskType: string;
@@ -473,6 +473,7 @@ export class WorkspaceService {
     switch (storedTheme) {
       case 'dark':
       case 'soft':
+      case 'cini':
       case 'bright':
         return storedTheme;
       default:

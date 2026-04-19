@@ -298,7 +298,7 @@ export class WorkspacePageComponent implements OnInit, OnDestroy {
   private readonly taskOutlets = viewChildren(NgComponentOutlet);
   private tokenClockHandle: ReturnType<typeof globalThis.setInterval> | null = null;
 
-  readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft'];
+  readonly themes: WorkspaceTheme[] = ['bright', 'dark', 'soft', 'cini'];
   readonly nowMs = signal(Date.now());
   readonly isRenewingToken = signal(false);
   readonly activeToolbarButtons = computed(() =>

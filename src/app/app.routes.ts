@@ -23,7 +23,7 @@ const guestOnlyGuard: CanActivateFn = () => {
     return true;
   }
 
-  return inject(Router).createUrlTree(['/workspace', 'event-viewer']);
+  return inject(Router).createUrlTree(['/workspace']);
 };
 
 export const routes: Routes = [

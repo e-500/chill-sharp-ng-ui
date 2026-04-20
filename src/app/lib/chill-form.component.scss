@@ -114,7 +114,11 @@
   user-select: none;
 }
 
-.form-cell.empty-cell {
+.form-cell.empty-cell:not(.edit-mode) {
+  display: none;
+}
+
+.form-cell.empty-cell.edit-mode {
   min-height: 4.5rem;
 }
 

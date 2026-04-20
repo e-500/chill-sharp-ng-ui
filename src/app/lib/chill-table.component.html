@@ -209,6 +209,7 @@
                           [form]="activeCellEdit()?.form ?? null"
                           [schema]="schema()"
                           [propertyNames]="[column.name]"
+                          [readonlyPropertyNames]="readonlyPropertyNames()"
                           [showLabels]="false"
                           [externalErrors]="rowFieldErrors(entity)"
                           (valueChange)="handleCellValueChange($event)"

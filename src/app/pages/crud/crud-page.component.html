@@ -30,6 +30,7 @@
           [rowActions]="activeRowActions()"
           [ordering]="queryModel()?.ordering ?? null"
           [enableInlineEditing]="!isInlineEditDisabled()"
+          [readonlyPropertyNames]="readonlyEntityPropertyNames()"
           [showSchemaHeader]="showTableHeader()"
           [validationFocus]="validationFocus()"
           (cellEditCommit)="handleInlineCellEdit($event)"

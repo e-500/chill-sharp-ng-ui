@@ -74,16 +74,6 @@
 .chill-form {
   display: grid;
   gap: 0.85rem;
-  padding: 1.15rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--tron-border-strong);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 58%, transparent), transparent 24%),
-    var(--tron-panel);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent),
-    0 0 1.25rem var(--tron-glow),
-    var(--shadow);
   position: relative;
   overflow: hidden;
 }
@@ -129,29 +119,80 @@
 }
 
 .cell-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
   color: var(--text-main);
   font-weight: 600;
 }
 
-.span-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.cell-toolbar__title-row,
+.cell-toolbar__settings-row {
+  min-width: 0;
 }
 
-.span-controls button {
-  width: 1.85rem;
-  height: 1.85rem;
+.cell-toolbar__title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.cell-toolbar__title-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-visibility-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.cell-toolbar__settings-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(6.35rem, auto);
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.cell-toolbar__icon-button,
+.cell-toolbar__icon-spacer {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+}
+
+.cell-toolbar__icon-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--tron-border);
   border-radius: 0.4rem;
   background: var(--surface-0);
   color: var(--text-main);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
   cursor: pointer;
+}
+
+.span-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.15rem;
+  min-width: 6.35rem;
+}
+
+.span-controls__value {
+  min-width: 1.75rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .empty-cell-body {
@@ -206,6 +247,6 @@ button[type='submit'] {
 
 :root[data-theme='dark'] .layout-button,
 :root[data-theme='dark'] .column-count select,
-:root[data-theme='dark'] .span-controls button {
+:root[data-theme='dark'] .cell-toolbar__icon-button {
   background: rgba(9, 19, 26, 0.58);
 }

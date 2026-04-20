@@ -35,6 +35,7 @@ export class CrudPageComponentConfiguration {
   disableDelete = false;
   relationLabel?: string | I18nText | null;
   defaultValues?: Record<string, JsonValue> | null;
+  fixedValues?: Record<string, JsonValue> | null;
   fixedQueryValues?: Record<string, JsonValue> | null;
   defaultQueryValues?: Record<string, JsonValue> | null;
   relations?: CrudPageComponentConfiguration[] | null;
@@ -83,6 +84,7 @@ export class CrudPageComponent implements OnInit {
     ...Object.keys(this.defaultQueryValues()),
     ...Object.keys(this.fixedQueryValues())
   ].filter((propertyName, index, values) => values.findIndex((value) => value === propertyName) === index));
+  readonly readonlyEntityPropertyNames = computed(() => Object.keys(this.fixedEntityValues()));
   readonly currentPage = signal(1);
   readonly pageSize = DEFAULT_PAGE_SIZE;
   readonly validationErrorMessage = computed(() => {
@@ -415,7 +417,9 @@ export class CrudPageComponent implements OnInit {
    * Returns the label for the current page.
    */
   pageLabel(): string {
-    return this.chill.T('A28A7E16-5B47-4B5D-A5CF-54BDEFF43073', `Page ${this.currentPage()} of ${this.totalPages()}`, `Pagina ${this.currentPage()} di ${this.totalPages()}`);
+    const pageText = this.chill.T('A28A7E16-5B47-4B5D-A5CF-54BDEFF43073', 'Page', 'Pagina');
+    const ofText = this.chill.T('36821A44-09BC-431A-A1DD-72B2415701C2', 'of', 'di');
+    return `${pageText} ${this.currentPage()} ${ofText} ${this.totalPages()}`;
   }
 
   /**
@@ -446,6 +450,7 @@ export class CrudPageComponent implements OnInit {
         inputs: {
           schema,
           entity: this.prepareDialogEntity(entity, schema),
+          readonlyPropertyNames: this.readonlyEntityPropertyNames(),
           submitLabelGuid: isDraft ? 'D7EA89E2-4AF2-455A-8FA9-33540E61D7C5' : '62953302-B951-4FD1-BD08-4B7649A91BAF',
           submitPrimaryDefaultText: isDraft ? 'Done' : 'Update',
           submitSecondaryDefaultText: isDraft ? 'Fine' : 'Aggiorna',
@@ -580,7 +585,8 @@ export class CrudPageComponent implements OnInit {
       } satisfies ChillState,
       chillType: schema.chillType?.trim() ?? '',
       properties: {
-        ...this.defaultEntityValues()
+        ...this.defaultEntityValues(),
+        ...this.fixedEntityValues()
       }
     };
     this.results.update((current) => [...current, this.prepareEntityForSchema(draftEntity, schema, isNew)]);
@@ -1095,6 +1101,7 @@ export class CrudPageComponent implements OnInit {
     const clonedEntity = this.cloneEntity(entity);
     const nextProperties: Record<string, JsonValue> = {
       ...(isNew ? this.defaultEntityValues() : {}),
+      ...(isNew ? this.fixedEntityValues() : {}),
       ...(clonedEntity.properties ?? {})
     };
 
@@ -1313,6 +1320,10 @@ export class CrudPageComponent implements OnInit {
     return this.resolveConfigRecord(this.normalizedConfiguration().defaultValues);
   }
 
+  private fixedEntityValues(): Record<string, JsonValue> {
+    return this.resolveConfigRecord(this.normalizedConfiguration().fixedValues);
+  }
+
   private defaultQueryValues(): Record<string, JsonValue> {
     return this.resolveConfigRecord(this.normalizedConfiguration().defaultQueryValues);
   }
@@ -1341,6 +1352,7 @@ export class CrudPageComponent implements OnInit {
     normalizedConfiguration.disableDelete = this.readConfigBoolean(configuration['disableDelete']);
     normalizedConfiguration.relationLabel = this.readRelationLabel(configuration['relationLabel']);
     normalizedConfiguration.defaultValues = this.readConfigRecord(configuration['defaultValues']);
+    normalizedConfiguration.fixedValues = this.readConfigRecord(configuration['fixedValues']);
     normalizedConfiguration.fixedQueryValues = this.readConfigRecord(configuration['fixedQueryValues']);
     normalizedConfiguration.defaultQueryValues = this.readConfigRecord(configuration['defaultQueryValues']);
     normalizedConfiguration.relations = this.readRelationConfigurations(configuration.relations);
@@ -1540,6 +1552,9 @@ export class CrudPageComponent implements OnInit {
       relationLabel: configuration.relationLabel ?? null,
       defaultValues: {
         ...this.resolveConfigRecord(configuration.defaultValues, entity)
+      },
+      fixedValues: {
+        ...this.resolveConfigRecord(configuration.fixedValues, entity)
       },
       fixedQueryValues: {
         ...this.resolveConfigRecord(configuration.fixedQueryValues, entity)

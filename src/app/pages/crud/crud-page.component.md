@@ -58,6 +58,7 @@ Each relation uses the same configuration type as the root CRUD page:
   viewCode: 'default',
   relationLabel: 'Rows',
   defaultValues: { ... },
+  fixedValues: { ... },
   fixedQueryValues: { ... },
   defaultQueryValues: { ... },
   relations: [ ... ]
@@ -97,6 +98,9 @@ const configuration = {
       },
       defaultValues: {
         OrderGuid: '@{Guid}'
+      },
+      fixedValues: {
+        OrderGuid: '@{Guid}'
       }
     }
   ]
@@ -111,7 +115,7 @@ Behavior:
 
 ### Placeholder Syntax
 
-Inside `defaultValues`, `fixedQueryValues`, and `defaultQueryValues`, string values can use placeholder syntax:
+Inside `defaultValues`, `fixedValues`, `fixedQueryValues`, and `defaultQueryValues`, string values can use placeholder syntax:
 
 - `@{FieldName}`
 - `@{mock}`
@@ -138,6 +142,7 @@ If a value does not match the placeholder syntax, it is used as-is.
 - `fixedQueryValues`: use for mandatory query filters that the user should not change
 - `defaultQueryValues`: use for initial query values that the user may still edit
 - `defaultValues`: use for initial create-dialog defaults in the child CRUD
+- `fixedValues`: use for initial create-dialog defaults that should be read-only in the entity form and table inline editor
 
 ### Custom Menu Label
 

@@ -28,6 +28,7 @@ interface FormLayoutItem {
   kind: 'property' | 'empty';
   name?: string;
   span: number;
+  hidden: boolean;
 }
 
 interface FormLayoutState {
@@ -36,8 +37,8 @@ interface FormLayoutState {
 }
 
 type ResolvedFormLayoutItem =
-  | { id: string; kind: 'property'; property: ChillPropertySchema; span: number }
-  | { id: string; kind: 'empty'; span: number };
+  | { id: string; kind: 'property'; property: ChillPropertySchema; span: number; hidden: boolean }
+  | { id: string; kind: 'empty'; span: number; hidden: boolean };
 
 @Component({
   selector: 'app-chill-form',
@@ -80,6 +81,7 @@ export class ChillFormComponent implements OnDestroy {
   readonly isSavingLayout = signal(false);
   readonly layoutError = signal('');
   readonly dragPropertyName = signal('');
+  readonly isPointerOverToolbar = signal(false);
   readonly schemaRefreshTick = signal(0);
   readonly layoutState = signal<FormLayoutState>({
     columnCount: DEFAULT_FORM_COLUMN_COUNT,
@@ -87,6 +89,7 @@ export class ChillFormComponent implements OnDestroy {
   });
   private formValueSubscription = new Subscription();
   private lastFormValue: Record<string, JsonValue> = {};
+  private lastFormResetSignature = '';
   private autocompleteRequestSequence = 0;
   private pendingAutocompletePromise: Promise<void> | null = null;
   readonly mode = computed<'entity' | 'query'>(() => this.query() ? 'query' : 'entity');
@@ -106,7 +109,8 @@ export class ChillFormComponent implements OnDestroy {
           return {
             id: item.id,
             kind: 'empty' as const,
-            span
+            span,
+            hidden: item.hidden
           };
         }
 
@@ -120,7 +124,8 @@ export class ChillFormComponent implements OnDestroy {
           id: item.id,
           kind: 'property' as const,
           property,
-          span
+          span,
+          hidden: item.hidden
         };
       })
       .filter((item): item is ResolvedFormLayoutItem => item !== null);
@@ -137,7 +142,8 @@ export class ChillFormComponent implements OnDestroy {
         id: property.name,
         kind: 'property' as const,
         property,
-        span: 1
+        span: 1,
+        hidden: false
       }));
 
     return [...resolvedItems, ...missingProperties];
@@ -185,6 +191,18 @@ export class ChillFormComponent implements OnDestroy {
       this.schemaRefreshTick();
       const schema = this.schema();
       const source = this.source();
+      const nextLayoutState = this.readLayoutState(schema);
+      const formResetSignature = this.buildFormResetSignature(schema, source);
+      const shouldResetForm = formResetSignature !== this.lastFormResetSignature;
+      this.layoutState.set(nextLayoutState);
+      this.layoutError.set('');
+      this.isEditMode.set(false);
+
+      if (!shouldResetForm) {
+        return;
+      }
+
+      this.lastFormResetSignature = formResetSignature;
       const nextForm = schema
         ? this.chill.prepareForm(schema, source)
         : null;
@@ -195,9 +213,6 @@ export class ChillFormComponent implements OnDestroy {
       this.internalSubmitError.set('');
       this.isAutocompleting.set(false);
       this.isSubmitting.set(false);
-      this.layoutState.set(this.readLayoutState(schema));
-      this.layoutError.set('');
-      this.isEditMode.set(false);
       this.syncFormValueSubscription(nextForm);
 
     });
@@ -287,6 +302,7 @@ export class ChillFormComponent implements OnDestroy {
     }
 
     if (!this.isEditMode()) {
+      this.layoutState.update((current) => this.completeLayoutState(current));
       this.isEditMode.set(true);
       this.layoutError.set('');
       return;
@@ -354,10 +370,22 @@ export class ChillFormComponent implements OnDestroy {
         {
           id: this.createEmptyLayoutItemId(current.items),
           kind: 'empty',
-          span: 1
+          span: 1,
+          hidden: false
         }
       ]
     }));
+  }
+
+  updatePropertyHidden(itemId: string, hidden: boolean): void {
+    this.layoutState.update((current) => ({
+      ...current,
+      items: this.updateLayoutItemHidden(current.items, itemId, hidden)
+    }));
+  }
+
+  setPointerOverToolbar(value: boolean): void {
+    this.isPointerOverToolbar.set(value);
   }
 
   increaseSpan(itemId: string): void {
@@ -385,7 +413,8 @@ export class ChillFormComponent implements OnDestroy {
         id: property.name,
         kind: 'property' as const,
         name: property.name,
-        span: 1
+        span: 1,
+        hidden: false
       }))
     }));
   }
@@ -434,6 +463,7 @@ export class ChillFormComponent implements OnDestroy {
     });
 
     this.dragPropertyName.set('');
+    this.isPointerOverToolbar.set(false);
   }
 
   endDrag(): void {
@@ -827,7 +857,7 @@ export class ChillFormComponent implements OnDestroy {
 
   private hasInvalidPropertyState(): boolean {
     return this.layoutItems()
-      .filter((item): item is Extract<ResolvedFormLayoutItem, { kind: 'property' }> => item.kind === 'property')
+      .filter((item): item is Extract<ResolvedFormLayoutItem, { kind: 'property' }> => item.kind === 'property' && !item.hidden)
       .some((item) => this.propertyValidity()[item.property.name] === false);
   }
 
@@ -852,7 +882,9 @@ export class ChillFormComponent implements OnDestroy {
     }
 
     const metadata = this.readSchemaMetadata(schema);
-    metadata[FORM_LAYOUT_METADATA_KEY] = JSON.stringify(this.layoutState());
+    const layoutState = this.layoutState();
+    const serializedLayout = JSON.stringify(layoutState);
+    metadata[FORM_LAYOUT_METADATA_KEY] = serializedLayout;
 
     const updatedSchema: ChillSchema = {
       ...schema,
@@ -868,7 +900,7 @@ export class ChillFormComponent implements OnDestroy {
         const targetSchema = this.schema();
         if (targetSchema) {
           targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
-          (targetSchema as unknown as JsonObject)['Metadata'] = targetSchema.metadata as unknown as JsonValue;
+          delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
         }
         this.layoutState.set(this.readLayoutState(effectiveSchema));
         this.isSavingLayout.set(false);
@@ -899,8 +931,8 @@ export class ChillFormComponent implements OnDestroy {
         if (targetSchema) {
           targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
           targetSchema.properties = [...(effectiveSchema.properties ?? [])];
-          (targetSchema as unknown as JsonObject)['Metadata'] = targetSchema.metadata as unknown as JsonValue;
-          (targetSchema as unknown as JsonObject)['Properties'] = targetSchema.properties as unknown as JsonValue;
+          delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
+          delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
         }
         this.propertyValidity.set(this.createInitialPropertyValidity(effectiveSchema));
         this.layoutState.set(this.readLayoutState(effectiveSchema));
@@ -921,7 +953,8 @@ export class ChillFormComponent implements OnDestroy {
         id: property.name,
         kind: 'property' as const,
         name: property.name,
-        span: 1
+        span: 1,
+        hidden: false
       }))
     };
   }
@@ -930,6 +963,22 @@ export class ChillFormComponent implements OnDestroy {
     return Object.fromEntries(
       (schema?.properties ?? []).map((property) => [property.name, true] as const)
     );
+  }
+
+  private buildFormResetSignature(schema: ChillSchema | null, source: ChillEntity | ChillQuery | null): string {
+    return JSON.stringify({
+      schema: schema
+        ? {
+            chillType: schema.chillType ?? '',
+            chillViewCode: schema.chillViewCode ?? '',
+            displayName: schema.displayName ?? '',
+            handleAttachments: schema.handleAttachments === true,
+            queryRelatedChillType: schema.queryRelatedChillType ?? '',
+            properties: schema.properties ?? []
+          }
+        : null,
+      source
+    });
   }
 
   private readLayoutState(schema: ChillSchema | null): FormLayoutState {
@@ -976,13 +1025,15 @@ export class ChillFormComponent implements OnDestroy {
           id: name,
           kind: 'property' as const,
           name,
-          span: 1
+          span: 1,
+          hidden: false
         }));
 
-      return {
+      const restoredLayout = {
         columnCount,
         items: [...restoredItems, ...missingItems]
       };
+      return restoredLayout;
     } catch {
       return defaultLayout;
     }
@@ -993,10 +1044,11 @@ export class ChillFormComponent implements OnDestroy {
       return null;
     }
 
-    const candidate = value as { id?: unknown; kind?: unknown; name?: unknown; span?: unknown };
+    const candidate = value as { id?: unknown; kind?: unknown; name?: unknown; span?: unknown; hidden?: unknown };
     const span = typeof candidate.span === 'number' && Number.isFinite(candidate.span)
       ? Math.max(1, Math.floor(candidate.span))
       : 1;
+    const hidden = candidate.hidden === true;
 
     const kind = candidate.kind === 'empty'
       ? 'empty'
@@ -1009,7 +1061,8 @@ export class ChillFormComponent implements OnDestroy {
       return {
         id,
         kind,
-        span
+        span,
+        hidden
       };
     }
 
@@ -1026,8 +1079,75 @@ export class ChillFormComponent implements OnDestroy {
         : name,
       kind,
       name,
-      span
+      span,
+      hidden
     };
+  }
+
+  private updateLayoutItemHidden(items: FormLayoutItem[], itemId: string, hidden: boolean): FormLayoutItem[] {
+    const normalizedItemId = itemId.trim();
+    if (!normalizedItemId) {
+      return items;
+    }
+
+    let didUpdate = false;
+    const nextItems = items.map((item) => {
+      if (item.id !== normalizedItemId && item.name !== normalizedItemId) {
+        return item;
+      }
+
+      didUpdate = true;
+      return {
+        ...item,
+        hidden
+      };
+    });
+
+    if (didUpdate) {
+      return nextItems;
+    }
+
+    const property = this.properties().find((candidate) => candidate.name === normalizedItemId);
+    if (!property) {
+      return items;
+    }
+
+    return [
+      ...items,
+      {
+        id: property.name,
+        kind: 'property',
+        name: property.name,
+        span: 1,
+        hidden
+      }
+    ];
+  }
+
+  private completeLayoutState(layoutState: FormLayoutState): FormLayoutState {
+    const knownPropertyNames = new Set(
+      layoutState.items
+        .flatMap((item) => item.kind === 'property' && item.name ? [item.name] : [])
+    );
+    const missingItems = this.properties()
+      .filter((property) => !knownPropertyNames.has(property.name))
+      .map((property) => ({
+        id: property.name,
+        kind: 'property' as const,
+        name: property.name,
+        span: 1,
+        hidden: false
+      }));
+
+    return missingItems.length === 0
+      ? layoutState
+      : {
+          ...layoutState,
+          items: [
+            ...layoutState.items,
+            ...missingItems
+          ]
+        };
   }
 
   private createEmptyLayoutItemId(items: FormLayoutItem[]): string {

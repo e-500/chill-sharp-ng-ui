@@ -113,6 +113,7 @@ export class ChillTableComponent {
   readonly rowAction = input<ChillTableRowAction | null>(null);
   readonly rowActions = input<ChillTableRowAction[] | null>(null);
   readonly enableInlineEditing = input(false);
+  readonly readonlyPropertyNames = input<string[] | null>(null);
   readonly validationFocus = input<ChillTableValidationFocus | null>(null);
   readonly showSchemaHeader = input(true);
   readonly ordering = input<ChillOrdering | null>(null);
@@ -290,6 +291,11 @@ export class ChillTableComponent {
    * Hides row actions while the user is editing layout metadata.
    */
   readonly hasActionColumn = computed(() => this.resolvedRowActions().length > 0 && !this.isEditLayoutMode());
+  readonly readonlyPropertyNameSet = computed(() => new Set(
+    (this.readonlyPropertyNames() ?? [])
+      .map((propertyName) => propertyName.trim().toLowerCase())
+      .filter((propertyName) => propertyName.length > 0)
+  ));
 
   // #endregion
 
@@ -663,6 +669,10 @@ export class ChillTableComponent {
     return this.activeCellEdit()?.propertyName === column.name;
   }
 
+  isColumnReadOnly(column: TableColumn): boolean {
+    return this.readonlyPropertyNameSet().has(column.name.trim().toLowerCase());
+  }
+
   canSortColumn(column: TableColumn): boolean {
     return (column.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) !== CHILL_PROPERTY_TYPE.ChillEntityCollection;
   }
@@ -744,7 +754,7 @@ export class ChillTableComponent {
    * Creates a single-property edit session for the chosen cell using a fresh schema-driven form.
    */
   activateCellEdit(entity: ChillEntity, column: TableColumn): void {
-    if (!this.enableInlineEditing() || this.isEditLayoutMode() || this.isDeletedRow(entity)) {
+    if (!this.enableInlineEditing() || this.isEditLayoutMode() || this.isDeletedRow(entity) || this.isColumnReadOnly(column)) {
       return;
     }
 
@@ -1147,8 +1157,8 @@ export class ChillTableComponent {
         if (targetSchema) {
           targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
           targetSchema.properties = [...(effectiveSchema.properties ?? [])];
-          (targetSchema as unknown as JsonObject)['metadata'] = targetSchema.metadata as unknown as JsonValue;
-          (targetSchema as unknown as JsonObject)['properties'] = targetSchema.properties as unknown as JsonValue;
+          delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
+          delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
         }
         this.layoutState.set(normalizedLayoutState);
         this.layoutState.set(this.readLayoutState(effectiveSchema));
@@ -1194,7 +1204,7 @@ export class ChillTableComponent {
             .filter((item) => item.name.length > 0)
         : [];
 
-      return defaultLayout.map((column) => {
+      const restoredLayout = defaultLayout.map((column) => {
         const savedColumn = savedColumns.find((item) => item.name === column.name);
         return savedColumn
           ? { ...column, ...savedColumn }
@@ -1207,6 +1217,7 @@ export class ChillTableComponent {
           const resolvedRightIndex = rightIndex >= 0 ? rightIndex : Number.MAX_SAFE_INTEGER;
           return resolvedLeftIndex - resolvedRightIndex;
         });
+      return restoredLayout;
     } catch {
       return defaultLayout;
     }
@@ -1284,7 +1295,7 @@ export class ChillTableComponent {
       return { ...camelMetadata };
     }
 
-    const pascalMetadata = (schema as unknown as JsonObject)['metadata'];
+    const pascalMetadata = (schema as unknown as JsonObject)['Metadata'];
     if (pascalMetadata && typeof pascalMetadata === 'object' && !Array.isArray(pascalMetadata)) {
       return Object.fromEntries(
         Object.entries(pascalMetadata).map(([key, value]) => [key, typeof value === 'string' ? value : String(value ?? '')])
@@ -1451,8 +1462,8 @@ export class ChillTableComponent {
         if (targetSchema) {
           targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
           targetSchema.properties = [...(effectiveSchema.properties ?? [])];
-          (targetSchema as unknown as JsonObject)['metadata'] = targetSchema.metadata as unknown as JsonValue;
-          (targetSchema as unknown as JsonObject)['properties'] = targetSchema.properties as unknown as JsonValue;
+          delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
+          delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
         }
         this.activeCellEdit.set(null);
         this.layoutState.set(this.readLayoutState(effectiveSchema));

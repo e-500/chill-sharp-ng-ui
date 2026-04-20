@@ -67,38 +67,63 @@
         @for (item of layoutItems(); track trackByProperty($index, item)) {
           <section
             class="form-cell"
-            [class.empty-cell]="item.kind === 'empty'"
+            [class.empty-cell]="item.kind === 'empty' || (item.kind === 'property' && item.hidden && !isEditMode())"
             [class.edit-mode]="isEditMode()"
             [style.grid-column]="'span ' + item.span"
-            [draggable]="isEditMode()"
+            [draggable]="isEditMode() && !isPointerOverToolbar()"
             (dragstart)="beginDrag(item.id)"
             (dragover)="allowDrop($event)"
             (drop)="dropProperty(item.id)"
             (dragend)="endDrag()">
             @if (isEditMode()) {
-              <div class="cell-toolbar">
-                <span>
+              <div
+                class="cell-toolbar"
+                (pointerenter)="setPointerOverToolbar(true)"
+                (pointerleave)="setPointerOverToolbar(false)"
+                (click)="$event.stopPropagation()">
+                <div class="cell-toolbar__title-row">
+                  <span>
+                    @if (item.kind === 'property') {
+                      {{ item.property.displayName || item.property.name }}
+                    } @else {
+                      {{ chill.T('278389E7-9C0F-4849-B7C8-B904CC0E4AAA', 'Empty cell', 'Cella vuota') }}
+                    }
+                  </span>
                   @if (item.kind === 'property') {
-                    {{ item.property.displayName || item.property.name }}
-                  } @else {
-                    {{ chill.T('278389E7-9C0F-4849-B7C8-B904CC0E4AAA', 'Empty cell', 'Cella vuota') }}
+                    <input
+                      type="checkbox"
+                      class="field-visibility-checkbox"
+                      [checked]="!item.hidden"
+                      (mousedown)="$event.stopPropagation()"
+                      (click)="$event.stopPropagation()"
+                      (change)="updatePropertyHidden(item.property.name, !$any($event.target).checked)"
+                      [name]="'hidden-' + item.property.name"
+                      [attr.aria-label]="chill.T('D72C8236-361A-4053-86B8-6F5A9D6983F6', 'Show field', 'Mostra campo')" />
                   }
-                </span>
-                <div class="span-controls">
+                </div>
+                <div class="cell-toolbar__settings-row">
                   @if (item.kind === 'property') {
-                    <button type="button" (click)="openPropertySettings(item.property)" [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
+                    <button type="button" class="cell-toolbar__icon-button" (click)="openPropertySettings(item.property)" [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
                       <span class="material-symbol-icon">tune</span>
                     </button>
+                  } @else {
+                    <span class="cell-toolbar__icon-spacer"></span>
                   }
-                  <button type="button" (click)="decreaseSpan(item.id)">-</button>
-                  <span>{{ item.span }}</span>
-                  <button type="button" (click)="increaseSpan(item.id)">+</button>
+                  <div class="span-controls">
+                    <button type="button" class="cell-toolbar__icon-button" (click)="decreaseSpan(item.id)" [attr.aria-label]="chill.T('DB73501A-618F-48C7-A6BC-613B44729887', 'Decrease field span', 'Riduci larghezza campo')">
+                      <span class="material-symbol-icon" aria-hidden="true">remove</span>
+                    </button>
+                    <span class="span-controls__value">{{ item.span }}</span>
+                    <button type="button" class="cell-toolbar__icon-button" (click)="increaseSpan(item.id)" [attr.aria-label]="chill.T('63E1E823-9015-4551-A43B-4B672E988B4A', 'Increase field span', 'Aumenta larghezza campo')">
+                      <span class="material-symbol-icon" aria-hidden="true">add</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             }
             @else 
             {
-              @if (item.kind === 'property') {
+              @if (item.kind === 'property' && !item.hidden) {
                 <app-chill-polymorphic-input
                   [form]="form()"
                   [schema]="schema()"
@@ -108,7 +133,7 @@
                   (validityChange)="updatePropertyValidity(item.property.name, $event)"
                   (fieldBlur)="handlePropertyBlur($event)" />
               } @else {
-                <div class="empty-cell-body" [class.edit-mode]="isEditMode()"></div>
+                <div class="empty-cell-body"></div>
               }
             }
           </section>

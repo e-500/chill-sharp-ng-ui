@@ -305,7 +305,7 @@ export class ChillService {
   }
 
   setSchema(schema: ChillSchema) {
-    return this.chill.setSchema({
+    const request = {
       ...schema,
       chillType: schema.chillType ?? '',
       chillViewCode: schema.chillViewCode ?? '',
@@ -338,7 +338,11 @@ export class ChillService {
         enumValues: property.enumValues ?? null,
         metadata: this.serializeMetadataRecord(property.metadata)
       }))
-    }).pipe(
+    };
+    delete (request as unknown as Record<string, unknown>)['Metadata'];
+    delete (request as unknown as Record<string, unknown>)['Properties'];
+
+    return this.chill.setSchema(request).pipe(
       map((response) => this.normalizeSchema(response as ChillSchema | null)),
       catchError((error) => this.rethrowFriendlyError(error))
     );

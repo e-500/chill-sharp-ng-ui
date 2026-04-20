@@ -36,7 +36,7 @@
           (cellEditCommit)="handleInlineCellEdit($event)"
           (sortChange)="applyOrdering($event)" />
 
-        @if (results().length > pageSize) {
+        @if (canGoToPreviousPage() || canGoToNextPage()) {
           <footer class="pagination">
             <button type="button" (click)="goToPreviousPage()" [disabled]="!canGoToPreviousPage()">
               {{ chill.T('15FA9D58-C1F9-4A70-8B67-C2D4232D6B89', 'Previous', 'Precedente') }}

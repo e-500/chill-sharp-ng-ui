@@ -7,13 +7,14 @@ import { firstValueFrom } from 'rxjs';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../lib/chill-form.component';
 import { ChillTableComponent, type ChillTableCellEditCommitEvent, type ChillTableRowAction, type ChillTableSelectionColumn, type ChillTableSortChangeEvent, type ChillTableValidationFocus } from '../../lib/chill-table.component';
-import { CHILL_PROPERTY_TYPE, ChillEntityStatus, ChillState, type ChillEntity, type ChillEntityChangeNotification, type ChillFormSubmitEvent, type ChillQuery, type ChillSchema, type ChillSchemaListItem } from '../../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, ChillEntityStatus, ChillState, type ChillEntity, type ChillEntityChangeNotification, type ChillFormSubmitEvent, type ChillPagination, type ChillQuery, type ChillSchema, type ChillSchemaListItem } from '../../models/chill-schema.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
 import { WorkspaceService } from '../../services/workspace.service';
 
 const DEFAULT_VIEW_CODE = 'default';
 const DEFAULT_PAGE_SIZE = 20;
+const SERVER_PAGE_WINDOW_SIZE = 4;
 const ENTITY_NOTIFICATION_IGNORE_WINDOW_MS = 1000;
 const ATTACHMENT_ENTITY_CHILL_TYPE = 'ChillSharp.Attachment.Model.Attachment';
 const ATTACHMENT_QUERY_CHILL_TYPE = 'ChillSharp.Attachment.Model.AttachmentQuery';
@@ -79,6 +80,8 @@ export class CrudPageComponent implements OnInit {
   readonly results = signal<ChillEntity[]>([]);
   readonly selectedEntityKeys = signal<string[]>([]);
   readonly selectedViewCode = signal(DEFAULT_VIEW_CODE);
+  readonly serverWindowStartPage = signal(1);
+  readonly hasMoreServerPages = signal(false);
   readonly normalizedConfiguration = computed(() => this.normalizeComponentConfiguration(this.componentConfiguration()));
   readonly readonlyQueryPropertyNames = computed(() => [
     ...Object.keys(this.defaultQueryValues()),
@@ -117,10 +120,8 @@ export class CrudPageComponent implements OnInit {
 
     return null;
   });
-  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.results().length / this.pageSize)));
   readonly pagedResults = computed(() => {
-    const page = Math.min(this.currentPage(), this.totalPages());
-    const start = (page - 1) * this.pageSize;
+    const start = (this.currentPage() - this.serverWindowStartPage()) * this.pageSize;
     return this.results().slice(start, start + this.pageSize);
   });
   readonly rowActions = computed<ChillTableRowAction[]>(() => [
@@ -192,8 +193,7 @@ export class CrudPageComponent implements OnInit {
     const normalizedType = chillType.trim();
     this.selectedQueryType.set(normalizedType);
     this.errorMessage.set('');
-    this.results.set([]);
-    this.currentPage.set(1);
+    this.clearResultWindow();
 
     if (!normalizedType) {
       this.querySchema.set(null);
@@ -215,7 +215,7 @@ export class CrudPageComponent implements OnInit {
 
     const query = this.normalizeQuery(event.value as ChillQuery);
     this.queryModel.set(query);
-    this.executeQuery(query, true);
+    this.executeQuery(query, true, 1);
   }
 
   applyOrdering(event: ChillTableSortChangeEvent): void {
@@ -235,7 +235,7 @@ export class CrudPageComponent implements OnInit {
     });
 
     this.queryModel.set(nextQuery);
-    this.executeQuery(nextQuery, true);
+    this.executeQuery(nextQuery, true, 1);
   }
 
   /**
@@ -388,7 +388,7 @@ export class CrudPageComponent implements OnInit {
    * Checks if navigation to the next page is possible.
    */
   canGoToNextPage(): boolean {
-    return this.currentPage() < this.totalPages();
+    return this.hasLoadedPage(this.currentPage() + 1) || this.hasMoreServerPages();
   }
 
   /**
@@ -399,7 +399,18 @@ export class CrudPageComponent implements OnInit {
       return;
     }
 
-    this.currentPage.update((page) => Math.max(1, page - 1));
+    const previousPage = this.currentPage() - 1;
+    if (this.hasLoadedPage(previousPage)) {
+      this.currentPage.set(previousPage);
+      return;
+    }
+
+    const query = this.queryModel();
+    if (!query) {
+      return;
+    }
+
+    this.executeQuery(this.normalizeQuery(query), true, previousPage);
   }
 
   /**
@@ -410,7 +421,18 @@ export class CrudPageComponent implements OnInit {
       return;
     }
 
-    this.currentPage.update((page) => Math.min(this.totalPages(), page + 1));
+    const nextPage = this.currentPage() + 1;
+    if (this.hasLoadedPage(nextPage)) {
+      this.currentPage.set(nextPage);
+      return;
+    }
+
+    const query = this.queryModel();
+    if (!query) {
+      return;
+    }
+
+    this.executeQuery(this.normalizeQuery(query), true, nextPage);
   }
 
   /**
@@ -418,8 +440,7 @@ export class CrudPageComponent implements OnInit {
    */
   pageLabel(): string {
     const pageText = this.chill.T('A28A7E16-5B47-4B5D-A5CF-54BDEFF43073', 'Page', 'Pagina');
-    const ofText = this.chill.T('36821A44-09BC-431A-A1DD-72B2415701C2', 'of', 'di');
-    return `${pageText} ${this.currentPage()} ${ofText} ${this.totalPages()}`;
+    return `${pageText} ${this.currentPage()}`;
   }
 
   /**
@@ -516,7 +537,7 @@ export class CrudPageComponent implements OnInit {
           this.selectedQueryType.set(backupQuerySchema.chillType?.trim() ?? '');
           this.querySchema.set(backupQuerySchema);
           this.queryModel.set(this.createQueryModel(backupQuerySchema));
-          this.results.set([]);
+          this.clearResultWindow();
           void this.loadResultSchema(configuredResultType, backupQuerySchema.chillViewCode?.trim() || this.selectedViewCode());
           return;
         }
@@ -540,7 +561,7 @@ export class CrudPageComponent implements OnInit {
           this.querySchema.set(null);
           this.resultSchema.set(null);
           this.queryModel.set(null);
-          this.results.set([]);
+          this.clearResultWindow();
           this.errorMessage.set(this.chill.T('80085620-C926-4F8C-820D-672EE1E7B4AF', 'The selected query schema is unavailable.', 'Lo schema di query selezionato non è disponibile.'));
           this.isLoadingSchema.set(false);
           return;
@@ -557,7 +578,7 @@ export class CrudPageComponent implements OnInit {
         this.querySchema.set(null);
         this.resultSchema.set(null);
         this.queryModel.set(null);
-        this.results.set([]);
+        this.clearResultWindow();
         this.errorMessage.set(this.chill.formatError(error));
         this.isLoadingSchema.set(false);
       }
@@ -698,6 +719,7 @@ export class CrudPageComponent implements OnInit {
             direction: ordering.direction === 'DESC' ? 'DESC' : 'ASC'
           }
         : null,
+      pagination: this.buildPaginationForPage(this.currentPage()),
       resultProperties: resultSchema?.properties?.map((property) => ({ PropertyName: property.name })) ?? []
     };
   }
@@ -809,16 +831,39 @@ export class CrudPageComponent implements OnInit {
       return;
     }
 
-    this.executeQuery(this.normalizeQuery(query), false);
+    this.executeQuery(this.normalizeQuery(query), false, this.currentPage());
   }
 
-  private executeQuery(query: ChillQuery, preservePendingEntitiesOnError: boolean): void {
+  private clearResultWindow(): void {
+    this.results.set([]);
+    this.currentPage.set(1);
+    this.serverWindowStartPage.set(1);
+    this.hasMoreServerPages.set(false);
+  }
+
+  private executeQuery(query: ChillQuery, preservePendingEntitiesOnError: boolean, targetPage: number): void {
+    const normalizedTargetPage = Math.max(1, targetPage);
+    const windowStartPage = this.calculateServerWindowStartPage(normalizedTargetPage);
+    const pagedQuery = {
+      ...query,
+      pagination: this.buildPaginationForPage(normalizedTargetPage)
+    };
+
     this.isSearching.set(true);
     this.errorMessage.set('');
-    this.chill.query(query).subscribe({
+    this.chill.query(pagedQuery).subscribe({
       next: (response) => {
-        this.results.set(this.mergeWithDraftEntities(this.extractEntities(response)));
-        this.currentPage.set(1);
+        const serverEntities = this.extractEntities(response);
+        if (serverEntities.length === 0 && normalizedTargetPage > 1) {
+          this.hasMoreServerPages.set(false);
+          this.isSearching.set(false);
+          return;
+        }
+
+        this.results.set(this.mergeWithDraftEntities(serverEntities));
+        this.serverWindowStartPage.set(windowStartPage);
+        this.currentPage.set(normalizedTargetPage);
+        this.hasMoreServerPages.set(serverEntities.length >= this.serverWindowEntityCount());
         this.isSearching.set(false);
       },
       error: (error: unknown) => {
@@ -826,10 +871,37 @@ export class CrudPageComponent implements OnInit {
           this.results.set(this.pendingEntities());
         }
         this.errorMessage.set(this.chill.formatError(error));
-        this.currentPage.set(1);
+        this.currentPage.set(normalizedTargetPage);
+        this.serverWindowStartPage.set(windowStartPage);
+        this.hasMoreServerPages.set(false);
         this.isSearching.set(false);
       }
     });
+  }
+
+  private buildPaginationForPage(page: number): ChillPagination {
+    const windowStartPage = this.calculateServerWindowStartPage(page);
+    return {
+      Page: Math.floor((windowStartPage - 1) / SERVER_PAGE_WINDOW_SIZE) + 1,
+      PageResults: this.serverWindowEntityCount()
+    };
+  }
+
+  private calculateServerWindowStartPage(page: number): number {
+    return Math.floor((Math.max(1, page) - 1) / SERVER_PAGE_WINDOW_SIZE) * SERVER_PAGE_WINDOW_SIZE + 1;
+  }
+
+  private serverWindowEntityCount(): number {
+    return this.pageSize * SERVER_PAGE_WINDOW_SIZE;
+  }
+
+  private hasLoadedPage(page: number): boolean {
+    if (page < this.serverWindowStartPage()) {
+      return false;
+    }
+
+    const start = (page - this.serverWindowStartPage()) * this.pageSize;
+    return start >= 0 && start < this.results().length;
   }
 
   private removeIsNewEntity(entity: ChillEntity): void {
@@ -1046,7 +1118,7 @@ export class CrudPageComponent implements OnInit {
       const firstInvalidEntity = entities[firstInvalidIndex];
       const absoluteIndex = this.results().findIndex((entity) => this.readEntityKey(entity) === this.readEntityKey(firstInvalidEntity));
       if (absoluteIndex >= 0) {
-        this.currentPage.set(Math.floor(absoluteIndex / this.pageSize) + 1);
+        this.currentPage.set(this.serverWindowStartPage() + Math.floor(absoluteIndex / this.pageSize));
       }
     }
 

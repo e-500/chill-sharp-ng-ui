@@ -60,6 +60,11 @@ export interface ChillOrdering extends JsonObject {
   direction: 'ASC' | 'DESC';
 }
 
+export interface ChillPagination extends JsonObject {
+  Page: number;
+  PageResults: number;
+}
+
 export type ChillEntityChangeAction = 'CREATED' | 'UPDATED' | 'DELETED';
 
 export interface ChillEntityChangeNotification {
@@ -79,6 +84,7 @@ export type ChillQuery = JsonObject & {
   chillType?: string;
   properties?: Record<string, JsonValue>;
   resultProperties?: JsonValue[];
+  pagination?: ChillPagination | null;
   ordering?: ChillOrdering | null;
   chillState?: ChillEntityState;
 };

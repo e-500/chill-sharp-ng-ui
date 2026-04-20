@@ -110,8 +110,8 @@
 }
 
 .form-cell.edit-mode {
-  cursor: grab;
   border-color: var(--tron-border-strong);
+  user-select: none;
 }
 
 .form-cell.empty-cell {

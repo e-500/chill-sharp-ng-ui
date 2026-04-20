@@ -81,7 +81,6 @@ export class ChillFormComponent implements OnDestroy {
   readonly isSavingLayout = signal(false);
   readonly layoutError = signal('');
   readonly dragPropertyName = signal('');
-  readonly isPointerOverToolbar = signal(false);
   readonly schemaRefreshTick = signal(0);
   readonly layoutState = signal<FormLayoutState>({
     columnCount: DEFAULT_FORM_COLUMN_COUNT,
@@ -384,10 +383,6 @@ export class ChillFormComponent implements OnDestroy {
     }));
   }
 
-  setPointerOverToolbar(value: boolean): void {
-    this.isPointerOverToolbar.set(value);
-  }
-
   increaseSpan(itemId: string): void {
     this.layoutState.update((current) => ({
       ...current,
@@ -419,8 +414,13 @@ export class ChillFormComponent implements OnDestroy {
     }));
   }
 
-  beginDrag(itemId: string): void {
+  beginDrag(event: DragEvent, itemId: string): void {
     if (!this.isEditMode()) {
+      return;
+    }
+
+    if (this.isCellToolbarControl(event.target)) {
+      event.preventDefault();
       return;
     }
 
@@ -463,7 +463,6 @@ export class ChillFormComponent implements OnDestroy {
     });
 
     this.dragPropertyName.set('');
-    this.isPointerOverToolbar.set(false);
   }
 
   endDrag(): void {
@@ -655,6 +654,11 @@ export class ChillFormComponent implements OnDestroy {
     }
 
     return activeElement.getAttribute('name')?.trim() ?? '';
+  }
+
+  private isCellToolbarControl(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && !!target.closest('input, button, select, textarea');
   }
 
   private async flushPendingAutocomplete(): Promise<void> {

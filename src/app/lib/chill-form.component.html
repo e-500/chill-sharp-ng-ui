@@ -70,16 +70,14 @@
             [class.empty-cell]="item.kind === 'empty' || (item.kind === 'property' && item.hidden && !isEditMode())"
             [class.edit-mode]="isEditMode()"
             [style.grid-column]="'span ' + item.span"
-            [draggable]="isEditMode() && !isPointerOverToolbar()"
-            (dragstart)="beginDrag(item.id)"
+            [draggable]="isEditMode()"
+            (dragstart)="beginDrag($event, item.id)"
             (dragover)="allowDrop($event)"
             (drop)="dropProperty(item.id)"
             (dragend)="endDrag()">
             @if (isEditMode()) {
               <div
                 class="cell-toolbar"
-                (pointerenter)="setPointerOverToolbar(true)"
-                (pointerleave)="setPointerOverToolbar(false)"
                 (click)="$event.stopPropagation()">
                 <div class="cell-toolbar__title-row">
                   <span>

@@ -1,8 +1,42 @@
 <section class="chill-table-shell">
   @if (showSchemaHeader() && schema()?.displayName) {
     <header class="table-header">
-      <p class="table-kicker"><app-chill-i18n-label [labelGuid]="'2DDE962B-086C-47B1-8A48-B16F0E34C0A3'" [primaryDefaultText]="'Chill schema'" [secondaryDefaultText]="'Schema Chill'" /></p>
-      <h2>{{ schema()?.displayName }}</h2>
+      <div class="table-header__title">
+        <p class="table-kicker"><app-chill-i18n-label [labelGuid]="'2DDE962B-086C-47B1-8A48-B16F0E34C0A3'" [primaryDefaultText]="'Chill schema'" [secondaryDefaultText]="'Schema Chill'" /></p>
+        <h2>{{ schema()?.displayName }}</h2>
+      </div>
+
+      @if (enableFullTextSearch()) {
+        <div class="table-search" [class.is-open]="isFullTextSearchOpen()">
+          @if (isFullTextSearchOpen()) {
+            <input
+              #fullTextSearchInput
+              type="search"
+              class="table-search__input"
+              [ngModel]="fullTextSearchText()"
+              (ngModelChange)="updateFullTextSearchText($event)"
+              (keydown.enter)="submitFullTextSearch()"
+              (keydown.escape)="resetFullTextSearch()"
+              [placeholder]="chill.T('D513421E-1C00-425E-A89B-E736A440474F', 'Search', 'Cerca')"
+              [attr.aria-label]="chill.T('54E62296-DB94-4973-A2AE-49902D5E25E5', 'Full text search', 'Ricerca full text')" />
+            <button
+              type="button"
+              class="table-search__icon-button"
+              (click)="resetFullTextSearch()"
+              [attr.aria-label]="chill.T('34015BA4-E0CA-460E-B82B-A4E2D4D8A184', 'Clear', 'Pulisci')">
+              <span class="material-symbol-icon" aria-hidden="true">close</span>
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="table-search__icon-button"
+              (click)="toggleFullTextSearch()"
+              [attr.aria-label]="chill.T('54E62296-DB94-4973-A2AE-49902D5E25E5', 'Full text search', 'Ricerca full text')">
+              <span class="material-symbol-icon" aria-hidden="true">search</span>
+            </button>
+          }
+        </div>
+      }
     </header>
   }
 

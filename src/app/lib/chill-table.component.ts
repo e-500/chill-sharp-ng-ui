@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, OnDestroy, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import { CHILL_PROPERTY_TYPE, type ChillEntity, type ChillEntityChangeNotification, type ChillMetadataRecord, type ChillOrdering, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
@@ -117,6 +117,8 @@ export class ChillTableComponent {
   readonly validationFocus = input<ChillTableValidationFocus | null>(null);
   readonly showSchemaHeader = input(true);
   readonly ordering = input<ChillOrdering | null>(null);
+  readonly enableFullTextSearch = input(false);
+  readonly fullTextSearch = input('');
   // #endregion
 
   readonly columnWidthOptions = TABLE_COLUMN_WIDTH_OPTIONS;
@@ -124,9 +126,11 @@ export class ChillTableComponent {
   // #region Outputs
   readonly cellEditCommit = output<ChillTableCellEditCommitEvent>();
   readonly sortChange = output<ChillTableSortChangeEvent>();
+  readonly fullTextSearchChange = output<string>();
   // #endregion
 
   // #region State References
+  private readonly fullTextSearchInput = viewChild<ElementRef<HTMLInputElement>>('fullTextSearchInput');
   readonly isEditLayoutMode = signal(false);
   readonly isSavingLayout = signal(false);
   readonly layoutError = signal('');
@@ -136,6 +140,8 @@ export class ChillTableComponent {
   readonly activeRowActionMenu = signal<ActiveRowActionMenuState | null>(null);
   readonly displayedEntities = signal<ChillEntity[]>([]);
   readonly schemaRefreshTick = signal(0);
+  readonly isFullTextSearchOpen = signal(false);
+  readonly fullTextSearchText = signal('');
   private readonly entityNotificationSubscriptions = new Map<string, Subscription>();
   private subscribedNotificationChillType = '';
   // #endregion
@@ -150,6 +156,14 @@ export class ChillTableComponent {
       this.layoutState.set(this.readLayoutState(this.schema()));
       this.layoutError.set('');
       this.isEditLayoutMode.set(false);
+    });
+
+    effect(() => {
+      const searchText = this.fullTextSearch();
+      this.fullTextSearchText.set(searchText);
+      if (searchText.trim().length > 0) {
+        this.isFullTextSearchOpen.set(true);
+      }
     });
 
     effect(() => {
@@ -345,6 +359,44 @@ export class ChillTableComponent {
     this.layoutState.update((current) => current.map((item) => item.name === columnName
       ? { ...item, hidden }
       : item));
+  }
+
+  toggleFullTextSearch(): void {
+    if (!this.enableFullTextSearch()) {
+      return;
+    }
+
+    if (!this.isFullTextSearchOpen()) {
+      this.isFullTextSearchOpen.set(true);
+      setTimeout(() => this.fullTextSearchInput()?.nativeElement.focus());
+      return;
+    }
+
+    this.submitFullTextSearch();
+  }
+
+  updateFullTextSearchText(value: string): void {
+    this.fullTextSearchText.set(value);
+  }
+
+  submitFullTextSearch(): void {
+    if (!this.enableFullTextSearch()) {
+      return;
+    }
+
+    const normalizedText = this.fullTextSearchText().trim();
+    this.fullTextSearchText.set(normalizedText);
+    this.fullTextSearchChange.emit(normalizedText);
+  }
+
+  resetFullTextSearch(): void {
+    if (!this.enableFullTextSearch()) {
+      return;
+    }
+
+    this.fullTextSearchText.set('');
+    this.fullTextSearchChange.emit('');
+    this.isFullTextSearchOpen.set(false);
   }
 
   updateColumnWidthProportion(columnName: string, direction: -1 | 1): void {

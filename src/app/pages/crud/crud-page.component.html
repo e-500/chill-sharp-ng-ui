@@ -32,8 +32,11 @@
           [enableInlineEditing]="!isInlineEditDisabled()"
           [readonlyPropertyNames]="readonlyEntityPropertyNames()"
           [showSchemaHeader]="showTableHeader()"
+          [enableFullTextSearch]="canOpenSearchDialog()"
+          [fullTextSearch]="currentFullTextSearch()"
           [validationFocus]="validationFocus()"
           (cellEditCommit)="handleInlineCellEdit($event)"
+          (fullTextSearchChange)="applyFullTextSearch($event)"
           (sortChange)="applyOrdering($event)" />
 
         @if (canGoToPreviousPage() || canGoToNextPage()) {

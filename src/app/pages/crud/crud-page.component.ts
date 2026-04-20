@@ -120,6 +120,10 @@ export class CrudPageComponent implements OnInit {
 
     return null;
   });
+  readonly currentFullTextSearch = computed(() => {
+    const value = this.queryModel()?.properties?.['FullTextSearch'];
+    return typeof value === 'string' ? value : '';
+  });
   readonly pagedResults = computed(() => {
     const start = (this.currentPage() - this.serverWindowStartPage()) * this.pageSize;
     return this.results().slice(start, start + this.pageSize);
@@ -234,6 +238,31 @@ export class CrudPageComponent implements OnInit {
         : null
     });
 
+    this.queryModel.set(nextQuery);
+    this.executeQuery(nextQuery, true, 1);
+  }
+
+  applyFullTextSearch(value: string): void {
+    const currentQuery = this.queryModel();
+    if (!currentQuery) {
+      return;
+    }
+
+    const fullTextSearch = value.trim();
+    const nextProperties = {
+      ...(currentQuery.properties ?? {})
+    };
+
+    if (fullTextSearch.length > 0) {
+      nextProperties['FullTextSearch'] = fullTextSearch;
+    } else {
+      delete nextProperties['FullTextSearch'];
+    }
+
+    const nextQuery = this.normalizeQuery({
+      ...currentQuery,
+      properties: nextProperties
+    });
     this.queryModel.set(nextQuery);
     this.executeQuery(nextQuery, true, 1);
   }

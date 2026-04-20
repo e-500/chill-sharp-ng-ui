@@ -92,7 +92,7 @@ export class CrudTaskComponent implements WorkspaceTaskComponentInterface, OnDes
           primaryDefaultText: 'Search',
           secondaryDefaultText: 'Cerca',
           ariaLabel: this.chill.T('44972777-6760-4F48-BE39-B504E4467150', 'Search', 'Cerca'),
-          icon: 'search',
+          icon: 'filter_alt',
           iconClass: 'material-symbol-icon',
           action: () => page.openSearchDialog(),
           disabled: !page.canOpenSearchDialog()

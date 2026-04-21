@@ -50,6 +50,7 @@ import { PermissionAction, PermissionEffect, PermissionScope } from '../models/c
 import type {
   ChillEntityChangeNotification,
   ChillEntity,
+  ChillEntityOptions,
   ChillMetadataRecord,
   ChillPropertySchema,
   ChillQuery,
@@ -317,7 +318,6 @@ export class ChillService {
         ...property,
         name: property.name,
         displayName: property.displayName ?? property.name,
-        mcpDescription: property.mcpDescription ?? '',
         propertyType: (property.propertyType ?? 0) as never,
         chillType: property.chillType ?? null,
         referenceChillType: property.referenceChillType ?? null,
@@ -928,7 +928,7 @@ export class ChillService {
     );
   }
 
-  setEntityOptions(entityOptions: ChillDtoEntityOptions) {
+  setEntityOptions(entityOptions: ChillEntityOptions) {
     return this.chill.setEntityOptions(this.toEntityOptionsDto(entityOptions)).pipe(
       map((response) => this.normalizeEntityOptions(response)),
       catchError((error) => this.rethrowFriendlyError(error))
@@ -2146,7 +2146,8 @@ export class ChillService {
     };
   }
 
-  private normalizeEntityOptions(response: ChillDtoEntityOptions): ChillDtoEntityOptions {
+  private normalizeEntityOptions(response: ChillDtoEntityOptions): ChillEntityOptions {
+    const responseObject = this.isJsonObject(response) ? response : {};
     return {
       chillType: response.chillType?.trim() ?? '',
       checksumEnabled: !!response.checksumEnabled,
@@ -2154,11 +2155,13 @@ export class ChillService {
       labelFormatString: response.labelFormatString?.trim() || null,
       shortLabelFormatString: response.shortLabelFormatString?.trim() || null,
       fullTextContentFormatString: response.fullTextContentFormatString?.trim() || null,
-      changeLogEnabled: !!response.changeLogEnabled
+      changeLogEnabled: !!response.changeLogEnabled,
+      enableMCP: this.readJsonBoolean(responseObject, 'EnableMCP'),
+      mcpDescription: this.readJsonString(responseObject, 'MCPDescription') ?? null
     };
   }
 
-  private toEntityOptionsDto(entityOptions: ChillDtoEntityOptions): ChillDtoEntityOptions {
+  private toEntityOptionsDto(entityOptions: ChillEntityOptions): ChillDtoEntityOptions & { enableMCP: boolean; mcpDescription: string | null } {
     return {
       chillType: entityOptions.chillType?.trim() ?? '',
       checksumEnabled: !!entityOptions.checksumEnabled,
@@ -2166,7 +2169,9 @@ export class ChillService {
       labelFormatString: entityOptions.labelFormatString?.trim() || null,
       shortLabelFormatString: entityOptions.shortLabelFormatString?.trim() || null,
       fullTextContentFormatString: entityOptions.fullTextContentFormatString?.trim() || null,
-      changeLogEnabled: !!entityOptions.changeLogEnabled
+      changeLogEnabled: !!entityOptions.changeLogEnabled,
+      enableMCP: !!entityOptions.enableMCP,
+      mcpDescription: entityOptions.mcpDescription?.trim() || null
     };
   }
 
@@ -2198,7 +2203,6 @@ export class ChillService {
         ...property,
         name: this.readJsonString(property, 'Name') ?? '',
         displayName: this.readJsonString(property, 'DisplayName') ?? property.name ?? '',
-        mcpDescription: this.readJsonString(property, 'McpDescription') ?? property.mcpDescription ?? '',
         metadata: this.normalizeMetadataRecord(property['metadata'] ?? property['Metadata'])
       }));
   }

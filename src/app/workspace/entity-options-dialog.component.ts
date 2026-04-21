@@ -1,10 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import type { ChillDtoEntityOptions, JsonValue } from 'chill-sharp-ng-client';
+import type { JsonValue } from 'chill-sharp-ng-client';
 import { firstValueFrom } from 'rxjs';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
-import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, type ChillEntityOptions, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { ChillService } from '../services/chill.service';
 
@@ -80,7 +80,7 @@ export class EntityOptionsDialogComponent {
   readonly isLoading = signal(true);
   readonly isValid = signal(true);
   readonly loadError = signal('');
-  readonly entityOptions = signal<ChillDtoEntityOptions | null>(null);
+  readonly entityOptions = signal<ChillEntityOptions | null>(null);
   readonly schema = computed<ChillSchema>(() => ({
     chillType: this.chillType().trim() || 'Entity.Options',
     chillViewCode: 'dialog',
@@ -95,7 +95,9 @@ export class EntityOptionsDialogComponent {
     labelFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
     shortLabelFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
     fullTextContentFormatString: new FormControl<JsonValue>('', { nonNullable: true }),
-    changeLogEnabled: new FormControl<JsonValue>(false, { nonNullable: true })
+    changeLogEnabled: new FormControl<JsonValue>(false, { nonNullable: true }),
+    enableMCP: new FormControl<JsonValue>(false, { nonNullable: true }),
+    mcpDescription: new FormControl<JsonValue>('', { nonNullable: true })
   });
 
   private readonly properties: ChillPropertySchema[] = [
@@ -140,6 +142,20 @@ export class EntityOptionsDialogComponent {
       propertyType: CHILL_PROPERTY_TYPE.Boolean,
       isNullable: false,
       metadata: {} as ChillMetadataRecord
+    },
+    {
+      name: 'enableMCP',
+      displayName: this.chill.T('08469F6C-2B99-4BE9-8191-C3D085FF55C3', 'MCP enabled', 'MCP abilitato'),
+      propertyType: CHILL_PROPERTY_TYPE.Boolean,
+      isNullable: false,
+      metadata: {} as ChillMetadataRecord
+    },
+    {
+      name: 'mcpDescription',
+      displayName: this.chill.T('5265F0B1-B0BE-448E-88CB-80C99BF6AB92', 'MCP description', 'Descrizione MCP'),
+      propertyType: CHILL_PROPERTY_TYPE.Text,
+      isNullable: true,
+      metadata: { maxLength: '4000' } as ChillMetadataRecord
     }
   ];
 
@@ -173,14 +189,16 @@ export class EntityOptionsDialogComponent {
       return;
     }
 
-    const payload: ChillDtoEntityOptions = {
+    const payload: ChillEntityOptions = {
       chillType,
       checksumEnabled: this.readBoolean('checksumEnabled'),
       handleAttachments: this.readBoolean('handleAttachments'),
       labelFormatString: this.readOptionalString('labelFormatString'),
       shortLabelFormatString: this.readOptionalString('shortLabelFormatString'),
       fullTextContentFormatString: this.readOptionalString('fullTextContentFormatString'),
-      changeLogEnabled: this.readBoolean('changeLogEnabled')
+      changeLogEnabled: this.readBoolean('changeLogEnabled'),
+      enableMCP: this.readBoolean('enableMCP'),
+      mcpDescription: this.readOptionalString('mcpDescription')
     };
 
     const savedOptions = await firstValueFrom(this.chill.setEntityOptions(payload));
@@ -198,6 +216,8 @@ export class EntityOptionsDialogComponent {
       this.form.controls['shortLabelFormatString'].setValue(entityOptions.shortLabelFormatString ?? '');
       this.form.controls['fullTextContentFormatString'].setValue(entityOptions.fullTextContentFormatString ?? '');
       this.form.controls['changeLogEnabled'].setValue(entityOptions.changeLogEnabled);
+      this.form.controls['enableMCP'].setValue(entityOptions.enableMCP);
+      this.form.controls['mcpDescription'].setValue(entityOptions.mcpDescription ?? '');
     } catch (error) {
       this.entityOptions.set(null);
       this.loadError.set(this.chill.formatError(error));

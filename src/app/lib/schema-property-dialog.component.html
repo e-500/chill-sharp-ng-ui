@@ -33,11 +33,6 @@
       <input type="text" [ngModel]="draft().displayName" (ngModelChange)="updateText('displayName', $event)" name="schema-property-display-name" />
     </label>
 
-    <label class="schema-property-dialog__field schema-property-dialog__field--full">
-      <span>{{ chill.T('5265F0B1-B0BE-448E-88CB-80C99BF6AB92', 'MCP description', 'Descrizione MCP') }}</span>
-      <textarea rows="3" [ngModel]="draft().mcpDescription" (ngModelChange)="updateText('mcpDescription', $event)" name="schema-property-mcp-description"></textarea>
-    </label>
-
     <label class="schema-property-dialog__field">
       <span>{{ chill.T('A1803D67-C40D-41AF-BFD2-8F9B0E34C48B', 'Property type', 'Tipo proprietà') }}</span>
       <select [ngModel]="draft().propertyType" (ngModelChange)="updatePropertyType($event)" name="schema-property-type">

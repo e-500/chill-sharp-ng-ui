@@ -10,7 +10,6 @@ import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema
 type SchemaPropertyDraft = {
   name: string;
   displayName: string;
-  mcpDescription: string;
   propertyType: number;
   isNullable: boolean;
   isReadOnly: boolean;
@@ -163,7 +162,6 @@ export class SchemaPropertyDialogComponent {
     return {
       name: property.name ?? '',
       displayName: property.displayName ?? property.name ?? '',
-      mcpDescription: property.mcpDescription ?? '',
       propertyType: property.propertyType ?? CHILL_PROPERTY_TYPE.Unknown,
       isNullable: property.isNullable !== false,
       isReadOnly: property.isReadOnly ?? this.readBooleanMetadata(property.metadata, 'readonly'),
@@ -188,7 +186,6 @@ export class SchemaPropertyDialogComponent {
     return {
       name: '',
       displayName: '',
-      mcpDescription: '',
       propertyType: CHILL_PROPERTY_TYPE.String,
       isNullable: true,
       isReadOnly: false,
@@ -338,7 +335,6 @@ export class SchemaPropertyDialogComponent {
       ...source,
       name: draft.name.trim(),
       displayName: draft.displayName.trim() || draft.name.trim(),
-      mcpDescription: draft.mcpDescription.trim(),
       propertyType: draft.propertyType,
       isNullable: draft.isNullable,
       isReadOnly: draft.isReadOnly,

@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
+import type { ChillDtoEntityOptions, JsonObject, JsonValue } from 'chill-sharp-ng-client';
 
 export type ChillMetadataValue = JsonValue;
 export type ChillPropertySelectOptionTuple = [value: string, text: string];
@@ -12,7 +12,6 @@ export type ChillEntityState = JsonObject & {
 export interface ChillPropertySchema {
   name: string;
   displayName?: string;
-  mcpDescription?: string;
   propertyType?: number;
   isNullable: boolean;
   isReadOnly?: boolean;
@@ -53,6 +52,11 @@ export interface ChillSchemaListItem {
   chillViewCode?: string;
   module?: string;
   relatedChillType?: string | null;
+}
+
+export interface ChillEntityOptions extends ChillDtoEntityOptions {
+  enableMCP: boolean;
+  mcpDescription: string | null;
 }
 
 export interface ChillOrdering extends JsonObject {

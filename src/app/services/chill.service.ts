@@ -298,8 +298,8 @@ export class ChillService {
     );
   }
 
-  getSchema(chillType: string, chillViewCode: string, cultureName?: string) {
-    return this.chill.getSchema(chillType, chillViewCode, this.resolveCultureName(cultureName)).pipe(
+  getSchema(chillType: string, chillViewCode: string, cultureName?: string, update = false) {
+    return this.chill.getSchema(chillType, chillViewCode, this.resolveCultureName(cultureName), update).pipe(
       map((response) => this.normalizeSchema(response as ChillSchema | null)),
       catchError((error) => this.rethrowFriendlyError(error))
     );
@@ -312,6 +312,8 @@ export class ChillService {
       chillViewCode: schema.chillViewCode ?? '',
       displayName: schema.displayName ?? '',
       handleAttachments: schema.handleAttachments === true,
+      enableMCP: schema.enableMCP === true,
+      mcpDescription: schema.mcpDescription?.trim() ?? '',
       queryRelatedChillType: schema.queryRelatedChillType ?? null,
       metadata: this.serializeMetadataRecord(schema.metadata),
       properties: (schema.properties ?? []).map((property) => ({
@@ -319,6 +321,8 @@ export class ChillService {
         name: property.name,
         displayName: property.displayName ?? property.name,
         propertyType: (property.propertyType ?? 0) as never,
+        simplePropertyType: property.simplePropertyType ?? '',
+        mcpDescription: property.mcpDescription ?? '',
         chillType: property.chillType ?? null,
         referenceChillType: property.referenceChillType ?? null,
         referenceChillTypeQuery: property.referenceChillTypeQuery ?? null,
@@ -2186,6 +2190,8 @@ export class ChillService {
       chillViewCode: this.readJsonString(response, 'ChillViewCode') ?? '',
       displayName: this.readJsonString(response, 'DisplayName') ?? '',
       handleAttachments: this.readJsonBoolean(response, 'HandleAttachments'),
+      enableMCP: this.readJsonBoolean(response, 'EnableMCP'),
+      mcpDescription: this.readJsonString(response, 'MCPDescription') ?? null,
       queryRelatedChillType: this.readJsonString(response, 'QueryRelatedChillType') ?? undefined,
       metadata: this.normalizeMetadataRecord(response['metadata'] ?? response['Metadata']),
       properties: this.normalizeSchemaProperties(response['properties'] ?? response['Properties'])
@@ -2203,6 +2209,8 @@ export class ChillService {
         ...property,
         name: this.readJsonString(property, 'Name') ?? '',
         displayName: this.readJsonString(property, 'DisplayName') ?? property.name ?? '',
+        simplePropertyType: this.readJsonString(property, 'SimplePropertyType') ?? property.simplePropertyType ?? '',
+        mcpDescription: this.readJsonString(property, 'MCPDescription') ?? property.mcpDescription ?? '',
         metadata: this.normalizeMetadataRecord(property['metadata'] ?? property['Metadata'])
       }));
   }

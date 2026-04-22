@@ -267,6 +267,14 @@ export class CrudPageComponent implements OnInit {
     this.executeQuery(nextQuery, true, 1);
   }
 
+  handleResultSchemaUpdated(schema: ChillSchema): void {
+    this.resultSchema.set({
+      ...schema,
+      metadata: schema.metadata ? { ...schema.metadata } : undefined,
+      properties: [...(schema.properties ?? [])]
+    });
+  }
+
   /**
    * Opens a search dialog for the current query schema.
    */

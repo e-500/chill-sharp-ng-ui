@@ -13,6 +13,8 @@ export interface ChillPropertySchema {
   name: string;
   displayName?: string;
   propertyType?: number;
+  simplePropertyType?: string;
+  mcpDescription?: string;
   isNullable: boolean;
   isReadOnly?: boolean;
   chillType?: string | null;
@@ -39,6 +41,8 @@ export interface ChillSchema {
   chillViewCode?: string;
   displayName?: string;
   handleAttachments?: boolean;
+  enableMCP?: boolean;
+  mcpDescription?: string | null;
   queryRelatedChillType?: string;
   metadata?: ChillMetadataRecord;
   properties: ChillPropertySchema[];

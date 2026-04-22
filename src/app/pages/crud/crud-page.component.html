@@ -37,6 +37,7 @@
           [validationFocus]="validationFocus()"
           (cellEditCommit)="handleInlineCellEdit($event)"
           (fullTextSearchChange)="applyFullTextSearch($event)"
+          (schemaUpdated)="handleResultSchemaUpdated($event)"
           (sortChange)="applyOrdering($event)" />
 
         @if (canGoToPreviousPage() || canGoToNextPage()) {

@@ -127,12 +127,14 @@ export class ChillTableComponent {
   readonly cellEditCommit = output<ChillTableCellEditCommitEvent>();
   readonly sortChange = output<ChillTableSortChangeEvent>();
   readonly fullTextSearchChange = output<string>();
+  readonly schemaUpdated = output<ChillSchema>();
   // #endregion
 
   // #region State References
   private readonly fullTextSearchInput = viewChild<ElementRef<HTMLInputElement>>('fullTextSearchInput');
   readonly isEditLayoutMode = signal(false);
   readonly isSavingLayout = signal(false);
+  readonly isRefreshingSchema = signal(false);
   readonly layoutError = signal('');
   readonly dragColumnName = signal('');
   readonly layoutState = signal<ColumnLayoutState[]>([]);
@@ -377,6 +379,39 @@ export class ChillTableComponent {
 
   updateFullTextSearchText(value: string): void {
     this.fullTextSearchText.set(value);
+  }
+
+  refreshSchemaFromModel(): void {
+    const schema = this.schema();
+    const chillType = schema?.chillType?.trim() ?? '';
+    const chillViewCode = schema?.chillViewCode?.trim() || 'default';
+    if (!schema || !chillType || this.isRefreshingSchema()) {
+      return;
+    }
+
+    this.isRefreshingSchema.set(true);
+    this.isSavingLayout.set(true);
+    this.layoutError.set('');
+
+    this.chill.getSchema(chillType, chillViewCode, undefined, true).subscribe({
+      next: (updatedSchema) => {
+        if (!updatedSchema) {
+          this.layoutError.set(this.chill.T('A6A6949E-F0D4-42F5-A8AE-E15B1B174084', 'The result schema is unavailable.', 'Lo schema dei risultati non è disponibile.'));
+          return;
+        }
+
+        this.applyUpdatedSchema(schema, updatedSchema);
+      },
+      error: (error: unknown) => {
+        this.layoutError.set(this.chill.formatError(error));
+        this.isRefreshingSchema.set(false);
+        this.isSavingLayout.set(false);
+      },
+      complete: () => {
+        this.isRefreshingSchema.set(false);
+        this.isSavingLayout.set(false);
+      }
+    });
   }
 
   submitFullTextSearch(): void {
@@ -1527,6 +1562,23 @@ export class ChillTableComponent {
         this.isSavingLayout.set(false);
       }
     });
+  }
+
+  private applyUpdatedSchema(targetSchema: ChillSchema, updatedSchema: ChillSchema): void {
+    targetSchema.metadata = this.readSchemaMetadata(updatedSchema);
+    targetSchema.properties = [...(updatedSchema.properties ?? [])];
+    targetSchema.displayName = updatedSchema.displayName ?? targetSchema.displayName;
+    targetSchema.handleAttachments = updatedSchema.handleAttachments;
+    targetSchema.enableMCP = updatedSchema.enableMCP;
+    targetSchema.mcpDescription = updatedSchema.mcpDescription ?? null;
+    targetSchema.queryRelatedChillType = updatedSchema.queryRelatedChillType;
+    delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
+    delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
+
+    this.activeCellEdit.set(null);
+    this.layoutState.set(this.readLayoutState(targetSchema));
+    this.schemaRefreshTick.update((current) => current + 1);
+    this.schemaUpdated.emit(targetSchema);
   }
 
   /**

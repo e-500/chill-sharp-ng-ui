@@ -19,13 +19,13 @@ type EntityOptionsFormGroup = FormGroup<Record<string, FormControl<JsonValue>>>;
       <p class="entity-options-dialog__lede">
         {{ chill.T(
           'A63A8D6A-85B4-48A3-822D-AF4F6C67D5AA',
-          'Update the entity behavior and label formatting used by the selected CRUD type.',
-          'Aggiorna il comportamento dell entita e la formattazione delle etichette usata dal tipo CRUD selezionato.'
+          'Update the behavior and label formatting used by the selected type.',
+          'Aggiorna il comportamento e la formattazione delle etichette usata dal tipo selezionato.'
         ) }}
       </p>
 
       <p class="entity-options-dialog__type">
-        {{ chill.T('E17E30B7-A5A7-4A29-AE1F-9AC4F7F752AB', 'Entity type', 'Tipo entita') }}:
+        {{ chill.T('E17E30B7-A5A7-4A29-AE1F-9AC4F7F752AB', 'Configured type', 'Tipo configurato') }}:
         <strong>{{ chillType() }}</strong>
       </p>
 

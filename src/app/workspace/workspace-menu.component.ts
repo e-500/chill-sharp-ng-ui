@@ -17,6 +17,13 @@ interface CrudSchemaOption {
   viewCode: string;
 }
 
+interface EntityOptionsSchemaOption {
+  module: string;
+  chillType: string;
+  displayName: string;
+  kind: 'Entity' | 'Query';
+}
+
 interface WorkspaceMenuNode {
   item: ChillMenuItem;
   children: WorkspaceMenuNode[];
@@ -141,14 +148,51 @@ interface WorkspaceMenuNode {
             <strong>Add to menu</strong>
             <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to add it to the application menu.' }}</span>
           </button>
+        </section>
+
+        <section class="workspace-menu__crud-launcher">
+          <div class="workspace-menu__section-heading">
+            <strong>Entity option</strong>
+            <span>Select a model and type, including query types, then configure its options.</span>
+          </div>
+
+          @if (schemaLoadError()) {
+            <p class="workspace-menu__status error">{{ schemaLoadError() }}</p>
+          } @else if (isLoadingSchemas()) {
+            <p class="workspace-menu__status">Loading types...</p>
+          }
+
+          <label class="workspace-menu__field">
+            <span>Model</span>
+            <select
+              [ngModel]="selectedEntityOptionsModule()"
+              (ngModelChange)="selectEntityOptionsModule($event)"
+              [disabled]="isLoadingSchemas() || entityOptionsModuleOptions().length === 0">
+              @for (module of entityOptionsModuleOptions(); track module) {
+                <option [value]="module">{{ module }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="workspace-menu__field">
+            <span>Type</span>
+            <select
+              [ngModel]="selectedEntityOptionsChillType()"
+              (ngModelChange)="selectedEntityOptionsChillType.set($event)"
+              [disabled]="isLoadingSchemas() || filteredEntityOptionsTypes().length === 0">
+              @for (schema of filteredEntityOptionsTypes(); track schema.chillType) {
+                <option [value]="schema.chillType">{{ schema.displayName }} ({{ schema.kind }}: {{ schema.chillType }})</option>
+              }
+            </select>
+          </label>
 
           <button
             type="button"
             class="workspace-menu__item workspace-menu__item--launch"
             (click)="openEntityOptionsDialog()"
-            [disabled]="!selectedCrudSchema()">
-            <strong>Set entity options</strong>
-            <span>{{ selectedCrudSchema()?.displayName || 'Choose a type to edit its entity options.' }}</span>
+            [disabled]="!selectedEntityOptionsSchema()">
+            <strong>Configure</strong>
+            <span>{{ selectedEntityOptionsSchema()?.displayName || 'Choose a type to configure its options.' }}</span>
           </button>
         </section>
       }
@@ -305,8 +349,11 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
   readonly isLoadingSchemas = signal(true);
   readonly schemaLoadError = signal('');
   readonly crudTypes = signal<CrudSchemaOption[]>([]);
+  readonly entityOptionsTypes = signal<EntityOptionsSchemaOption[]>([]);
   readonly selectedModule = signal('');
   readonly selectedChillType = signal('');
+  readonly selectedEntityOptionsModule = signal('');
+  readonly selectedEntityOptionsChillType = signal('');
   readonly viewCode = signal('default');
   readonly isLoadingMenu = signal(true);
   readonly menuLoadError = signal('');
@@ -321,6 +368,11 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
     .filter((schema) => schema.module === this.selectedModule()));
   readonly selectedCrudSchema = computed(() => this.filteredCrudTypes()
     .find((schema) => schema.chillType === this.selectedChillType()) ?? null);
+  readonly entityOptionsModuleOptions = computed(() => [...new Set(this.entityOptionsTypes().map((schema) => schema.module))]);
+  readonly filteredEntityOptionsTypes = computed(() => this.entityOptionsTypes()
+    .filter((schema) => schema.module === this.selectedEntityOptionsModule()));
+  readonly selectedEntityOptionsSchema = computed(() => this.filteredEntityOptionsTypes()
+    .find((schema) => schema.chillType === this.selectedEntityOptionsChillType()) ?? null);
 
   ngOnInit(): void {
     this.loadCrudTypes();
@@ -335,6 +387,12 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
     this.selectedModule.set(module);
     const firstSchema = this.filteredCrudTypes()[0] ?? null;
     this.selectedChillType.set(firstSchema?.chillType ?? '');
+  }
+
+  selectEntityOptionsModule(module: string): void {
+    this.selectedEntityOptionsModule.set(module);
+    const firstSchema = this.filteredEntityOptionsTypes()[0] ?? null;
+    this.selectedEntityOptionsChillType.set(firstSchema?.chillType ?? '');
   }
 
   openCrudTask(): void {
@@ -382,7 +440,7 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
   }
 
   async openEntityOptionsDialog(): Promise<void> {
-    const schema = this.selectedCrudSchema();
+    const schema = this.selectedEntityOptionsSchema();
     if (!schema) {
       return;
     }
@@ -622,17 +680,31 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
           .filter((schema) => this.isQuerySchema(schema))
           .map((schema) => this.toCrudSchemaOption(schema))
           .sort((left, right) => left.displayName.localeCompare(right.displayName));
+        const entityOptionsTypes = schemaList
+          .map((schema) => this.toEntityOptionsSchemaOption(schema))
+          .filter((schema): schema is EntityOptionsSchemaOption => schema !== null)
+          .filter((schema, index, options) => index === options.findIndex((option) =>
+            option.module === schema.module && option.chillType === schema.chillType
+          ))
+          .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
         this.crudTypes.set(crudTypes);
+        this.entityOptionsTypes.set(entityOptionsTypes);
         this.isLoadingSchemas.set(false);
 
         const firstModule = crudTypes[0]?.module ?? '';
         this.selectedModule.set(firstModule);
         const firstSchema = crudTypes.find((schema) => schema.module === firstModule) ?? null;
         this.selectedChillType.set(firstSchema?.chillType ?? '');
+
+        const firstEntityOptionsModule = entityOptionsTypes[0]?.module ?? '';
+        this.selectedEntityOptionsModule.set(firstEntityOptionsModule);
+        const firstEntityOptionsSchema = entityOptionsTypes.find((schema) => schema.module === firstEntityOptionsModule) ?? null;
+        this.selectedEntityOptionsChillType.set(firstEntityOptionsSchema?.chillType ?? '');
       },
       error: (error: unknown) => {
         this.crudTypes.set([]);
+        this.entityOptionsTypes.set([]);
         this.schemaLoadError.set(this.chill.formatError(error));
         this.isLoadingSchemas.set(false);
       }
@@ -738,6 +810,20 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       queryChillType: schema.chillType?.trim() ?? '',
       displayName: schema.displayName?.trim() || schema.name?.trim() || chillType,
       viewCode: schema.chillViewCode?.trim() || 'default'
+    };
+  }
+
+  private toEntityOptionsSchemaOption(schema: ChillSchemaListItem): EntityOptionsSchemaOption | null {
+    const chillType = schema.chillType?.trim() ?? '';
+    if (!chillType) {
+      return null;
+    }
+
+    return {
+      module: schema.module?.trim() || chillType.split('.')[0] || 'Default',
+      chillType,
+      displayName: schema.displayName?.trim() || schema.name?.trim() || chillType,
+      kind: this.isQuerySchema(schema) ? 'Query' : 'Entity'
     };
   }
 

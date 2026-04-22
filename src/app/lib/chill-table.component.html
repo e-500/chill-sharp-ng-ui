@@ -62,6 +62,15 @@
           <app-chill-i18n-button-label [labelGuid]="'9D0B43AC-47B4-4C63-98C7-DB0118C9C0CF'" [primaryDefaultText]="'Edit layout mode'" [secondaryDefaultText]="'Modalita modifica layout'" />
         }
       </button>
+      @if (isEditLayoutMode()) {
+        <button type="button" class="layout-button" (click)="refreshSchemaFromModel()" [disabled]="isSavingLayout()">
+          @if (isRefreshingSchema()) {
+            <app-chill-i18n-button-label [labelGuid]="'8628775B-B831-44F2-8A38-909F40E2F7B3'" [primaryDefaultText]="'Updating schema...'" [secondaryDefaultText]="'Aggiornamento schema...'" />
+          } @else {
+            <app-chill-i18n-button-label [labelGuid]="'62953302-B951-4FD1-BD08-4B7649A91BAF'" [primaryDefaultText]="'Update'" [secondaryDefaultText]="'Aggiorna'" />
+          }
+        </button>
+      }
     </div>
   }
 

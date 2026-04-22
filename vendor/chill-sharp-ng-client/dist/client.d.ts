@@ -19,7 +19,7 @@ export declare class ChillSharpNgClient {
     downloadAttachment(attachmentOrGuid: JsonObject | string): Observable<Blob>;
     version(): string;
     test(): Observable<string>;
-    getSchema(chillType: string, chillViewCode: string, cultureName?: string): Observable<ChillDtoSchema | null>;
+    getSchema(chillType: string, chillViewCode: string, cultureName?: string, update?: boolean): Observable<ChillDtoSchema | null>;
     getSchemaList(cultureName?: string): Observable<ChillDtoSchemaListItem[]>;
     setSchema(schema: ChillDtoSchema): Observable<ChillDtoSchema | null>;
     getEntityOptions(chillType: string): Observable<ChillDtoEntityOptions>;

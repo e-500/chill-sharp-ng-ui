@@ -39,8 +39,10 @@ export interface ChillDtoPropertySchema extends JsonObject {
     name: string;
     displayName: string;
     propertyType: ChillDtoPropertyType;
+    simplePropertyType: string;
     referenceChillType: string | null;
     referenceChillTypeQuery: string | null;
+    mcpDescription: string;
     metadata: Record<string, string>;
 }
 export interface ChillDtoSchema extends JsonObject {
@@ -48,6 +50,8 @@ export interface ChillDtoSchema extends JsonObject {
     chillViewCode: string;
     displayName: string;
     handleAttachments: boolean;
+    enableMCP: boolean;
+    mcpDescription: string;
     metadata: Record<string, string>;
     queryRelatedChillType: string | null;
     properties: ChillDtoPropertySchema[];
@@ -65,6 +69,8 @@ export interface ChillDtoEntityOptions extends JsonObject {
     labelFormatString: string | null;
     shortLabelFormatString: string | null;
     fullTextContentFormatString: string | null;
+    enableMCP: boolean;
+    mcpDescription: string | null;
     changeLogEnabled: boolean;
 }
 export interface ChillOrdering extends JsonObject {
@@ -375,7 +381,7 @@ export declare class ChillSharpClient {
     downloadAttachment(attachmentOrGuid: JsonObject | string): Promise<Blob>;
     version(): string;
     test(): Promise<string>;
-    getSchema(chillType: string, chillViewCode: string, cultureName?: string): Promise<ChillDtoSchema | null>;
+    getSchema(chillType: string, chillViewCode: string, cultureName?: string, update?: boolean): Promise<ChillDtoSchema | null>;
     getSchemaList(cultureName?: string): Promise<ChillDtoSchemaListItem[]>;
     setSchema(schema: ChillDtoSchema): Promise<ChillDtoSchema | null>;
     getEntityOptions(chillType: string): Promise<ChillDtoEntityOptions>;

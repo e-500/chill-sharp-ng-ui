@@ -164,13 +164,16 @@ export class ChillSharpClient {
     test() {
         return this.sendText("GET", this.buildApiUrl("test"), true);
     }
-    getSchema(chillType, chillViewCode, cultureName) {
+    getSchema(chillType, chillViewCode, cultureName, update = false) {
         const encodedType = encodeURIComponent(this.normalizeRequiredValue(chillType, "chillType"));
         const encodedView = encodeURIComponent(this.normalizeRequiredValue(chillViewCode, "chillViewCode"));
         const effectiveCultureName = this.normalizeOptionalValue(cultureName) ?? this.cultureName;
         let relativeUrl = `get-schema?chillType=${encodedType}&chillViewCode=${encodedView}`;
         if (effectiveCultureName) {
             relativeUrl += `&cultureName=${encodeURIComponent(effectiveCultureName)}`;
+        }
+        if (update) {
+            relativeUrl += "&update=true";
         }
         return this.sendJson("GET", this.buildSchemaUrl(relativeUrl));
     }

@@ -69,6 +69,7 @@ export class ChillFormComponent implements OnDestroy {
   readonly readonlyPropertyNames = input<string[] | null>(null);
 
   readonly formSubmit = output<ChillFormSubmitEvent>();
+  readonly schemaUpdated = output<ChillSchema>();
 
   readonly form = signal<FormGroup<Record<string, FormControl<JsonValue>>> | null>(null);
   readonly propertyValidity = signal<Record<string, boolean>>({});
@@ -79,6 +80,7 @@ export class ChillFormComponent implements OnDestroy {
   readonly internalSubmitError = signal('');
   readonly isEditMode = signal(false);
   readonly isSavingLayout = signal(false);
+  readonly isRefreshingSchema = signal(false);
   readonly layoutError = signal('');
   readonly dragPropertyName = signal('');
   readonly schemaRefreshTick = signal(0);
@@ -187,7 +189,6 @@ export class ChillFormComponent implements OnDestroy {
 
   constructor() {
     effect(() => {
-      this.schemaRefreshTick();
       const schema = this.schema();
       const source = this.source();
       const nextLayoutState = this.readLayoutState(schema);
@@ -412,6 +413,39 @@ export class ChillFormComponent implements OnDestroy {
         hidden: false
       }))
     }));
+  }
+
+  refreshSchemaFromModel(): void {
+    const schema = this.schema();
+    const chillType = schema?.chillType?.trim() ?? '';
+    const chillViewCode = schema?.chillViewCode?.trim() || 'default';
+    if (!schema || !chillType || this.isRefreshingSchema()) {
+      return;
+    }
+
+    this.isRefreshingSchema.set(true);
+    this.isSavingLayout.set(true);
+    this.layoutError.set('');
+
+    this.chill.getSchema(chillType, chillViewCode, undefined, true).subscribe({
+      next: (updatedSchema) => {
+        if (!updatedSchema) {
+          this.layoutError.set(this.chill.T('A6A6949E-F0D4-42F5-A8AE-E15B1B174084', 'The result schema is unavailable.', 'Lo schema dei risultati non è disponibile.'));
+          return;
+        }
+
+        this.applyUpdatedSchema(schema, updatedSchema);
+      },
+      error: (error: unknown) => {
+        this.layoutError.set(this.chill.formatError(error));
+        this.isRefreshingSchema.set(false);
+        this.isSavingLayout.set(false);
+      },
+      complete: () => {
+        this.isRefreshingSchema.set(false);
+        this.isSavingLayout.set(false);
+      }
+    });
   }
 
   beginDrag(event: DragEvent, itemId: string): void {
@@ -933,14 +967,8 @@ export class ChillFormComponent implements OnDestroy {
         const effectiveSchema = savedSchema ?? updatedSchema;
         const targetSchema = this.schema();
         if (targetSchema) {
-          targetSchema.metadata = this.readSchemaMetadata(effectiveSchema);
-          targetSchema.properties = [...(effectiveSchema.properties ?? [])];
-          delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
-          delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
+          this.applyUpdatedSchema(targetSchema, effectiveSchema);
         }
-        this.propertyValidity.set(this.createInitialPropertyValidity(effectiveSchema));
-        this.layoutState.set(this.readLayoutState(effectiveSchema));
-        this.schemaRefreshTick.update((current) => current + 1);
         this.isSavingLayout.set(false);
       },
       error: (error: unknown) => {
@@ -948,6 +976,35 @@ export class ChillFormComponent implements OnDestroy {
         this.isSavingLayout.set(false);
       }
     });
+  }
+
+  private applyUpdatedSchema(targetSchema: ChillSchema, updatedSchema: ChillSchema): void {
+    targetSchema.metadata = this.readSchemaMetadata(updatedSchema);
+    targetSchema.properties = [...(updatedSchema.properties ?? [])];
+    targetSchema.displayName = updatedSchema.displayName ?? targetSchema.displayName;
+    targetSchema.handleAttachments = updatedSchema.handleAttachments;
+    targetSchema.enableMCP = updatedSchema.enableMCP;
+    targetSchema.mcpDescription = updatedSchema.mcpDescription ?? null;
+    targetSchema.queryRelatedChillType = updatedSchema.queryRelatedChillType;
+    delete (targetSchema as unknown as Record<string, unknown>)['Metadata'];
+    delete (targetSchema as unknown as Record<string, unknown>)['Properties'];
+
+    const currentFormValue = this.form()?.getRawValue() ?? {};
+    const nextForm = this.chill.prepareForm(targetSchema, this.source());
+    for (const [fieldName, fieldValue] of Object.entries(currentFormValue)) {
+      const control = nextForm.controls[fieldName];
+      if (control) {
+        control.setValue(fieldValue, { emitEvent: false });
+      }
+    }
+
+    this.lastFormResetSignature = this.buildFormResetSignature(targetSchema, this.source());
+    this.form.set(nextForm);
+    this.syncFormValueSubscription(nextForm);
+    this.propertyValidity.set(this.createInitialPropertyValidity(targetSchema));
+    this.layoutState.set(this.readLayoutState(targetSchema));
+    this.schemaRefreshTick.update((current) => current + 1);
+    this.schemaUpdated.emit(targetSchema);
   }
 
   private createDefaultLayout(schema: ChillSchema | null): FormLayoutState {

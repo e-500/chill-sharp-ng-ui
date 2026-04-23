@@ -14,19 +14,32 @@ import { ChillJsonInputComponent } from './chill-json-input.component';
         [language]="language()"
         [placeholder]="placeholder()"
         [disabled]="disabled()"
+        [mobileFullHeight]="true"
         minHeight="18rem"
         maxHeight="70vh"
         (valueChange)="draft.set($event)"></app-chill-json-input>
     </section>
   `,
   styles: [`
-    .text-editor-dialog {
+    :host {
       display: block;
+      min-height: 0;
+    }
+
+    .text-editor-dialog {
+      display: grid;
       min-width: min(58rem, calc(100vw - 5rem));
+      min-height: 0;
+    }
+
+    .text-editor-dialog app-chill-json-input {
+      min-height: 0;
     }
 
     @media (max-width: 720px) {
+      :host,
       .text-editor-dialog {
+        height: 100%;
         min-width: 0;
       }
     }

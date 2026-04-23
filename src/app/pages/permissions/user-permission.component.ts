@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import { ChillI18nButtonLabelComponent } from '../../lib/chill-i18n-button-label.component';
+import { NoticeTransitionDirective } from '../../lib/notice-transition.directive';
 import type {
   AuthPermissionRule,
   AuthRole,
@@ -16,7 +17,7 @@ import { PermissionEditorComponent, type PermissionEditorRow } from './permissio
 @Component({
   selector: 'app-user-permission',
   standalone: true,
-  imports: [CommonModule, PermissionEditorComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, AuthSearchSelectComponent],
+  imports: [CommonModule, PermissionEditorComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, AuthSearchSelectComponent, NoticeTransitionDirective],
   templateUrl: './user-permission.component.html',
   styleUrl: './permission-editor.component.scss'
 })

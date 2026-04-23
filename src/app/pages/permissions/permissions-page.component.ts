@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
+import { NoticeTransitionDirective } from '../../lib/notice-transition.directive';
 import type { AuthRole, AuthUser } from '../../models/chill-auth.models';
 import type { WorkspaceTaskComponentInterface } from '../../models/workspace-task.models';
 import { ChillService } from '../../services/chill.service';
@@ -13,7 +14,7 @@ type PermissionSection = 'users' | 'roles';
 @Component({
   selector: 'app-permissions-page',
   standalone: true,
-  imports: [CommonModule, UserPermissionComponent, RolePermissionComponent, ChillI18nLabelComponent],
+  imports: [CommonModule, UserPermissionComponent, RolePermissionComponent, ChillI18nLabelComponent, NoticeTransitionDirective],
   templateUrl: './permissions-page.component.html',
   styleUrl: './permissions-page.component.scss'
 })

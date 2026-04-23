@@ -4,6 +4,7 @@ import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Va
 import { Router, RouterLink } from '@angular/router';
 import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
 import { ChillI18nButtonLabelComponent } from '../lib/chill-i18n-button-label.component';
+import { NoticeTransitionDirective } from '../lib/notice-transition.directive';
 import { CHILL_CULTURE } from '../chill.config';
 import { ChillService } from '../services/chill.service';
 
@@ -16,7 +17,7 @@ function passwordMatchValidator(control: AbstractControl): ValidationErrors | nu
 @Component({
   selector: 'app-register-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, NoticeTransitionDirective],
   template: `
     <section class="auth-page">
       <div class="auth-card wide">

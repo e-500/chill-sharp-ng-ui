@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
 import { ChillI18nLabelComponent } from '../../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../../lib/chill-form.component';
 import { ChillTableComponent } from '../../../lib/chill-table.component';
+import { NoticeTransitionDirective } from '../../../lib/notice-transition.directive';
 import type { ChillEntity, ChillFormSubmitEvent, ChillQuery, ChillSchema, ChillSchemaListItem } from '../../../models/chill-schema.models';
 import type { WorkspaceTaskComponentInterface } from '../../../models/workspace-task.models';
 import { ChillService } from '../../../services/chill.service';
@@ -15,7 +16,7 @@ const DEFAULT_VIEW_CODE = 'default';
 @Component({
   selector: 'app-event-viewer',
   standalone: true,
-  imports: [CommonModule, ChillFormComponent, ChillTableComponent, ChillI18nLabelComponent],
+  imports: [CommonModule, ChillFormComponent, ChillTableComponent, ChillI18nLabelComponent, NoticeTransitionDirective],
   templateUrl: './event-viewer.component.html',
   styleUrl: './event-viewer.component.scss'
 })

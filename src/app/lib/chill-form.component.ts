@@ -19,6 +19,7 @@ import { ChillPolymorphicInputComponent } from './chill-polymorphic-input.compon
 import { ChillService } from '../services/chill.service';
 import { ChillI18nLabelComponent } from './chill-i18n-label.component';
 import { ChillI18nButtonLabelComponent } from './chill-i18n-button-label.component';
+import { NoticeTransitionDirective } from './notice-transition.directive';
 
 const FORM_LAYOUT_METADATA_KEY = 'chill-form-component';
 const DEFAULT_FORM_COLUMN_COUNT = 2;
@@ -44,7 +45,7 @@ type ResolvedFormLayoutItem =
 @Component({
   selector: 'app-chill-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, ChillPolymorphicInputComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, ChillPolymorphicInputComponent, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, NoticeTransitionDirective],
   templateUrl: './chill-form.component.html',
   styleUrl: './chill-form.component.scss'   
 })

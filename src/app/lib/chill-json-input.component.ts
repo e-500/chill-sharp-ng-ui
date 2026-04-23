@@ -19,6 +19,9 @@ type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api');
   selector: 'app-chill-json-input',
   standalone: true,
   imports: [CommonModule],
+  host: {
+    '[class.is-mobile-full-height]': 'mobileFullHeight()'
+  },
   template: `
     <div class="json-editor" [class.is-invalid]="invalid()">
       <div #editorHost class="json-editor__host" [ngStyle]="editorStyle()"></div>
@@ -55,6 +58,20 @@ type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api');
     :root[data-theme='dark'] .json-editor {
       background: rgba(9, 19, 26, 0.58);
     }
+
+    @media (max-width: 720px) {
+      :host(.is-mobile-full-height),
+      :host(.is-mobile-full-height) .json-editor,
+      :host(.is-mobile-full-height) .json-editor__host {
+        height: 100%;
+        min-height: 0;
+      }
+
+      :host(.is-mobile-full-height) .json-editor__host {
+        max-height: none !important;
+        height: 100% !important;
+      }
+    }
   `]
 })
 export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDestroy {
@@ -65,6 +82,7 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
   readonly language = input<'json' | 'plaintext'>('json');
   readonly minHeight = input('4rem');
   readonly maxHeight = input('50vh');
+  readonly mobileFullHeight = input(false);
 
   readonly valueChange = output<string>();
   readonly blur = output<void>();

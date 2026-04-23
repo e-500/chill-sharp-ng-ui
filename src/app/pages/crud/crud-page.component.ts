@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import { ChillFormComponent } from '../../lib/chill-form.component';
 import { ChillTableComponent, type ChillTableCellEditCommitEvent, type ChillTableRowAction, type ChillTableSelectionColumn, type ChillTableSortChangeEvent, type ChillTableValidationFocus } from '../../lib/chill-table.component';
+import { NoticeTransitionDirective } from '../../lib/notice-transition.directive';
 import { CHILL_PROPERTY_TYPE, ChillEntityStatus, ChillState, type ChillEntity, type ChillEntityChangeNotification, type ChillFormSubmitEvent, type ChillPagination, type ChillQuery, type ChillSchema, type ChillSchemaListItem } from '../../models/chill-schema.models';
 import { ChillService } from '../../services/chill.service';
 import { WorkspaceDialogService } from '../../services/workspace-dialog.service';
@@ -45,7 +46,7 @@ export class CrudPageComponentConfiguration {
 @Component({
   selector: 'app-crud-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChillTableComponent, ChillI18nLabelComponent],
+  imports: [CommonModule, FormsModule, ChillTableComponent, ChillI18nLabelComponent, NoticeTransitionDirective],
   templateUrl: './crud-page.component.html',
   styleUrl: './crud-page.component.scss'
 })

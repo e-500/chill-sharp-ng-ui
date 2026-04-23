@@ -4,6 +4,7 @@ export interface WorkspaceDialogRequest<TResult = unknown> {
   title: string;
   component: WorkspaceTaskComponentType;
   inputs?: Record<string, unknown>;
+  panelClass?: string | string[];
   okLabel?: string;
   cancelLabel?: string;
   showOkButton?: boolean;

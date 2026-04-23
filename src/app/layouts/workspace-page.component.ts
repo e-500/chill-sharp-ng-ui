@@ -67,7 +67,12 @@ import type { WorkspaceTaskInstance } from '../services/workspace.service';
     .workspace-toolbar-button--accent {
       border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
       background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      color: var(--surface-0);
+      color: #f8fffd;
+    }
+
+    .workspace-toolbar-button--accent .workspace-toolbar-button__text,
+    .workspace-toolbar-button--accent .workspace-toolbar-button__icon {
+      color: #f8fffd;
     }
 
     .workspace-toolbar-button--accent:disabled {

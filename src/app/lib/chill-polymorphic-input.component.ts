@@ -553,6 +553,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
       const result = await this.dialog.openDialog<string>({
         title: property.displayName?.trim() || property.name,
         component: ChillTextEditorDialogComponent,
+        panelClass: 'workspace-dialog--mobile-full-height',
         okLabel: this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Save', 'Salva'),
         inputs: {
           value: this.textValue(property.name),

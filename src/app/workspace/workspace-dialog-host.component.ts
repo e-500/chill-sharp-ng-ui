@@ -33,6 +33,7 @@ interface DialogSubmitComponent {
 
         <section
           class="workspace-dialog"
+          [ngClass]="activeDialog.panelClass"
           [class.is-background]="!isTopDialog(activeDialog.id)"
           role="dialog"
           [attr.aria-modal]="isTopDialog(activeDialog.id) ? 'true' : null"
@@ -292,6 +293,21 @@ interface DialogSubmitComponent {
       .workspace-dialog {
         width: calc(100vw - 1rem);
         max-height: calc(100vh - 1rem);
+      }
+
+      .workspace-dialog.workspace-dialog--mobile-full-height {
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border-width: 0;
+        border-radius: 0;
+        transform: none;
+      }
+
+      .workspace-dialog.workspace-dialog--mobile-full-height .workspace-dialog__content {
+        display: grid;
       }
 
       .workspace-dialog__toolbar,

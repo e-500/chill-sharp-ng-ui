@@ -3,6 +3,7 @@ import { Component, effect, inject, input, output, signal } from '@angular/core'
 import { FormsModule } from '@angular/forms';
 import { ChillI18nLabelComponent } from '../../lib/chill-i18n-label.component';
 import { ChillI18nButtonLabelComponent } from '../../lib/chill-i18n-button-label.component';
+import { NoticeTransitionDirective } from '../../lib/notice-transition.directive';
 import type { EditableAuthPermissionRule } from '../../models/chill-auth.models';
 import { PermissionAction, PermissionEffect, PermissionScope } from '../../models/chill-auth.models';
 import { ChillService } from '../../services/chill.service';
@@ -16,7 +17,7 @@ const ALL_PROPERTIES_VALUE = '__all__';
 @Component({
   selector: 'app-permission-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
+  imports: [CommonModule, FormsModule, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, NoticeTransitionDirective],
   templateUrl: './permission-editor.component.html',
   styleUrl: './permission-editor.component.scss'
 })

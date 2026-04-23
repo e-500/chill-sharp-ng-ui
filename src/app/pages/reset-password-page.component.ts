@@ -4,13 +4,14 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ChillI18nLabelComponent } from '../lib/chill-i18n-label.component';
 import { ChillI18nButtonLabelComponent } from '../lib/chill-i18n-button-label.component';
+import { NoticeTransitionDirective } from '../lib/notice-transition.directive';
 import type { PasswordResetTokenResponse } from '../models/chill-auth.models';
 import { ChillService } from '../services/chill.service';
 
 @Component({
   selector: 'app-reset-password-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, ChillI18nLabelComponent, ChillI18nButtonLabelComponent, NoticeTransitionDirective],
   template: `
     <section class="auth-page">
       <div class="auth-card">

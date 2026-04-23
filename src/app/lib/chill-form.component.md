@@ -49,9 +49,10 @@ An external component can still override submit behavior through `onSubmit`. Whe
 
 - `autocomplete()` runs on property blur, not on change.
 - The form tracks pending autocomplete requests and the submit flow waits for them to finish.
-- Returned values are applied back into the form, except for the currently focused field when that control is dirty and non-null.
+- Submit stays available while autocomplete is running, so a Save click is queued and continues after autocomplete completes.
+- Returned values are applied back into the form, except for the field that triggered blur, or the currently focused field, when that control is dirty and non-null.
 
-This prevents autocomplete from overwriting the field the user is actively editing while still allowing the server to update dependent fields.
+This prevents autocomplete from overwriting the field the user is actively editing, including values saved from the expanded text editor dialog, while still allowing the server to update dependent fields.
 
 ## Dialog Entity Submit Flow
 

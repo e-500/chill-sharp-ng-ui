@@ -158,7 +158,7 @@
 
 .cell-toolbar__settings-row {
   display: grid;
-  grid-template-columns: 2rem minmax(6.35rem, auto);
+  grid-template-columns: 2rem minmax(7.25rem, 1fr) minmax(6.35rem, auto);
   align-items: center;
   gap: 0.45rem;
   width: 100%;
@@ -168,6 +168,12 @@
 .cell-toolbar__icon-spacer {
   width: 2rem;
   min-width: 2rem;
+  height: 2rem;
+}
+
+.cell-toolbar__select-spacer {
+  display: block;
+  min-width: 7.25rem;
   height: 2rem;
 }
 
@@ -197,6 +203,18 @@
   font-size: 0.8rem;
   font-weight: 700;
   text-align: center;
+}
+
+.property-type-select {
+  min-width: 7.25rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--tron-border);
+  border-radius: 0.4rem;
+  background: var(--surface-0);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.78rem;
 }
 
 .empty-cell-body {
@@ -251,6 +269,7 @@ button[type='submit'] {
 
 :root[data-theme='dark'] .layout-button,
 :root[data-theme='dark'] .column-count select,
-:root[data-theme='dark'] .cell-toolbar__icon-button {
+:root[data-theme='dark'] .cell-toolbar__icon-button,
+:root[data-theme='dark'] .property-type-select {
   background: rgba(9, 19, 26, 0.58);
 }

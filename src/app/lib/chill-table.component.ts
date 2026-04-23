@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, ElementRef, HostListener, OnDestroy, computed, effect, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 import type { JsonObject, JsonValue } from 'chill-sharp-ng-client';
-import { CHILL_PROPERTY_TYPE, type ChillEntity, type ChillEntityChangeNotification, type ChillMetadataRecord, type ChillOrdering, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, CHILL_PROPERTY_TYPE_OPTIONS, canChangeChillPropertyType, chillSimplePropertyType, type ChillEntity, type ChillEntityChangeNotification, type ChillMetadataRecord, type ChillOrdering, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
@@ -122,6 +122,7 @@ export class ChillTableComponent {
   // #endregion
 
   readonly columnWidthOptions = TABLE_COLUMN_WIDTH_OPTIONS;
+  readonly propertyTypeOptions = CHILL_PROPERTY_TYPE_OPTIONS;
 
   // #region Outputs
   readonly cellEditCommit = output<ChillTableCellEditCommitEvent>();
@@ -764,6 +765,28 @@ export class ChillTableComponent {
     return (column.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) !== CHILL_PROPERTY_TYPE.ChillEntityCollection;
   }
 
+  isPropertyTypeOptionDisabled(property: ChillPropertySchema, propertyType: number): boolean {
+    return !canChangeChillPropertyType(property.propertyType, propertyType);
+  }
+
+  updatePropertyType(property: ChillPropertySchema, value: number | string): void {
+    const schema = this.schema();
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!schema || !Number.isFinite(parsed) || !canChangeChillPropertyType(property.propertyType, parsed)) {
+      return;
+    }
+
+    if ((property.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) === parsed) {
+      return;
+    }
+
+    this.savePropertySchema(schema, property.name, {
+      ...property,
+      propertyType: parsed,
+      simplePropertyType: chillSimplePropertyType(parsed)
+    });
+  }
+
   private readActiveOrdering(): ChillOrdering | null {
     const ordering = this.ordering();
     return ordering?.propertyName?.trim()
@@ -957,6 +980,10 @@ export class ChillTableComponent {
    * Supports Enter-to-commit and Escape-to-cancel without letting the event leak to the row.
    */
   handleCellEditorKeydown(event: KeyboardEvent): void {
+    if (this.isMonacoEditorEventTarget(event.target)) {
+      return;
+    }
+
     if (event.key === 'Enter') {
       event.preventDefault();
       event.stopPropagation();
@@ -1310,6 +1337,11 @@ export class ChillTableComponent {
     }
   }
 
+  private isMonacoEditorEventTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && !!target.closest('.editor-field, .monaco-editor');
+  }
+
   /**
    * Stores visible columns before hidden ones so the persisted layout can be rendered directly.
    */
@@ -1532,11 +1564,27 @@ export class ChillTableComponent {
   }
 
   private savePropertySchema(schema: ChillSchema, originalPropertyName: string, property: ChillPropertySchema): void {
-    const updatedSchema: ChillSchema = {
+    const normalizedLayoutState = this.normalizeLayoutForSave(this.layoutState());
+    const metadata = this.readSchemaMetadata(schema);
+    metadata[TABLE_LAYOUT_METADATA_KEY] = JSON.stringify({
+      columns: normalizedLayoutState.map((column) => ({
+        name: column.name,
+        displayName: column.displayName,
+        hidden: column.hidden
+      }))
+    } satisfies PersistedTableLayout);
+
+    const schemaWithUpdatedProperty: ChillSchema = {
       ...schema,
       properties: (schema.properties ?? []).map((candidate) => candidate.name === originalPropertyName
         ? property
-        : candidate)
+        : candidate),
+      metadata
+    };
+
+    const updatedSchema: ChillSchema = {
+      ...schemaWithUpdatedProperty,
+      properties: this.applyPropertyWidthProportions(schemaWithUpdatedProperty, normalizedLayoutState)
     };
 
     this.isSavingLayout.set(true);

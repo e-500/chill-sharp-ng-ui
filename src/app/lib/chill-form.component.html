@@ -112,8 +112,19 @@
                     <button type="button" class="cell-toolbar__icon-button" (click)="openPropertySettings(item.property)" [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
                       <span class="material-symbol-icon">tune</span>
                     </button>
+                    <select
+                      class="property-type-select"
+                      [ngModel]="item.property.propertyType"
+                      (ngModelChange)="updatePropertyType(item.property, $event)"
+                      [name]="'propertyType-' + item.property.name"
+                      [attr.aria-label]="chill.T('A1803D67-C40D-41AF-BFD2-8F9B0E34C48B', 'Property type', 'Tipo proprietà')">
+                      @for (option of propertyTypeOptions; track option.value) {
+                        <option [ngValue]="option.value" [disabled]="isPropertyTypeOptionDisabled(item.property, option.value)">{{ option.label }}</option>
+                      }
+                    </select>
                   } @else {
                     <span class="cell-toolbar__icon-spacer"></span>
+                    <span class="cell-toolbar__select-spacer"></span>
                   }
                   <div class="span-controls">
                     <button type="button" class="cell-toolbar__icon-button" (click)="decreaseSpan(item.id)" [attr.aria-label]="chill.T('DB73501A-618F-48C7-A6BC-613B44729887', 'Decrease field span', 'Riduci larghezza campo')">

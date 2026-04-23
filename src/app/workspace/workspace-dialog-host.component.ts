@@ -7,7 +7,7 @@ import {
   effect,
   inject,
   signal,
-  viewChild
+  viewChildren
 } from '@angular/core';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
@@ -25,17 +25,26 @@ interface DialogSubmitComponent {
   standalone: true,
   imports: [CommonModule, ChillI18nButtonLabelComponent],
   template: `
-    @if (dialog.activeDialog(); as activeDialog) {
-      <div class="workspace-dialog-backdrop" (click)="cancel()"></div>
+    @if (dialog.dialogs().length > 0) {
+      @for (activeDialog of dialog.dialogs(); track activeDialog.id) {
+        @if (isTopDialog(activeDialog.id)) {
+          <div class="workspace-dialog-backdrop" (click)="cancel(activeDialog.id)"></div>
+        }
 
-      <section class="workspace-dialog" role="dialog" aria-modal="true" [attr.aria-label]="activeDialog.title">
+        <section
+          class="workspace-dialog"
+          [class.is-background]="!isTopDialog(activeDialog.id)"
+          role="dialog"
+          [attr.aria-modal]="isTopDialog(activeDialog.id) ? 'true' : null"
+          [attr.aria-hidden]="isTopDialog(activeDialog.id) ? null : 'true'"
+          [attr.aria-label]="activeDialog.title">
         <header class="workspace-dialog__toolbar">
           <div class="workspace-dialog__title">
             <p>{{ chill.T('4ED0A2E7-CFF1-4593-8861-18B9EBF9F10A', 'Task dialog', 'Dialog attivita') }}</p>
             <h2>{{ activeDialog.title }}</h2>
           </div>
 
-          @if (toolbarButtons().length > 0) {
+          @if (isTopDialog(activeDialog.id) && toolbarButtons().length > 0) {
             <div class="workspace-dialog__toolbar-actions">
               @for (button of toolbarButtons(); track button.id) {
                 <button
@@ -66,8 +75,8 @@ interface DialogSubmitComponent {
           <button
             type="button"
             class="workspace-dialog__close"
-            (click)="cancel()"
-            [disabled]="isBusy()"
+            (click)="cancel(activeDialog.id)"
+            [disabled]="isBusy() || !isTopDialog(activeDialog.id)"
             [attr.aria-label]="activeDialog.cancelLabel || chill.T('C10CCB95-A6D7-40F1-ACAD-3A8F318958C2', 'Close dialog', 'Chiudi dialog')">
             x
           </button>
@@ -84,7 +93,7 @@ interface DialogSubmitComponent {
 
           <div class="workspace-dialog__actions">
             @if (activeDialog.showCancelButton !== false) {
-              <button type="button" class="workspace-dialog__button secondary" (click)="cancel()" [disabled]="isBusy()">
+              <button type="button" class="workspace-dialog__button secondary" (click)="cancel(activeDialog.id)" [disabled]="isBusy() || !isTopDialog(activeDialog.id)">
                 @if (activeDialog.cancelLabel) {
                   {{ activeDialog.cancelLabel }}
                 } @else {
@@ -94,7 +103,7 @@ interface DialogSubmitComponent {
             }
 
             @if (activeDialog.showOkButton !== false) {
-              <button type="button" class="workspace-dialog__button primary" (click)="confirm()" [disabled]="isBusy() || !canConfirm()">
+              <button type="button" class="workspace-dialog__button primary" (click)="confirm(activeDialog.id)" [disabled]="isBusy() || !isTopDialog(activeDialog.id) || !canConfirm()">
                 {{ isBusy()
                   ? chill.T('08325F54-06AE-40E5-93EF-3C49B8E0B965', 'Working...', 'Elaborazione...')
                   : '' }}
@@ -112,7 +121,8 @@ interface DialogSubmitComponent {
             }
           </div>
         </footer>
-      </section>
+        </section>
+      }
     }
   `,
   styles: `
@@ -149,6 +159,10 @@ interface DialogSubmitComponent {
       background: var(--surface-3);
       box-shadow: var(--shadow);
       overflow: hidden;
+    }
+
+    .workspace-dialog.is-background {
+      pointer-events: none;
     }
 
     .workspace-dialog__toolbar,
@@ -320,56 +334,91 @@ export class WorkspaceDialogHostComponent {
   readonly dialog = inject(WorkspaceDialogService);
   readonly toolbar = inject(WorkspaceToolbarService);
 
-  private readonly viewContainer = viewChild('contentHost', { read: ViewContainerRef });
+  private readonly contentHosts = viewChildren('contentHost', { read: ViewContainerRef });
 
   readonly isBusy = signal(false);
   readonly errorMessage = signal('');
   readonly toolbarButtons = computed(() => this.toolbar.buttons('dialog'));
 
-  private contentRef: ComponentRef<unknown> | null = null;
+  private readonly contentRefs = new Map<number, ComponentRef<unknown>>();
   private readonly activeDialog = computed(() => this.dialog.activeDialog());
+  private activeDialogId = 0;
 
   constructor() {
     effect(() => {
       const activeDialog = this.activeDialog();
-      const host = this.viewContainer();
-      if (!host) {
+      const activeDialogId = activeDialog?.id ?? 0;
+      if (activeDialogId !== this.activeDialogId) {
+        this.activeDialogId = activeDialogId;
+        this.isBusy.set(false);
+        this.errorMessage.set('');
+      }
+    });
+
+    effect(() => {
+      const dialogs = this.dialog.dialogs();
+      const hosts = this.contentHosts();
+      if (hosts.length < dialogs.length) {
         return;
       }
 
-      host.clear();
-      this.contentRef = null;
-      this.isBusy.set(false);
-      this.errorMessage.set('');
+      const liveDialogIds = new Set(dialogs.map((activeDialog) => activeDialog.id));
+      for (const [dialogId, contentRef] of this.contentRefs) {
+        if (liveDialogIds.has(dialogId)) {
+          continue;
+        }
 
-      if (!activeDialog) {
-        return;
+        contentRef.destroy();
+        this.contentRefs.delete(dialogId);
       }
 
-      this.contentRef = host.createComponent(activeDialog.component);
-      for (const [key, value] of Object.entries(activeDialog.inputs ?? {})) {
-        this.contentRef.setInput(key, value);
-      }
+      dialogs.forEach((activeDialog, index) => {
+        if (this.contentRefs.has(activeDialog.id)) {
+          return;
+        }
+
+        const host = hosts[index];
+        if (!host) {
+          return;
+        }
+
+        host.clear();
+        const contentRef = host.createComponent(activeDialog.component);
+        for (const [key, value] of Object.entries(activeDialog.inputs ?? {})) {
+          contentRef.setInput(key, value);
+        }
+        this.contentRefs.set(activeDialog.id, contentRef);
+      });
     });
   }
 
-  cancel(): void {
-    if (this.isBusy()) {
+  isTopDialog(dialogId: number): boolean {
+    return this.activeDialog()?.id === dialogId;
+  }
+
+  cancel(dialogId?: number): void {
+    if (this.isBusy() || (dialogId !== undefined && !this.isTopDialog(dialogId))) {
       return;
     }
 
     this.dialog.cancel();
   }
 
-  async confirm(): Promise<void> {
-    if (this.isBusy()) {
+  async confirm(dialogId?: number): Promise<void> {
+    if (this.isBusy() || (dialogId !== undefined && !this.isTopDialog(dialogId))) {
       return;
     }
 
+    const activeDialog = this.activeDialog();
+    if (!activeDialog) {
+      return;
+    }
+
+    const contentRef = this.contentRefs.get(activeDialog.id) ?? null;
     this.errorMessage.set('');
 
     try {
-      const componentInstance = this.contentRef?.instance;
+      const componentInstance = contentRef?.instance;
       if (this.isDialogSubmitter(componentInstance)) {
         await componentInstance.submit();
         return;
@@ -388,7 +437,10 @@ export class WorkspaceDialogHostComponent {
   }
 
   canConfirm(): boolean {
-    const componentInstance = this.contentRef?.instance;
+    const activeDialog = this.activeDialog();
+    const componentInstance = activeDialog
+      ? this.contentRefs.get(activeDialog.id)?.instance
+      : null;
     return this.isDialogSubmitter(componentInstance)
       ? (componentInstance.canDialogSubmit?.() ?? true)
       : true;

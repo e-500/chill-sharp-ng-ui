@@ -192,13 +192,24 @@
             [placeholder]="placeholder(property)"></textarea>
         }
       } @else if (isJsonEditor(property)) {
-        <app-chill-json-input
-          [value]="textValue(property.name)"
-          [placeholder]="placeholder(property)"
-          [invalid]="!!validationMessage(property.name)"
-          [disabled]="isPropertyReadOnly(property.name) || (control(property.name)?.disabled ?? false)"
-          (valueChange)="updateJsonInput(property.name, $event)"
-          (blur)="emitFieldBlur(property.name)"></app-chill-json-input>
+        <div class="editor-field">
+          <app-chill-json-input
+            [value]="textValue(property.name)"
+            [language]="editorLanguage(property)"
+            [placeholder]="placeholder(property)"
+            [invalid]="!!validationMessage(property.name)"
+            [disabled]="isPropertyReadOnly(property.name) || (control(property.name)?.disabled ?? false)"
+            (valueChange)="updateJsonInput(property.name, $event)"
+            (blur)="emitFieldBlur(property.name)"></app-chill-json-input>
+          <button
+            type="button"
+            class="editor-dialog-button"
+            (mousedown)="beginEditorDialogSelection(property.name)"
+            (click)="openEditorDialog(property)"
+            [attr.aria-label]="chill.T('EC935816-DCBC-4AE7-BA13-36D66A7D7EBD', 'Open editor dialog', 'Apri editor in dialog')">
+            <span class="material-symbol-icon" aria-hidden="true">open_in_full</span>
+          </button>
+        </div>
       } @else if (isSelect(property)) {
         <select
           [ngModel]="selectValue(property.name)"

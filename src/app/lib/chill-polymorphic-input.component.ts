@@ -56,6 +56,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly validityChange = output<boolean>();
   readonly fieldBlur = output<Record<string, JsonValue>>();
   readonly lookupDialogOpenChange = output<boolean>();
+  readonly editorDialogOpenChange = output<boolean>();
   // #endregion
 
   // #region State
@@ -64,6 +65,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
   readonly errors = signal<ErrorMap>({});
   readonly lookups = signal<Record<string, LookupState>>({});
   readonly lookupDialogSelectionState = signal<Record<string, boolean>>({});
+  readonly editorDialogSelectionState = signal<Record<string, boolean>>({});
   readonly lookupOverlayPositions: ConnectedPosition[] = [
     {
       originX: 'start',
@@ -231,8 +233,7 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Uses type and metadata hints to decide when a string field should render as multiline input.
    */
   isTextarea(property: ChillPropertySchema): boolean {
-    return property.propertyType === CHILL_PROPERTY_TYPE.Text
-      || property.customFormat?.toLowerCase() === 'textarea'
+    return property.customFormat?.toLowerCase() === 'textarea'
       || this.metadataString(property, 'multiline').toLowerCase() === 'true';
   }
 
@@ -247,7 +248,12 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Flags JSON-string fields so the template can render the Monaco editor.
    */
   isJsonEditor(property: ChillPropertySchema): boolean {
-    return property.propertyType === CHILL_PROPERTY_TYPE.Json;
+    return property.propertyType === CHILL_PROPERTY_TYPE.Json
+      || property.propertyType === CHILL_PROPERTY_TYPE.Text;
+  }
+
+  editorLanguage(property: ChillPropertySchema): 'json' | 'plaintext' {
+    return property.propertyType === CHILL_PROPERTY_TYPE.Json ? 'json' : 'plaintext';
   }
 
   /**
@@ -539,6 +545,43 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
     this.setFieldValue(propertyName, value);
   }
 
+  async openEditorDialog(property: ChillPropertySchema): Promise<void> {
+    const { ChillTextEditorDialogComponent } = await import('./chill-text-editor-dialog.component');
+    this.beginEditorDialogSelection(property.name);
+    this.editorDialogOpenChange.emit(true);
+    try {
+      const result = await this.dialog.openDialog<string>({
+        title: property.displayName?.trim() || property.name,
+        component: ChillTextEditorDialogComponent,
+        okLabel: this.chill.T('62953302-B951-4FD1-BD08-4B7649A91BAF', 'Save', 'Salva'),
+        inputs: {
+          value: this.textValue(property.name),
+          language: this.editorLanguage(property),
+          placeholder: this.placeholder(property),
+          disabled: this.isPropertyReadOnly(property.name)
+        }
+      });
+
+      if (result.status !== 'confirmed' || typeof result.value !== 'string') {
+        return;
+      }
+
+      this.updateJsonInput(property.name, result.value);
+      this.validateField(property);
+      this.notifyFieldBlur(property.name);
+    } finally {
+      this.endEditorDialogSelection(property.name);
+      this.editorDialogOpenChange.emit(false);
+    }
+  }
+
+  beginEditorDialogSelection(propertyName: string): void {
+    this.editorDialogSelectionState.update((current) => ({
+      ...current,
+      [propertyName]: true
+    }));
+  }
+
   /**
    * Reads the current scalar value for a metadata-backed select field.
    */
@@ -642,7 +685,22 @@ export class ChillPolymorphicInputComponent implements OnDestroy {
    * Forwards blur for controls that do not need blur-time value normalization.
    */
   emitFieldBlur(propertyName: string): void {
+    if (this.editorDialogSelectionState()[propertyName]) {
+      return;
+    }
+
     this.notifyFieldBlur(propertyName);
+  }
+
+  private endEditorDialogSelection(propertyName: string): void {
+    this.editorDialogSelectionState.update((current) => {
+      if (!(propertyName in current)) {
+        return current;
+      }
+
+      const { [propertyName]: _, ...rest } = current;
+      return rest;
+    });
   }
 
   beginLookupDialogSelection(propertyName: string): void {

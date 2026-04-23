@@ -121,6 +121,75 @@ export const CHILL_PROPERTY_TYPE = {
   ChillQuery: 1100
 } as const;
 
+export type ChillPropertyTypeOption = {
+  value: number;
+  label: string;
+};
+
+export const CHILL_PROPERTY_TYPE_OPTIONS: ChillPropertyTypeOption[] = [
+  { value: CHILL_PROPERTY_TYPE.Guid, label: 'Guid' },
+  { value: CHILL_PROPERTY_TYPE.Integer, label: 'Integer' },
+  { value: CHILL_PROPERTY_TYPE.Decimal, label: 'Decimal' },
+  { value: CHILL_PROPERTY_TYPE.Date, label: 'Date' },
+  { value: CHILL_PROPERTY_TYPE.Time, label: 'Time' },
+  { value: CHILL_PROPERTY_TYPE.DateTime, label: 'DateTime' },
+  { value: CHILL_PROPERTY_TYPE.Duration, label: 'Duration' },
+  { value: CHILL_PROPERTY_TYPE.Boolean, label: 'Boolean' },
+  { value: CHILL_PROPERTY_TYPE.String, label: 'String' },
+  { value: CHILL_PROPERTY_TYPE.Text, label: 'Text' },
+  { value: CHILL_PROPERTY_TYPE.Select, label: 'Select' },
+  { value: CHILL_PROPERTY_TYPE.Json, label: 'Json' },
+  { value: CHILL_PROPERTY_TYPE.ChillEntity, label: 'ChillEntity' },
+  { value: CHILL_PROPERTY_TYPE.ChillEntityCollection, label: 'ChillEntityCollection' },
+  { value: CHILL_PROPERTY_TYPE.ChillQuery, label: 'ChillQuery' }
+];
+
+export function canChangeChillPropertyType(currentType: number | undefined, nextType: number): boolean {
+  if ((currentType ?? CHILL_PROPERTY_TYPE.Unknown) === nextType) {
+    return true;
+  }
+
+  return currentType === CHILL_PROPERTY_TYPE.String
+    && (nextType === CHILL_PROPERTY_TYPE.Text || nextType === CHILL_PROPERTY_TYPE.Json);
+}
+
+export function chillSimplePropertyType(propertyType: number | undefined): string {
+  switch (propertyType) {
+    case CHILL_PROPERTY_TYPE.Guid:
+      return 'guid';
+    case CHILL_PROPERTY_TYPE.Integer:
+      return 'int';
+    case CHILL_PROPERTY_TYPE.Decimal:
+      return 'decimal';
+    case CHILL_PROPERTY_TYPE.Date:
+      return 'date';
+    case CHILL_PROPERTY_TYPE.Time:
+      return 'time';
+    case CHILL_PROPERTY_TYPE.DateTime:
+      return 'datetime';
+    case CHILL_PROPERTY_TYPE.Duration:
+      return 'duration';
+    case CHILL_PROPERTY_TYPE.Boolean:
+      return 'bool';
+    case CHILL_PROPERTY_TYPE.String:
+      return 'string';
+    case CHILL_PROPERTY_TYPE.Text:
+      return 'text';
+    case CHILL_PROPERTY_TYPE.Select:
+      return 'string';
+    case CHILL_PROPERTY_TYPE.Json:
+      return 'json';
+    case CHILL_PROPERTY_TYPE.ChillEntity:
+      return 'chill-entity';
+    case CHILL_PROPERTY_TYPE.ChillEntityCollection:
+      return 'chill-entity-collection';
+    case CHILL_PROPERTY_TYPE.ChillQuery:
+      return 'chill-query';
+    default:
+      return '';
+  }
+}
+
 export type ChillEntityStatus = 'pristine' | 'draft' | 'dirty' | 'saving' | 'deleted' | 'error';
 
 export type ChillState = JsonObject & {

@@ -2,6 +2,7 @@ import { Injectable, computed, signal } from '@angular/core';
 import type { WorkspaceDialogRequest, WorkspaceDialogResult } from '../models/workspace-dialog.models';
 
 interface ActiveWorkspaceDialog<TResult = unknown> extends WorkspaceDialogRequest<TResult> {
+  id: number;
   resolve: (result: WorkspaceDialogResult<TResult>) => void;
 }
 
@@ -10,6 +11,9 @@ interface ActiveWorkspaceDialog<TResult = unknown> extends WorkspaceDialogReques
 })
 export class WorkspaceDialogService {
   private readonly dialogStackState = signal<ActiveWorkspaceDialog<unknown>[]>([]);
+  private nextDialogId = 1;
+
+  readonly dialogs = computed(() => this.dialogStackState());
 
   readonly activeDialog = computed(() => {
     const dialogStack = this.dialogStackState();
@@ -19,6 +23,7 @@ export class WorkspaceDialogService {
   openDialog<TResult>(request: WorkspaceDialogRequest<TResult>): Promise<WorkspaceDialogResult<TResult>> {
     return new Promise<WorkspaceDialogResult<TResult>>((resolve) => {
       this.dialogStackState.update((current) => [...current, {
+        id: this.nextDialogId++,
         okLabel: 'OK',
         cancelLabel: 'Cancel',
         showOkButton: true,

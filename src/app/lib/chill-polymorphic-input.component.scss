@@ -47,6 +47,33 @@
   width: 100%;
 }
 
+.editor-field {
+  position: relative;
+  min-width: 0;
+}
+
+.editor-dialog-button {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-color));
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--surface-0) 92%, transparent);
+  color: var(--text-main);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.editor-dialog-button .material-symbol-icon {
+  font-size: 1.05rem;
+}
+
 .field-error {
   color: var(--danger);
   font-size: 0.85rem;
@@ -133,6 +160,7 @@
 :root[data-theme='dark'] .field input,
 :root[data-theme='dark'] .field select,
 :root[data-theme='dark'] .field textarea,
+:root[data-theme='dark'] .editor-dialog-button,
 :root[data-theme='dark'] .lookup-dialog,
 :root[data-theme='dark'] .lookup-clear,
 :root[data-theme='dark'] .lookup-result,

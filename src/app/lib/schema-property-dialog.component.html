@@ -37,7 +37,7 @@
       <span>{{ chill.T('A1803D67-C40D-41AF-BFD2-8F9B0E34C48B', 'Property type', 'Tipo proprietà') }}</span>
       <select [ngModel]="draft().propertyType" (ngModelChange)="updatePropertyType($event)" name="schema-property-type">
         @for (option of propertyTypeOptions; track option.value) {
-          <option [ngValue]="option.value">{{ option.label }}</option>
+          <option [ngValue]="option.value" [disabled]="isPropertyTypeOptionDisabled(option.value)">{{ option.label }}</option>
         }
       </select>
     </label>

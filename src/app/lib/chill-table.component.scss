@@ -236,7 +236,7 @@ col.action-column {
 }
 
 .data-cell__editor {
-  width: max-content;
+  width: 100%;
   min-width: 14rem;
   max-width: none;
 }
@@ -283,7 +283,7 @@ col.action-column {
 
 .column-editor__settings-row {
   display: grid;
-  grid-template-columns: 2rem minmax(6.35rem, auto);
+  grid-template-columns: 2rem minmax(7.25rem, 1fr) minmax(6.35rem, auto);
   align-items: center;
   gap: 0.45rem;
   width: 100%;
@@ -344,6 +344,18 @@ col.action-column {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.property-type-select {
+  min-width: 7.25rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-color));
+  border-radius: 0.4rem;
+  background: var(--surface-0);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.78rem;
 }
 
 .column-editor input[type='checkbox'] {

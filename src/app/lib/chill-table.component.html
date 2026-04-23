@@ -141,6 +141,16 @@
                         [attr.aria-label]="chill.T('40E9838A-70F2-4E89-BE38-BBE44027D253', 'Edit property settings', 'Modifica impostazioni proprietà')">
                         <span class="material-symbol-icon">tune</span>
                       </button>
+                      <select
+                        class="property-type-select"
+                        [ngModel]="column.propertyType"
+                        (ngModelChange)="updatePropertyType(column, $event)"
+                        [name]="'propertyType-' + column.name"
+                        [attr.aria-label]="chill.T('A1803D67-C40D-41AF-BFD2-8F9B0E34C48B', 'Property type', 'Tipo proprietà')">
+                        @for (option of propertyTypeOptions; track option.value) {
+                          <option [ngValue]="option.value" [disabled]="isPropertyTypeOptionDisabled(column, option.value)">{{ option.label }}</option>
+                        }
+                      </select>
                       <div class="column-width-controls" [attr.aria-label]="chill.T('53796BE9-AF5C-487D-9B26-468C1B75FE54', 'Column width proportion', 'Proporzione larghezza colonna')">
                         <button
                           type="button"
@@ -257,7 +267,8 @@
                           [externalErrors]="rowFieldErrors(entity)"
                           (valueChange)="handleCellValueChange($event)"
                           (validityChange)="handleCellValidityChange($event)"
-                          (lookupDialogOpenChange)="handleLookupDialogOpenChange($event)" />
+                          (lookupDialogOpenChange)="handleLookupDialogOpenChange($event)"
+                          (editorDialogOpenChange)="handleLookupDialogOpenChange($event)" />
                       </div>
                     } @else {
                       <app-chill-polymorphic-output

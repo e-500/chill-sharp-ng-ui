@@ -21,7 +21,7 @@ type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api');
   imports: [CommonModule],
   template: `
     <div class="json-editor" [class.is-invalid]="invalid()">
-      <div #editorHost class="json-editor__host"></div>
+      <div #editorHost class="json-editor__host" [ngStyle]="editorStyle()"></div>
     </div>
   `,
   styles: [`
@@ -50,8 +50,6 @@ type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api');
 
     .json-editor__host {
       width: 100%;
-      min-height: 16rem;
-      height: min(34vh, 24rem);
     }
 
     :root[data-theme='dark'] .json-editor {
@@ -64,6 +62,9 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
   readonly placeholder = input('');
   readonly invalid = input(false);
   readonly disabled = input(false);
+  readonly language = input<'json' | 'plaintext'>('json');
+  readonly minHeight = input('4rem');
+  readonly maxHeight = input('50vh');
 
   readonly valueChange = output<string>();
   readonly blur = output<void>();
@@ -86,17 +87,17 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
 
     this.monaco = await import('monaco-editor/esm/vs/editor/editor.api');
 
-    this.model = this.monaco.editor.createModel(this.value(), 'json');
+    this.model = this.monaco.editor.createModel(this.value(), this.language());
     this.editor = this.monaco.editor.create(host, {
       model: this.model,
-      language: 'json',
+      language: this.language(),
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       tabSize: 2,
       insertSpaces: true,
-      formatOnPaste: true,
-      formatOnType: true,
+      formatOnPaste: this.language() === 'json',
+      formatOnType: this.language() === 'json',
       wordWrap: 'on',
       lineNumbersMinChars: 3,
       padding: { top: 12, bottom: 12 },
@@ -108,7 +109,7 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
       overviewRulerLanes: 0,
       fontSize: 13,
       readOnly: this.disabled(),
-      ariaLabel: this.placeholder() || 'JSON editor'
+      ariaLabel: this.placeholder() || this.defaultAriaLabel()
     });
 
     this.applyTheme();
@@ -156,7 +157,17 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
 
     if (changes['placeholder'] && this.editor) {
       this.editor.updateOptions({
-        ariaLabel: this.placeholder() || 'JSON editor'
+        ariaLabel: this.placeholder() || this.defaultAriaLabel()
+      });
+    }
+
+    if (changes['language'] && this.monaco && this.model && this.editor) {
+      const language = this.language();
+      this.monaco.editor.setModelLanguage(this.model, language);
+      this.editor.updateOptions({
+        formatOnPaste: language === 'json',
+        formatOnType: language === 'json',
+        ariaLabel: this.placeholder() || this.defaultAriaLabel()
       });
     }
   }
@@ -171,5 +182,17 @@ export class ChillJsonInputComponent implements AfterViewInit, OnChanges, OnDest
   private applyTheme(): void {
     const isDarkTheme = document.documentElement.dataset['theme'] === 'dark';
     this.monaco?.editor.setTheme(isDarkTheme ? 'vs-dark' : 'vs');
+  }
+
+  protected editorStyle(): Record<string, string> {
+    return {
+      minHeight: this.minHeight(),
+      maxHeight: this.maxHeight(),
+      height: `clamp(${this.minHeight()}, 34vh, ${this.maxHeight()})`
+    };
+  }
+
+  private defaultAriaLabel(): string {
+    return this.language() === 'json' ? 'JSON editor' : 'Text editor';
   }
 }

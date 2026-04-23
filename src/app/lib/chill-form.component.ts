@@ -12,6 +12,7 @@ import type {
   ChillQuery,
   ChillSchema
 } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, CHILL_PROPERTY_TYPE_OPTIONS, canChangeChillPropertyType, chillSimplePropertyType } from '../models/chill-schema.models';
 import { WorkspaceLayoutService } from '../services/workspace-layout.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { ChillPolymorphicInputComponent } from './chill-polymorphic-input.component';
@@ -49,6 +50,7 @@ type ResolvedFormLayoutItem =
 })
 export class ChillFormComponent implements OnDestroy {
   readonly columnOptions = [1, 2, 3, 4, 5, 6];
+  readonly propertyTypeOptions = CHILL_PROPERTY_TYPE_OPTIONS;
   readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly chill = inject(ChillService);
   readonly layout = inject(WorkspaceLayoutService);
@@ -155,7 +157,7 @@ export class ChillFormComponent implements OnDestroy {
       return false;
     }
 
-    if ((this.shouldAutocompleteOnBlur() && this.isAutocompleting()) || this.isSubmitting()) {
+    if (this.isSubmitting()) {
       return false;
     }
 
@@ -248,36 +250,40 @@ export class ChillFormComponent implements OnDestroy {
 
   async submit(): Promise<void> {
     const form = this.form();
-    if (!form || this.isEditMode()) {
+    if (!form || this.isEditMode() || this.isSubmitting()) {
       return;
     }
 
     this.internalSubmitError.set('');
-    if (this.shouldAutocompleteOnBlur()) {
-      await this.flushPendingAutocomplete();
-    }
-
-    if (form.pending || form.invalid || this.hasInvalidPropertyState()) {
-      return;
-    }
-
-    if (this.shouldValidateOnSubmit()) {
-      const isValid = await this.validateCurrentPayload();
-      if (!isValid) {
-        return;
-      }
-    }
-
-    const payload = this.mode() === 'query'
-      ? this.buildQueryPayload()
-      : this.buildEntityPayload();
-    const event: ChillFormSubmitEvent = {
-      kind: this.mode(),
-      value: payload
-    };
-
     this.isSubmitting.set(true);
     try {
+      if (this.shouldAutocompleteOnBlur()) {
+        await this.flushPendingAutocomplete();
+      }
+
+      if (form.pending || form.invalid || this.hasInvalidPropertyState()) {
+        return;
+      }
+
+      if (this.shouldValidateOnSubmit()) {
+        const isValid = await this.validateCurrentPayload();
+        if (!isValid) {
+          return;
+        }
+      }
+
+      if (form.pending || form.invalid || this.hasInvalidPropertyState()) {
+        return;
+      }
+
+      const payload = this.mode() === 'query'
+        ? this.buildQueryPayload()
+        : this.buildEntityPayload();
+      const event: ChillFormSubmitEvent = {
+        kind: this.mode(),
+        value: payload
+      };
+
       this.formSubmit.emit(event);
 
       const customSubmit = this.onSubmit();
@@ -382,6 +388,28 @@ export class ChillFormComponent implements OnDestroy {
       ...current,
       items: this.updateLayoutItemHidden(current.items, itemId, hidden)
     }));
+  }
+
+  isPropertyTypeOptionDisabled(property: ChillPropertySchema, propertyType: number): boolean {
+    return !canChangeChillPropertyType(property.propertyType, propertyType);
+  }
+
+  updatePropertyType(property: ChillPropertySchema, value: number | string): void {
+    const schema = this.schema();
+    const parsed = typeof value === 'number' ? value : Number(value);
+    if (!schema || !Number.isFinite(parsed) || !canChangeChillPropertyType(property.propertyType, parsed)) {
+      return;
+    }
+
+    if ((property.propertyType ?? CHILL_PROPERTY_TYPE.Unknown) === parsed) {
+      return;
+    }
+
+    this.savePropertySchema(schema, property.name, {
+      ...property,
+      propertyType: parsed,
+      simplePropertyType: chillSimplePropertyType(parsed)
+    });
   }
 
   increaseSpan(itemId: string): void {
@@ -521,13 +549,16 @@ export class ChillFormComponent implements OnDestroy {
   }
 
   handlePropertyBlur(value: Record<string, JsonValue>): void {
+    const protectedFieldNames = Object.keys(value)
+      .map((fieldName) => fieldName.trim())
+      .filter((fieldName) => fieldName.length > 0);
     this.updateFields(value);
     if (!this.shouldAutocompleteOnBlur()) {
       return;
     }
 
     queueMicrotask(() => {
-      void this.runAutocomplete();
+      void this.runAutocomplete(protectedFieldNames);
     });
   }
 
@@ -612,7 +643,7 @@ export class ChillFormComponent implements OnDestroy {
     });
   }
 
-  private async runAutocomplete(): Promise<void> {
+  private async runAutocomplete(protectedFieldNames: string[] = []): Promise<void> {
     const schema = this.schema();
     if (!schema || this.isEditMode() || !this.shouldAutocompleteOnBlur()) {
       return;
@@ -630,7 +661,7 @@ export class ChillFormComponent implements OnDestroy {
 
       const autocompletedFields = this.extractAutocompleteFields(schema, response);
       if (Object.keys(autocompletedFields).length > 0) {
-        this.applyAutocompleteFields(autocompletedFields);
+        this.applyAutocompleteFields(autocompletedFields, protectedFieldNames);
       }
     })()
       .catch(() => undefined)
@@ -647,13 +678,18 @@ export class ChillFormComponent implements OnDestroy {
     await pendingRequest;
   }
 
-  private applyAutocompleteFields(value: Record<string, JsonValue>): void {
+  private applyAutocompleteFields(value: Record<string, JsonValue>, protectedFieldNames: string[] = []): void {
     const form = this.form();
     if (!form) {
       return;
     }
 
     const focusedPropertyName = this.readFocusedPropertyName();
+    const protectedFieldNameSet = new Set(
+      protectedFieldNames
+        .map((fieldName) => fieldName.trim())
+        .filter((fieldName) => fieldName.length > 0)
+    );
     const nextValues: Record<string, JsonValue> = {};
 
     for (const [fieldName, fieldValue] of Object.entries(value)) {
@@ -665,7 +701,10 @@ export class ChillFormComponent implements OnDestroy {
       const shouldProtectFocusedField = fieldName === focusedPropertyName
         && control.dirty
         && control.value !== null;
-      if (shouldProtectFocusedField) {
+      const shouldProtectBlurredField = protectedFieldNameSet.has(fieldName)
+        && control.dirty
+        && control.value !== null;
+      if (shouldProtectFocusedField || shouldProtectBlurredField) {
         continue;
       }
 
@@ -952,11 +991,15 @@ export class ChillFormComponent implements OnDestroy {
   }
 
   private savePropertySchema(schema: ChillSchema, originalPropertyName: string, property: ChillPropertySchema): void {
+    const metadata = this.readSchemaMetadata(schema);
+    metadata[FORM_LAYOUT_METADATA_KEY] = JSON.stringify(this.layoutState());
+
     const updatedSchema: ChillSchema = {
       ...schema,
       properties: (schema.properties ?? []).map((candidate) => candidate.name === originalPropertyName
         ? property
-        : candidate)
+        : candidate),
+      metadata
     };
 
     this.isSavingLayout.set(true);

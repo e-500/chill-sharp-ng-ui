@@ -4,6 +4,8 @@
 
 `WorkspaceDialogService` manages the modal dialog stack used across the workspace. It opens component-based dialogs and resolves them with a typed result object.
 
+Nested dialogs stay in the stack until they are confirmed or cancelled. The dialog host keeps lower dialogs mounted while a child dialog is active, so parent form state survives picker/editor dialogs opened from inside the parent.
+
 ## Result Contract
 
 `openDialog<TResult>()` resolves to:

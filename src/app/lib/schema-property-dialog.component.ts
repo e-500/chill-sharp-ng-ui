@@ -5,7 +5,7 @@ import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { ChillService } from '../services/chill.service';
 import { ChillJsonInputComponent } from './chill-json-input.component';
 import { getDateFormatOptions } from './date-format-options';
-import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import { CHILL_PROPERTY_TYPE, CHILL_PROPERTY_TYPE_OPTIONS, canChangeChillPropertyType, chillSimplePropertyType, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 
 type SchemaPropertyDraft = {
   name: string;
@@ -27,11 +27,6 @@ type SchemaPropertyDraft = {
   regexPattern: string;
   enumValues: string;
   metadataJson: string;
-};
-
-type PropertyTypeOption = {
-  value: number;
-  label: string;
 };
 
 const MANAGED_METADATA_KEYS = ['required', 'readonly', 'minLength', 'maxLength', 'pattern', 'min', 'max', 'options'] as const;
@@ -86,23 +81,7 @@ export class SchemaPropertyDialogComponent {
   readonly showEnumValues = computed(() => this.selectedPropertyType() === CHILL_PROPERTY_TYPE.Select);
   readonly validationMessages = computed(() => this.validateDraft(this.draft()));
 
-  readonly propertyTypeOptions: PropertyTypeOption[] = [
-    { value: CHILL_PROPERTY_TYPE.Guid, label: 'Guid' },
-    { value: CHILL_PROPERTY_TYPE.Integer, label: 'Integer' },
-    { value: CHILL_PROPERTY_TYPE.Decimal, label: 'Decimal' },
-    { value: CHILL_PROPERTY_TYPE.Date, label: 'Date' },
-    { value: CHILL_PROPERTY_TYPE.Time, label: 'Time' },
-    { value: CHILL_PROPERTY_TYPE.DateTime, label: 'DateTime' },
-    { value: CHILL_PROPERTY_TYPE.Duration, label: 'Duration' },
-    { value: CHILL_PROPERTY_TYPE.Boolean, label: 'Boolean' },
-    { value: CHILL_PROPERTY_TYPE.String, label: 'String' },
-    { value: CHILL_PROPERTY_TYPE.Text, label: 'Text' },
-    { value: CHILL_PROPERTY_TYPE.Select, label: 'Select' },
-    { value: CHILL_PROPERTY_TYPE.Json, label: 'Json' },
-    { value: CHILL_PROPERTY_TYPE.ChillEntity, label: 'ChillEntity' },
-    { value: CHILL_PROPERTY_TYPE.ChillEntityCollection, label: 'ChillEntityCollection' },
-    { value: CHILL_PROPERTY_TYPE.ChillQuery, label: 'ChillQuery' }
-  ];
+  readonly propertyTypeOptions = CHILL_PROPERTY_TYPE_OPTIONS;
 
   constructor() {
     effect(() => {
@@ -140,10 +119,20 @@ export class SchemaPropertyDialogComponent {
 
   updatePropertyType(value: number | string): void {
     const parsed = typeof value === 'number' ? value : Number(value);
+    const property = this.property();
+    if (!property || !Number.isFinite(parsed) || !canChangeChillPropertyType(property.propertyType, parsed)) {
+      return;
+    }
+
     this.draft.update((current) => ({
       ...current,
-      propertyType: Number.isFinite(parsed) ? parsed : CHILL_PROPERTY_TYPE.Unknown
+      propertyType: parsed
     }));
+  }
+
+  isPropertyTypeOptionDisabled(value: number): boolean {
+    const property = this.property();
+    return !!property && !canChangeChillPropertyType(property.propertyType, value);
   }
 
   enumValuesPlaceholder(): string {
@@ -336,6 +325,7 @@ export class SchemaPropertyDialogComponent {
       name: draft.name.trim(),
       displayName: draft.displayName.trim() || draft.name.trim(),
       propertyType: draft.propertyType,
+      simplePropertyType: chillSimplePropertyType(draft.propertyType),
       isNullable: draft.isNullable,
       isReadOnly: draft.isReadOnly,
       minLength,

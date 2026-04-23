@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -70,22 +70,67 @@ function run(command, args) {
   }
 }
 
+function hasStaleAngularOptimizedClientCache() {
+  const cacheRoot = resolve(projectRoot, '.angular', 'cache');
+  if (!existsSync(cacheRoot)) {
+    return false;
+  }
+
+  const stack = [cacheRoot];
+  while (stack.length > 0) {
+    const currentPath = stack.pop();
+    if (!currentPath) {
+      continue;
+    }
+
+    const stats = statSync(currentPath);
+    if (stats.isDirectory()) {
+      for (const entry of readdirSync(currentPath, { withFileTypes: true })) {
+        stack.push(join(currentPath, entry.name));
+      }
+      continue;
+    }
+
+    if (!currentPath.endsWith(`${join('vite', 'deps', 'chill-sharp-ng-client.js')}`)) {
+      continue;
+    }
+
+    const contents = readFileSync(currentPath, 'utf8');
+    if (
+      contents.includes('getSchema(chillType, chillViewCode, cultureName)') &&
+      !contents.includes('getSchema(chillType, chillViewCode, cultureName, update = false)')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 const packagesToSync = packages.filter(needsSync);
-if (packagesToSync.length === 0) {
+const shouldCleanAngularCache = packagesToSync.length > 0 || hasStaleAngularOptimizedClientCache();
+if (packagesToSync.length === 0 && !shouldCleanAngularCache) {
   process.exit(0);
 }
 
-console.log(`[sync-local-clients] Refreshing ${packagesToSync.map((pkg) => pkg.name).join(', ')}`);
-
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-run(npmCommand, [
-  'install',
-  '--no-save',
-  ...packages.map((pkg) => pkg.sourcePath)
-]);
 
-run(process.execPath, [
-  resolve(projectRoot, 'node_modules', '@angular', 'cli', 'bin', 'ng.js'),
-  'cache',
-  'clean'
-]);
+if (packagesToSync.length > 0) {
+  console.log(`[sync-local-clients] Refreshing ${packagesToSync.map((pkg) => pkg.name).join(', ')}`);
+
+  run(npmCommand, [
+    'install',
+    '--no-save',
+    ...packages.map((pkg) => pkg.sourcePath)
+  ]);
+}
+
+if (shouldCleanAngularCache) {
+  console.log('[sync-local-clients] Cleaning Angular cache');
+
+  run(process.execPath, [
+    resolve(projectRoot, 'node_modules', '@angular', 'cli', 'bin', 'ng.js'),
+    'cache',
+    'clean'
+  ]);
+}

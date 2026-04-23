@@ -78,5 +78,13 @@
 @media (max-width: 960px) {
   .crud-page {
     padding: 1rem 0.25rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .crud-page::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 }

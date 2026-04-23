@@ -18,7 +18,8 @@ import { WorkspaceToolbarService } from '../../services/workspace-toolbar.servic
         [initialSelectedEntity]="initialSelectedEntity()"
         [initialSelectedEntities]="initialSelectedEntities()"
         [componentConfiguration]="resolvedComponentConfiguration()"
-        [showTableHeader]="toolbarScope() !== 'dialog'" />
+        [showTableHeader]="toolbarScope() !== 'dialog'"
+        [showMobileTaskClose]="toolbarScope() !== 'dialog'" />
     </section>
   `,
   styles: `

@@ -15,6 +15,7 @@ import { ChillPolymorphicOutputComponent } from './chill-polymorphic-output.comp
 const TABLE_LAYOUT_METADATA_KEY = 'chill-table-component';
 const TABLE_COLUMN_WIDTH_METADATA_KEY = 'widthProportion';
 const TABLE_COLUMN_WIDTH_OPTIONS = [0.25, 0.5, 1, 2, 3, 4, 5] as const;
+const ROW_REFRESH_FLASH_MS = 900;
 
 interface ColumnLayoutState {
   name: string;
@@ -119,6 +120,7 @@ export class ChillTableComponent {
   readonly ordering = input<ChillOrdering | null>(null);
   readonly enableFullTextSearch = input(false);
   readonly fullTextSearch = input('');
+  readonly showMobileTaskClose = input(false);
   // #endregion
 
   readonly columnWidthOptions = TABLE_COLUMN_WIDTH_OPTIONS;
@@ -129,6 +131,7 @@ export class ChillTableComponent {
   readonly sortChange = output<ChillTableSortChangeEvent>();
   readonly fullTextSearchChange = output<string>();
   readonly schemaUpdated = output<ChillSchema>();
+  readonly mobileTaskClose = output<void>();
   // #endregion
 
   // #region State References
@@ -145,7 +148,9 @@ export class ChillTableComponent {
   readonly schemaRefreshTick = signal(0);
   readonly isFullTextSearchOpen = signal(false);
   readonly fullTextSearchText = signal('');
+  readonly rowRefreshFlashKeys = signal<ReadonlySet<string>>(new Set<string>());
   private readonly entityNotificationSubscriptions = new Map<string, Subscription>();
+  private readonly rowRefreshFlashTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private subscribedNotificationChillType = '';
   // #endregion
 
@@ -170,7 +175,11 @@ export class ChillTableComponent {
     });
 
     effect(() => {
-      this.displayedEntities.set(this.entities());
+      const entities = this.entities();
+      this.displayedEntities.set(entities);
+    });
+
+    effect(() => {
       this.syncEntityNotificationSubscriptions(this.schema(), this.displayedEntities());
     });
 
@@ -238,6 +247,7 @@ export class ChillTableComponent {
    */
   ngOnDestroy(): void {
     this.clearEntityNotificationSubscriptions();
+    this.clearRowRefreshFlashTimers();
   }
 
   // #endregion
@@ -433,6 +443,14 @@ export class ChillTableComponent {
     this.fullTextSearchText.set('');
     this.fullTextSearchChange.emit('');
     this.isFullTextSearchOpen.set(false);
+  }
+
+  closeMobileTask(): void {
+    if (!this.showMobileTaskClose()) {
+      return;
+    }
+
+    this.mobileTaskClose.emit();
   }
 
   updateColumnWidthProportion(columnName: string, direction: -1 | 1): void {
@@ -860,6 +878,10 @@ export class ChillTableComponent {
     return this.readCrudState(entity) === 'deleted';
   }
 
+  isRefreshFlashRow(entity: ChillEntity): boolean {
+    return this.rowRefreshFlashKeys().has(this.trackByEntity(0, entity));
+  }
+
   /**
    * Creates a single-property edit session for the chosen cell using a fresh schema-driven form.
    */
@@ -1139,6 +1161,15 @@ export class ChillTableComponent {
     this.subscribedNotificationChillType = '';
   }
 
+  private clearRowRefreshFlashTimers(): void {
+    for (const timer of this.rowRefreshFlashTimers.values()) {
+      clearTimeout(timer);
+    }
+
+    this.rowRefreshFlashTimers.clear();
+    this.rowRefreshFlashKeys.set(new Set<string>());
+  }
+
   /**
    * Refreshes locally displayed rows only for remote update notifications that contain a Guid.
    */
@@ -1176,10 +1207,7 @@ export class ChillTableComponent {
     }
 
     try {
-      const latestEntityResponse = await firstValueFrom(this.chill.find({
-        chillType,
-        guid
-      }));
+      const latestEntityResponse = await firstValueFrom(this.chill.find(this.buildRefreshFindRequest(chillType, guid, schema)));
       if (!latestEntityResponse) {
         return;
       }
@@ -1188,6 +1216,7 @@ export class ChillTableComponent {
       const currentState = this.readCrudStateObject(currentEntity);
       if (currentState.status === 'pristine') {
         this.replaceDisplayedEntity(latestEntity, currentEntity);
+        this.flashRefreshedRow(currentEntity);
         return;
       }
 
@@ -1637,6 +1666,30 @@ export class ChillTableComponent {
     return typeof ignoreUntil === 'number' && Number.isFinite(ignoreUntil) && ignoreUntil > Date.now();
   }
 
+  private buildRefreshFindRequest(chillType: string, guid: string, schema: ChillSchema): JsonObject {
+    return {
+      chillType,
+      guid,
+      properties: this.buildTablePropertyRequest(schema)
+    };
+  }
+
+  private buildTablePropertyRequest(schema: ChillSchema): JsonObject {
+    const tablePropertyNames = this.columns()
+      .map((column) => column.name?.trim() ?? '')
+      .filter((propertyName) => propertyName.length > 0);
+    const fallbackPropertyNames = (schema.properties ?? [])
+      .map((property) => property.name?.trim() ?? '')
+      .filter((propertyName) => propertyName.length > 0);
+    const propertyNames = tablePropertyNames.length > 0
+      ? tablePropertyNames
+      : fallbackPropertyNames;
+
+    return Object.fromEntries(
+      [...new Set(propertyNames)].map((propertyName) => [propertyName, null])
+    ) as JsonObject;
+  }
+
   /**
    * Ensures a server entity exposes every schema property through the `properties` bag expected by the table.
    */
@@ -1685,6 +1738,29 @@ export class ChillTableComponent {
       ...activeCellEdit,
       entity: nextEntity
     });
+  }
+
+  private flashRefreshedRow(entity: ChillEntity): void {
+    const entityKey = this.trackByEntity(0, entity);
+    if (!entityKey) {
+      return;
+    }
+
+    const currentTimer = this.rowRefreshFlashTimers.get(entityKey);
+    if (currentTimer) {
+      clearTimeout(currentTimer);
+    }
+
+    this.rowRefreshFlashKeys.update((current) => new Set([...current, entityKey]));
+    const timer = setTimeout(() => {
+      this.rowRefreshFlashTimers.delete(entityKey);
+      this.rowRefreshFlashKeys.update((current) => {
+        const next = new Set(current);
+        next.delete(entityKey);
+        return next;
+      });
+    }, ROW_REFRESH_FLASH_MS);
+    this.rowRefreshFlashTimers.set(entityKey, timer);
   }
 
   /**

@@ -273,3 +273,13 @@ button[type='submit'] {
 :root[data-theme='dark'] .property-type-select {
   background: rgba(9, 19, 26, 0.58);
 }
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .form-cell {
+    grid-column: auto !important;
+  }
+}

@@ -63,6 +63,7 @@ export class CrudPageComponent implements OnInit {
   readonly initialSelectedEntity = input<ChillEntity | null>(null);
   readonly initialSelectedEntities = input<ChillEntity[]>([]);
   readonly showTableHeader = input(true);
+  readonly showMobileTaskClose = input(false);
   readonly componentConfiguration = input<CrudPageComponentConfiguration | null>(null);
   //#endregion
 
@@ -273,6 +274,15 @@ export class CrudPageComponent implements OnInit {
       metadata: schema.metadata ? { ...schema.metadata } : undefined,
       properties: [...(schema.properties ?? [])]
     });
+  }
+
+  closeActiveTask(): void {
+    const activeTaskId = this.workspace.activeTask()?.id;
+    if (!activeTaskId) {
+      return;
+    }
+
+    void this.workspace.closeTask(activeTaskId);
   }
 
   /**

@@ -7,15 +7,27 @@
           <h2>{{ schema()?.displayName }}</h2>
         </div>
 
-        @if (showMobileTaskClose()) {
-          <button
-            type="button"
-            class="table-header__task-close"
-            (click)="closeMobileTask()"
-            [attr.aria-label]="chill.T('D2566993-8138-408A-9153-904454528781', 'Close task', 'Chiudi attivita')">
-            <span class="material-symbol-icon" aria-hidden="true">close</span>
-          </button>
-        }
+        <div class="table-header__mobile-controls">
+          @if (enableFullTextSearch()) {
+            <button
+              type="button"
+              class="table-search__icon-button table-search__icon-button--mobile"
+              (click)="toggleFullTextSearch()"
+              [attr.aria-label]="chill.T('54E62296-DB94-4973-A2AE-49902D5E25E5', 'Full text search', 'Ricerca full text')">
+              <span class="material-symbol-icon" aria-hidden="true">search</span>
+            </button>
+          }
+
+          @if (showMobileTaskClose()) {
+            <button
+              type="button"
+              class="table-header__task-close"
+              (click)="closeMobileTask()"
+              [attr.aria-label]="chill.T('D2566993-8138-408A-9153-904454528781', 'Close task', 'Chiudi attivita')">
+              <span class="material-symbol-icon" aria-hidden="true">close</span>
+            </button>
+          }
+        </div>
       </div>
 
       @if (enableFullTextSearch()) {
@@ -98,7 +110,9 @@
         class="chill-table"
         [class.has-selection-column]="hasSelectionColumn()"
         [class.is-edit-layout-mode]="isEditLayoutMode()"
-        [class.has-inline-cell-edit]="activeCellEdit() !== null">
+        [class.has-inline-cell-edit]="activeCellEdit() !== null"
+        [style.--chill-table-min-width]="tableMinimumWidth()"
+        [style.--chill-table-mobile-min-width]="mobileTableMinimumWidth()">
         <colgroup>
           @if (hasSelectionColumn()) {
             <col class="selection-column" />

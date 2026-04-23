@@ -265,9 +265,9 @@ import type { WorkspaceTaskInstance } from '../services/workspace.service';
               </p>
               <h2>
                 <app-chill-i18n-label
-                  [labelGuid]="'D1B457BA-B716-4C96-BF66-4B20E1ACD805'"
+                  [labelGuid]="'6E9CFCD5-61BD-42DA-9666-1570CAEF87D7'"
                   [primaryDefaultText]="'No active task'"
-                  [secondaryDefaultText]="'Nessuna attivita attiva'" />
+                  [secondaryDefaultText]="'Nessuna attivita'" />
               </h2>
               <p>
                 <app-chill-i18n-label

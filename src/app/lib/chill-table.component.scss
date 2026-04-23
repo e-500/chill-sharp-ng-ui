@@ -1,10 +1,14 @@
 :host {
   display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .chill-table-shell {
   display: grid;
   gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table-actions {
@@ -42,6 +46,13 @@
 
 .table-header__title {
   min-width: 0;
+}
+
+.table-header__mobile-controls {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .table-header__task-close {
@@ -116,10 +127,17 @@
   opacity: 0.45;
 }
 
+.table-search__icon-button--mobile {
+  display: none;
+}
+
 .table-wrap {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: visible;
+  overscroll-behavior-x: contain;
   border-radius: 0.5rem;
   border: 1px solid var(--border-color);
   background: var(--surface-2);
@@ -127,25 +145,25 @@
 }
 
 .table-wrap.is-edit-layout-mode {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 .chill-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 36rem;
+  min-width: var(--chill-table-min-width, 36rem);
   table-layout: fixed;
 }
 
 .chill-table.is-edit-layout-mode {
   width: max-content;
-  min-width: 100%;
+  min-width: var(--chill-table-min-width, 100%);
   table-layout: auto;
 }
 
 .chill-table.has-inline-cell-edit {
   width: max-content;
-  min-width: 100%;
+  min-width: var(--chill-table-min-width, 100%);
   table-layout: auto;
 }
 
@@ -545,6 +563,14 @@ col.action-column {
     flex-direction: column;
   }
 
+  .table-header__title-row {
+    width: 100%;
+  }
+
+  .table-header__mobile-controls {
+    display: flex;
+  }
+
   .table-header__task-close {
     display: inline-grid;
     flex: 0 0 auto;
@@ -555,12 +581,27 @@ col.action-column {
     flex: none;
   }
 
+  .table-search:not(.is-open) {
+    display: none;
+  }
+
   .table-search__input {
     width: 100%;
     min-width: 0;
   }
 
+  .table-search__icon-button--mobile {
+    display: inline-grid;
+  }
+
   .chill-table {
-    min-width: 0;
+    min-width: var(--chill-table-mobile-min-width, var(--chill-table-min-width, 100%));
+    table-layout: auto;
+  }
+
+  .chill-table th:not(.action-column):not(.selection-column),
+  .chill-table td.data-cell,
+  col.data-column {
+    min-width: 20vw;
   }
 }

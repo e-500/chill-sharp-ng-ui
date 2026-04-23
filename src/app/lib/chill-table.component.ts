@@ -291,6 +291,26 @@ export class ChillTableComponent {
    */
   readonly visibleColumns = computed(() => this.columns().filter((column) => !column.hidden));
 
+  readonly tableMinimumWidth = computed(() => {
+    const dataColumnCount = this.visibleColumns().length;
+    const pinnedColumnWidthRem = this.pinnedColumnWidthRem();
+    const minimumWidthRem = Math.max(36, dataColumnCount * 12 + pinnedColumnWidthRem);
+
+    return `max(100%, ${minimumWidthRem}rem)`;
+  });
+
+  readonly mobileTableMinimumWidth = computed(() => {
+    const dataColumnCount = this.visibleColumns().length;
+    const pinnedColumnWidthRem = this.pinnedColumnWidthRem();
+    const dataColumnWidthVw = Math.max(1, dataColumnCount) * 50;
+
+    if (pinnedColumnWidthRem <= 0) {
+      return `max(100%, ${dataColumnWidthVw}vw)`;
+    }
+
+    return `max(100%, calc(${dataColumnWidthVw}vw + ${pinnedColumnWidthRem}rem))`;
+  });
+
   /**
    * Filters the resolved column list down to hidden columns.
    */
@@ -1168,6 +1188,10 @@ export class ChillTableComponent {
 
     this.rowRefreshFlashTimers.clear();
     this.rowRefreshFlashKeys.set(new Set<string>());
+  }
+
+  private pinnedColumnWidthRem(): number {
+    return (this.hasSelectionColumn() ? 3 : 0) + (this.hasActionColumn() ? 3 : 0);
   }
 
   /**

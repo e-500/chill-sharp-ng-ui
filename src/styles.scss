@@ -199,6 +199,17 @@ select {
   font: inherit;
 }
 
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] option,
+:root[data-theme='dark'] optgroup {
+  background-color: #13232d;
+  color: var(--text-main);
+}
+
+:root[data-theme='dark'] select {
+  color-scheme: dark;
+}
+
 a {
   color: var(--link-color);
 }

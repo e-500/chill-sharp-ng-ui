@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import type { JsonValue } from 'chill-sharp-ng-client';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
+import { applySchemaRelationsToCrudConfiguration } from '../lib/crud-configuration.utils';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
 import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
 import type { ChillMenuItem } from '../models/chill-menu.models';
@@ -73,6 +74,7 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
   readonly visible = input(true);
 
   readonly isValid = signal(true);
+  readonly isGeneratingConfigurationExample = signal(false);
   readonly selectedComponentName = signal('');
   readonly componentOptions = computed<[string, string][]>(() => {
     const registryOptions = this.workspace.availableTasks()
@@ -182,8 +184,8 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
           ),
           icon: 'data_object',
           iconClass: 'material-symbol-icon',
-          action: () => this.applyComponentConfigurationJsonExample(),
-          disabled: !selectedTask
+          action: () => void this.applyComponentConfigurationJsonExample(),
+          disabled: !selectedTask || this.isGeneratingConfigurationExample()
         }
       ], 'dialog');
     });
@@ -219,8 +221,26 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
     return this.parent()?.title?.trim() ?? '';
   }
 
-  applyComponentConfigurationJsonExample(): void {
-    this.form.controls['componentConfigurationJson'].setValue(this.selectedComponentConfigurationJsonExample());
+  async applyComponentConfigurationJsonExample(): Promise<void> {
+    const selectedTask = this.selectedTaskDefinition();
+    if (!selectedTask) {
+      return;
+    }
+
+    this.isGeneratingConfigurationExample.set(true);
+    try {
+      const nextValue = this.selectedComponentName().trim().toLowerCase() === 'crud'
+        ? await this.generateCrudComponentConfigurationJsonExample()
+        : this.selectedComponentConfigurationJsonExample();
+      this.form.controls['componentConfigurationJson'].setValue(nextValue);
+    } catch {
+      this.form.controls['componentConfigurationJson'].setValue(
+        this.readString('componentConfigurationJson') || this.selectedComponentConfigurationJsonExample()
+      );
+    } finally {
+      this.isGeneratingConfigurationExample.set(false);
+    }
+
     this.form.controls['componentConfigurationJson'].markAsDirty();
     this.form.controls['componentConfigurationJson'].markAsTouched();
   }
@@ -232,5 +252,59 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
   private readOptionalString(controlName: string): string | null {
     const value = this.readString(controlName);
     return value ? value : null;
+  }
+
+  private async generateCrudComponentConfigurationJsonExample(): Promise<string> {
+    const currentConfiguration = this.parseConfigurationJson(
+      this.readString('componentConfigurationJson')
+    ) ?? this.parseConfigurationJson(this.selectedComponentConfigurationJsonExample());
+
+    if (!currentConfiguration) {
+      return this.selectedComponentConfigurationJsonExample();
+    }
+
+    const chillType = this.readConfigurationString(currentConfiguration, 'chillType');
+    if (!chillType) {
+      return JSON.stringify(currentConfiguration, null, 2);
+    }
+
+    const viewCode = this.readConfigurationString(currentConfiguration, 'viewCode') || 'default';
+    const schema = await firstValueFrom(this.chill.getSchema(chillType, viewCode));
+    const nextConfiguration = applySchemaRelationsToCrudConfiguration({
+      ...currentConfiguration,
+      chillType,
+      viewCode
+    }, schema);
+
+    return JSON.stringify(nextConfiguration, null, 2);
+  }
+
+  private parseConfigurationJson(value: string): Record<string, unknown> | null {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(normalizedValue);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private readConfigurationString(configuration: Record<string, unknown>, key: string): string {
+    const directValue = configuration[key];
+    if (typeof directValue === 'string' && directValue.trim()) {
+      return directValue.trim();
+    }
+
+    const matchedKey = Object.keys(configuration).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const matchedValue = matchedKey ? configuration[matchedKey] : undefined;
+    return typeof matchedValue === 'string' && matchedValue.trim()
+      ? matchedValue.trim()
+      : '';
   }
 }

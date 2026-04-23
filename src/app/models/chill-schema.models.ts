@@ -4,6 +4,20 @@ export type ChillMetadataValue = JsonValue;
 export type ChillPropertySelectOptionTuple = [value: string, text: string];
 export type ChillMetadataRecord = Record<string, ChillMetadataValue>;
 
+export interface ChillSchemaRelationLabel {
+  labelGuid?: string | null;
+  primaryDefaultText?: string;
+  secondaryDefaultText?: string;
+}
+
+export interface ChillSchemaRelation {
+  chillType?: string;
+  chillQuery?: string;
+  fixedValues?: Record<string, JsonValue>;
+  fixedQueryValues?: Record<string, JsonValue>;
+  relationLabel?: ChillSchemaRelationLabel | null;
+}
+
 export type ChillEntityState = JsonObject & {
   isNew?: boolean;
   isDeleting?: boolean;
@@ -45,6 +59,7 @@ export interface ChillSchema {
   mcpDescription?: string | null;
   queryRelatedChillType?: string;
   metadata?: ChillMetadataRecord;
+  relations?: ChillSchemaRelation[];
   properties: ChillPropertySchema[];
 }
 

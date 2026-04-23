@@ -2,8 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
+import { applySchemaRelationsToCrudConfiguration } from '../lib/crud-configuration.utils';
 import type { ChillMenuItem } from '../models/chill-menu.models';
-import type { ChillSchemaListItem } from '../models/chill-schema.models';
+import type { ChillSchema, ChillSchemaListItem } from '../models/chill-schema.models';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceDialogService } from '../services/workspace-dialog.service';
 import { WorkspaceLayoutService } from '../services/workspace-layout.service';
@@ -415,28 +416,23 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const viewCode = this.normalizeViewCode(this.viewCode());
-    const configuration: Record<string, string> = {
-      chillType: schema.chillType,
-      viewCode
-    };
-    const queryChillType = schema.queryChillType.trim();
-    if (queryChillType) {
-      configuration['chillQuery'] = queryChillType;
+    try {
+      const configuration = await this.buildCrudMenuConfiguration(schema);
+      const savedItem = await firstValueFrom(this.chill.setMenu({
+        guid: crypto.randomUUID(),
+        positionNo: this.menuRoots().length + 1,
+        title: schema.displayName || schema.chillType,
+        description: `CRUD task for ${schema.chillType}`,
+        parent: null,
+        componentName: 'crud',
+        componentConfigurationJson: JSON.stringify(configuration, null, 2),
+        menuHierarchy: schema.module
+      }));
+
+      await this.refreshMenuBranch(savedItem.parent?.guid ?? null);
+    } catch (error) {
+      this.schemaLoadError.set(this.chill.formatError(error));
     }
-
-    const savedItem = await firstValueFrom(this.chill.setMenu({
-      guid: crypto.randomUUID(),
-      positionNo: this.menuRoots().length + 1,
-      title: schema.displayName || schema.chillType,
-      description: `CRUD task for ${schema.chillType}`,
-      parent: null,
-      componentName: 'crud',
-      componentConfigurationJson: JSON.stringify(configuration, null, 2),
-      menuHierarchy: schema.module
-    }));
-
-    await this.refreshMenuBranch(savedItem.parent?.guid ?? null);
   }
 
   async openEntityOptionsDialog(): Promise<void> {
@@ -837,6 +833,21 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       childrenError: '',
       hasChildren: false
     };
+  }
+
+  private async buildCrudMenuConfiguration(schema: CrudSchemaOption): Promise<Record<string, unknown>> {
+    const viewCode = this.normalizeViewCode(this.viewCode());
+    const baseConfiguration: Record<string, unknown> = {
+      chillType: schema.chillType,
+      viewCode
+    };
+    const queryChillType = schema.queryChillType.trim();
+    if (queryChillType) {
+      baseConfiguration['chillQuery'] = queryChillType;
+    }
+
+    const entitySchema = await firstValueFrom(this.chill.getSchema(schema.chillType, viewCode));
+    return applySchemaRelationsToCrudConfiguration(baseConfiguration, entitySchema as ChillSchema | null);
   }
 
   private async expandNodeForHover(node: WorkspaceMenuNode): Promise<void> {

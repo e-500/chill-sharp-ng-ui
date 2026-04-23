@@ -55,6 +55,8 @@ import type {
   ChillPropertySchema,
   ChillQuery,
   ChillSchema,
+  ChillSchemaRelation,
+  ChillSchemaRelationLabel,
   ChillSchemaListItem
 } from '../models/chill-schema.models';
 import type { ChillMenuItem as AppChillMenuItem } from '../models/chill-menu.models';
@@ -306,7 +308,7 @@ export class ChillService {
   }
 
   setSchema(schema: ChillSchema) {
-    const request = {
+    const { relations: _relations, ...request } = {
       ...schema,
       chillType: schema.chillType ?? '',
       chillViewCode: schema.chillViewCode ?? '',
@@ -2194,7 +2196,37 @@ export class ChillService {
       mcpDescription: this.readJsonString(response, 'MCPDescription') ?? null,
       queryRelatedChillType: this.readJsonString(response, 'QueryRelatedChillType') ?? undefined,
       metadata: this.normalizeMetadataRecord(response['metadata'] ?? response['Metadata']),
+      relations: this.normalizeSchemaRelations(response['relations'] ?? response['Relations']),
       properties: this.normalizeSchemaProperties(response['properties'] ?? response['Properties'])
+    };
+  }
+
+  private normalizeSchemaRelations(value: unknown): ChillSchemaRelation[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .filter((relation): relation is JsonObject => this.isJsonObject(relation))
+      .map((relation) => ({
+        ...relation,
+        chillType: this.readJsonString(relation, 'ChillType') ?? '',
+        chillQuery: this.readJsonString(relation, 'ChillQuery') ?? '',
+        fixedValues: this.normalizeJsonRecord(relation['fixedValues'] ?? relation['FixedValues']),
+        fixedQueryValues: this.normalizeJsonRecord(relation['fixedQueryValues'] ?? relation['FixedQueryValues']),
+        relationLabel: this.normalizeSchemaRelationLabel(relation['relationLabel'] ?? relation['RelationLabel'])
+      }));
+  }
+
+  private normalizeSchemaRelationLabel(value: unknown): ChillSchemaRelationLabel | null {
+    if (!this.isJsonObject(value)) {
+      return null;
+    }
+
+    return {
+      labelGuid: this.readJsonString(value, 'LabelGuid') ?? null,
+      primaryDefaultText: this.readJsonString(value, 'PrimaryDefaultText') ?? '',
+      secondaryDefaultText: this.readJsonString(value, 'SecondaryDefaultText') ?? ''
     };
   }
 
@@ -2236,6 +2268,16 @@ export class ChillService {
 
         return [key, entryValue as JsonValue];
       })
+    );
+  }
+
+  private normalizeJsonRecord(value: unknown): Record<string, JsonValue> {
+    if (!this.isJsonObject(value)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [key, entryValue as JsonValue])
     );
   }
 

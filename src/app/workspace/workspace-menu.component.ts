@@ -846,7 +846,7 @@ export class WorkspaceMenuComponent implements OnInit, OnDestroy {
       baseConfiguration['chillQuery'] = queryChillType;
     }
 
-    const entitySchema = await firstValueFrom(this.chill.getSchema(schema.chillType, viewCode));
+    const entitySchema = await firstValueFrom(this.chill.getSchema(schema.chillType, viewCode, undefined, true));
     return applySchemaRelationsToCrudConfiguration(baseConfiguration, entitySchema as ChillSchema | null);
   }
 

@@ -3,9 +3,15 @@ import { Component, OnDestroy, computed, effect, inject, input, signal } from '@
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import type { JsonValue } from 'chill-sharp-ng-client';
 import { Subscription, firstValueFrom } from 'rxjs';
-import { applySchemaRelationsToCrudConfiguration } from '../lib/crud-configuration.utils';
 import { ChillPolymorphicInputComponent } from '../lib/chill-polymorphic-input.component';
-import { CHILL_PROPERTY_TYPE, type ChillMetadataRecord, type ChillPropertySchema, type ChillSchema } from '../models/chill-schema.models';
+import {
+  CHILL_PROPERTY_TYPE,
+  type ChillMetadataRecord,
+  type ChillPropertySchema,
+  type ChillSchema,
+  type ChillSchemaRelation,
+  type ChillSchemaRelationLabel
+} from '../models/chill-schema.models';
 import type { ChillMenuItem } from '../models/chill-menu.models';
 import { ChillService } from '../services/chill.service';
 import { WorkspaceService } from '../services/workspace.service';
@@ -17,6 +23,23 @@ type MenuFormGroup = FormGroup<Record<string, FormControl<JsonValue>>>;
 interface MenuItemDialogResult {
   value: ChillMenuItem;
 }
+
+const CRUD_CONFIGURATION_KEYS = new Set([
+  'chillType',
+  'chillQuery',
+  'viewCode',
+  'disableAdd',
+  'disableCreate',
+  'disableEdit',
+  'disableInlineEdit',
+  'disableDelete',
+  'relationLabel',
+  'defaultValues',
+  'fixedValues',
+  'fixedQueryValues',
+  'defaultQueryValues',
+  'relations'
+]);
 
 @Component({
   selector: 'app-workspace-menu-item-dialog',
@@ -263,20 +286,191 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
       return this.selectedComponentConfigurationJsonExample();
     }
 
-    const chillType = this.readConfigurationString(currentConfiguration, 'chillType');
+    const templateConfiguration = this.parseConfigurationJson(this.selectedComponentConfigurationJsonExample())
+      ?? this.createEmptyCrudConfiguration();
+    const seedConfiguration = this.composeCrudConfigurationSeed(templateConfiguration, currentConfiguration);
+    const chillType = this.readConfigurationString(seedConfiguration, 'chillType');
     if (!chillType) {
-      return JSON.stringify(currentConfiguration, null, 2);
+      return JSON.stringify(seedConfiguration, null, 2);
     }
 
-    const viewCode = this.readConfigurationString(currentConfiguration, 'viewCode') || 'default';
-    const schema = await firstValueFrom(this.chill.getSchema(chillType, viewCode));
-    const nextConfiguration = applySchemaRelationsToCrudConfiguration({
-      ...currentConfiguration,
+    const viewCode = this.readConfigurationString(seedConfiguration, 'viewCode') || 'default';
+    const nextConfiguration = await this.buildCrudConfigurationFromSchema(
+      seedConfiguration,
       chillType,
-      viewCode
-    }, schema);
+      viewCode,
+      new Set<string>()
+    );
 
     return JSON.stringify(nextConfiguration, null, 2);
+  }
+
+  private async buildCrudConfigurationFromSchema(
+    seedConfiguration: Record<string, unknown>,
+    chillType: string,
+    viewCode: string,
+    visited: Set<string>
+  ): Promise<Record<string, unknown>> {
+    const normalizedChillType = chillType.trim();
+    const normalizedViewCode = viewCode.trim() || 'default';
+    const visitKey = `${normalizedChillType.toLowerCase()}|${normalizedViewCode.toLowerCase()}`;
+    if (visited.has(visitKey)) {
+      return this.createCrudConfigurationObject(seedConfiguration, []);
+    }
+
+    const nextVisited = new Set(visited);
+    nextVisited.add(visitKey);
+
+    const schema = await firstValueFrom(this.chill.getSchema(normalizedChillType, normalizedViewCode, undefined, true));
+    const relationConfigurations = await Promise.all((schema?.relations ?? []).map((relation) =>
+      this.buildCrudRelationConfiguration(relation, normalizedViewCode, nextVisited)
+    ));
+
+    return this.createCrudConfigurationObject(
+      seedConfiguration,
+      relationConfigurations.filter((configuration): configuration is Record<string, unknown> => configuration !== null)
+    );
+  }
+
+  private async buildCrudRelationConfiguration(
+    relation: ChillSchemaRelation,
+    viewCode: string,
+    visited: Set<string>
+  ): Promise<Record<string, unknown> | null> {
+    const chillType = this.normalizeString(relation.chillType);
+    if (!chillType) {
+      return null;
+    }
+
+    const seedConfiguration = this.createCrudConfigurationObject({
+      chillType,
+      chillQuery: this.normalizeString(relation.chillQuery) || null,
+      viewCode,
+      relationLabel: this.mapRelationLabel(relation.relationLabel) ?? this.createEmptyRelationLabel(),
+      fixedValues: this.normalizeJsonRecord(relation.fixedValues),
+      fixedQueryValues: this.normalizeJsonRecord(relation.fixedQueryValues)
+    }, []);
+
+    try {
+      return await this.buildCrudConfigurationFromSchema(seedConfiguration, chillType, viewCode, visited);
+    } catch {
+      return seedConfiguration;
+    }
+  }
+
+  private composeCrudConfigurationSeed(
+    templateConfiguration: Record<string, unknown>,
+    currentConfiguration: Record<string, unknown>
+  ): Record<string, unknown> {
+    const chillType = this.readConfigurationString(currentConfiguration, 'chillType')
+      || this.readConfigurationString(templateConfiguration, 'chillType');
+    const chillQuery = this.readConfigurationString(currentConfiguration, 'chillQuery')
+      || this.readConfigurationString(templateConfiguration, 'chillQuery');
+    const viewCode = this.readConfigurationString(currentConfiguration, 'viewCode')
+      || this.readConfigurationString(templateConfiguration, 'viewCode')
+      || 'default';
+
+    return this.createCrudConfigurationObject({
+      chillType,
+      chillQuery: chillQuery || null,
+      viewCode,
+      disableAdd: this.readConfigurationBoolean(
+        currentConfiguration,
+        'disableAdd',
+        this.readConfigurationBoolean(templateConfiguration, 'disableAdd', false)
+      ),
+      disableCreate: this.readConfigurationBoolean(
+        currentConfiguration,
+        'disableCreate',
+        this.readConfigurationBoolean(templateConfiguration, 'disableCreate', false)
+      ),
+      disableEdit: this.readConfigurationBoolean(
+        currentConfiguration,
+        'disableEdit',
+        this.readConfigurationBoolean(templateConfiguration, 'disableEdit', false)
+      ),
+      disableInlineEdit: this.readConfigurationBoolean(
+        currentConfiguration,
+        'disableInlineEdit',
+        this.readConfigurationBoolean(templateConfiguration, 'disableInlineEdit', false)
+      ),
+      disableDelete: this.readConfigurationBoolean(
+        currentConfiguration,
+        'disableDelete',
+        this.readConfigurationBoolean(templateConfiguration, 'disableDelete', false)
+      ),
+      relationLabel: this.readRelationLabelValue(currentConfiguration, 'relationLabel')
+        ?? this.readRelationLabelValue(templateConfiguration, 'relationLabel')
+        ?? this.createEmptyRelationLabel(),
+      defaultValues: this.readConfigurationRecord(currentConfiguration, 'defaultValues')
+        ?? this.readConfigurationRecord(templateConfiguration, 'defaultValues')
+        ?? {},
+      fixedValues: this.readConfigurationRecord(currentConfiguration, 'fixedValues')
+        ?? this.readConfigurationRecord(templateConfiguration, 'fixedValues')
+        ?? {},
+      fixedQueryValues: this.readConfigurationRecord(currentConfiguration, 'fixedQueryValues')
+        ?? this.readConfigurationRecord(templateConfiguration, 'fixedQueryValues')
+        ?? {},
+      defaultQueryValues: this.readConfigurationRecord(currentConfiguration, 'defaultQueryValues')
+        ?? this.readConfigurationRecord(templateConfiguration, 'defaultQueryValues')
+        ?? {},
+      ...this.readAdditionalConfigurationEntries(templateConfiguration),
+      ...this.readAdditionalConfigurationEntries(currentConfiguration)
+    }, []);
+  }
+
+  private createCrudConfigurationObject(
+    configuration: Record<string, unknown>,
+    relations: Record<string, unknown>[]
+  ): Record<string, unknown> {
+    const chillType = this.readConfigurationString(configuration, 'chillType');
+    const chillQuery = this.readConfigurationString(configuration, 'chillQuery');
+    const viewCode = this.readConfigurationString(configuration, 'viewCode') || 'default';
+
+    return {
+      chillType,
+      chillQuery: chillQuery || null,
+      viewCode,
+      disableAdd: this.readConfigurationBoolean(configuration, 'disableAdd', false),
+      disableCreate: this.readConfigurationBoolean(configuration, 'disableCreate', false),
+      disableEdit: this.readConfigurationBoolean(configuration, 'disableEdit', false),
+      disableInlineEdit: this.readConfigurationBoolean(configuration, 'disableInlineEdit', false),
+      disableDelete: this.readConfigurationBoolean(configuration, 'disableDelete', false),
+      relationLabel: this.readRelationLabelValue(configuration, 'relationLabel') ?? this.createEmptyRelationLabel(),
+      defaultValues: this.readConfigurationRecord(configuration, 'defaultValues') ?? {},
+      fixedValues: this.readConfigurationRecord(configuration, 'fixedValues') ?? {},
+      fixedQueryValues: this.readConfigurationRecord(configuration, 'fixedQueryValues') ?? {},
+      defaultQueryValues: this.readConfigurationRecord(configuration, 'defaultQueryValues') ?? {},
+      relations,
+      ...this.readAdditionalConfigurationEntries(configuration)
+    };
+  }
+
+  private createEmptyCrudConfiguration(): Record<string, unknown> {
+    return {
+      chillType: '',
+      chillQuery: null,
+      viewCode: 'default',
+      disableAdd: false,
+      disableCreate: false,
+      disableEdit: false,
+      disableInlineEdit: false,
+      disableDelete: false,
+      relationLabel: this.createEmptyRelationLabel(),
+      defaultValues: {},
+      fixedValues: {},
+      fixedQueryValues: {},
+      defaultQueryValues: {},
+      relations: []
+    };
+  }
+
+  private createEmptyRelationLabel(): Record<string, string> {
+    return {
+      labelGuid: '',
+      primaryDefaultText: '',
+      secondaryDefaultText: ''
+    };
   }
 
   private parseConfigurationJson(value: string): Record<string, unknown> | null {
@@ -296,15 +490,82 @@ export class WorkspaceMenuItemDialogComponent implements WorkspaceTaskComponent<
   }
 
   private readConfigurationString(configuration: Record<string, unknown>, key: string): string {
+    const value = this.readConfigurationValue(configuration, key);
+    return typeof value === 'string' && value.trim()
+      ? value.trim()
+      : '';
+  }
+
+  private readConfigurationBoolean(configuration: Record<string, unknown>, key: string, fallbackValue: boolean): boolean {
+    const value = this.readConfigurationValue(configuration, key);
+    return typeof value === 'boolean'
+      ? value
+      : fallbackValue;
+  }
+
+  private readConfigurationRecord(configuration: Record<string, unknown>, key: string): Record<string, JsonValue> | null {
+    const value = this.readConfigurationValue(configuration, key);
+    return this.normalizeJsonRecord(value);
+  }
+
+  private readRelationLabelValue(
+    configuration: Record<string, unknown>,
+    key: string
+  ): string | Record<string, string> | null {
+    const value = this.readConfigurationValue(configuration, key);
+    if (typeof value === 'string') {
+      const normalizedValue = value.trim();
+      return normalizedValue ? normalizedValue : null;
+    }
+
+    return this.mapRelationLabel(value);
+  }
+
+  private readAdditionalConfigurationEntries(configuration: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(configuration)
+        .filter(([key]) => !CRUD_CONFIGURATION_KEYS.has(key.toLowerCase()))
+    );
+  }
+
+  private readConfigurationValue(configuration: Record<string, unknown>, key: string): unknown {
     const directValue = configuration[key];
-    if (typeof directValue === 'string' && directValue.trim()) {
-      return directValue.trim();
+    if (directValue !== undefined) {
+      return directValue;
     }
 
     const matchedKey = Object.keys(configuration).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
-    const matchedValue = matchedKey ? configuration[matchedKey] : undefined;
-    return typeof matchedValue === 'string' && matchedValue.trim()
-      ? matchedValue.trim()
+    return matchedKey ? configuration[matchedKey] : undefined;
+  }
+
+  private mapRelationLabel(value: unknown): Record<string, string> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    const relationLabel = value as ChillSchemaRelationLabel;
+    return {
+      labelGuid: this.normalizeString(relationLabel.labelGuid),
+      primaryDefaultText: this.normalizeString(relationLabel.primaryDefaultText),
+      secondaryDefaultText: this.normalizeString(relationLabel.secondaryDefaultText)
+    };
+  }
+
+  private normalizeJsonRecord(value: unknown): Record<string, JsonValue> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, JsonValue>)
+        .map(([key, entryValue]) => [key.trim(), entryValue] as const)
+        .filter(([key]) => key.length > 0)
+    );
+  }
+
+  private normalizeString(value: unknown): string {
+    return typeof value === 'string'
+      ? value.trim()
       : '';
   }
 }
